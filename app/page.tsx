@@ -32,8 +32,8 @@ type DriveImage = {
 };
 
 type PhotoLikeRow = {
+  id: number;
   photo_id: string;
-  likes_count: number;
 };
 
 type GuestbookEntry = {
@@ -316,7 +316,7 @@ export default function Home() {
     const loadLikes = async () => {
       const { data, error: likesError } = await supabase
         .from("photo_likes")
-        .select("photo_id,likes_count")
+        .select("id,photo_id")
         .in("photo_id", photoIds);
 
       if (likesError) {
@@ -327,7 +327,7 @@ export default function Home() {
       const baseMap = Object.fromEntries(photoIds.map((id) => [id, 0]));
       const rows = (data ?? []) as PhotoLikeRow[];
       const mergedMap = rows.reduce<Record<string, number>>((acc, row) => {
-        acc[row.photo_id] = row.likes_count;
+        acc[row.photo_id] = (acc[row.photo_id] ?? 0) + 1;
         return acc;
       }, baseMap);
 
@@ -455,35 +455,13 @@ export default function Home() {
     setLikesByPhoto((prev) => ({ ...prev, [photoId]: previousCount + 1 }));
 
     try {
-      const { error: upsertError } = await supabase
+      const { error: insertError } = await supabase
         .from("photo_likes")
-        .upsert({ photo_id: photoId, likes_count: 0 }, { onConflict: "photo_id" });
+        .insert({ photo_id: photoId });
 
-      if (upsertError) {
-        throw upsertError;
+      if (insertError) {
+        throw insertError;
       }
-
-      const { data: row, error: selectError } = await supabase
-        .from("photo_likes")
-        .select("likes_count")
-        .eq("photo_id", photoId)
-        .single();
-
-      if (selectError) {
-        throw selectError;
-      }
-
-      const nextCount = ((row as { likes_count: number }).likes_count ?? 0) + 1;
-      const { error: updateError } = await supabase
-        .from("photo_likes")
-        .update({ likes_count: nextCount })
-        .eq("photo_id", photoId);
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      setLikesByPhoto((prev) => ({ ...prev, [photoId]: nextCount }));
     } catch (likeError) {
       console.error("Failed to update like:", likeError);
       setLikesByPhoto((prev) => ({ ...prev, [photoId]: previousCount }));
