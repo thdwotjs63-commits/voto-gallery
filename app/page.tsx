@@ -23,6 +23,8 @@ type DriveImage = {
   locationTag?: string;
   momentTag?: string;
   withTag?: string;
+  /** YYYYMMDD from parent folder name (e.g. 260413 → 20260413); 0 if none */
+  folderSortKey: number;
   thumbnailUrl: string;
   originalUrl: string;
   downloadUrl: string;
@@ -61,6 +63,30 @@ function extractStory(text: string): string | undefined {
   const withoutHashtags = text.replace(/#[\p{L}\p{N}_-]+/gu, " ");
   const normalized = withoutHashtags.replace(/\s+/g, " ").trim();
   return normalized.length > 0 ? normalized : undefined;
+}
+
+/** Parse calendar date from folder/file label: YYYYMMDD or YYMMDD (YY 00–69 → 20YY) */
+function parseDateKeyFromFolderLabel(text: string): number {
+  let best = 0;
+  const eight = text.match(/\b(19\d{6}|20\d{6})\b/g);
+  if (eight) {
+    for (const m of eight) {
+      const n = Number(m);
+      if (n > best) best = n;
+    }
+  }
+  const stripped = text.replace(/\b(19\d{6}|20\d{6})\b/g, " ");
+  const yymmdd = stripped.matchAll(/\b(\d{2})(\d{2})(\d{2})\b/g);
+  for (const m of yymmdd) {
+    const yy = Number(m[1]);
+    const mm = Number(m[2]);
+    const dd = Number(m[3]);
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) continue;
+    const yyyy = yy >= 70 ? 1900 + yy : 2000 + yy;
+    const key = yyyy * 10000 + mm * 100 + dd;
+    if (key > best) best = key;
+  }
+  return best;
 }
 
 async function getGoogleDriveImages(): Promise<DriveImage[]> {
@@ -128,7 +154,24 @@ async function getGoogleDriveImages(): Promise<DriveImage[]> {
     return items;
   }
 
-  const queue: string[] = [folderId];
+  let rootFolderName = "";
+  try {
+    const rootRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
+        folderId
+      )}?fields=name&key=${encodeURIComponent(resolvedApiKey)}`,
+      { cache: "no-store" }
+    );
+    if (rootRes.ok) {
+      const rootData = (await rootRes.json()) as { name?: string };
+      rootFolderName = rootData.name ?? "";
+    }
+  } catch {
+    /* ignore */
+  }
+
+  type QueueItem = { id: string; name: string };
+  const queue: QueueItem[] = [{ id: folderId, name: rootFolderName }];
   const visitedFolderIds = new Set<string>();
   const uniqueFiles = new Map<
     string,
@@ -137,19 +180,23 @@ async function getGoogleDriveImages(): Promise<DriveImage[]> {
       name: string;
       description?: string;
       imageMediaMetadata?: { width?: number; height?: number };
+      folderSortKey: number;
     }
   >();
 
   while (queue.length > 0) {
-    const currentFolderId = queue.shift();
-    if (!currentFolderId) break;
+    const current = queue.shift();
+    if (!current) break;
+    const { id: currentFolderId, name: currentFolderName } = current;
     if (visitedFolderIds.has(currentFolderId)) continue;
     visitedFolderIds.add(currentFolderId);
 
+    const folderSortKey = parseDateKeyFromFolderLabel(currentFolderName);
+
     const [subfolders, imagesInFolder] = await Promise.all([
-      fetchFiles<{ id: string }>(
+      fetchFiles<{ id: string; name: string }>(
         `'${currentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-        "id"
+        "id,name"
       ),
       fetchFiles<{
         id: string;
@@ -163,11 +210,16 @@ async function getGoogleDriveImages(): Promise<DriveImage[]> {
     ]);
 
     for (const folder of subfolders) {
-      queue.push(folder.id);
+      queue.push({ id: folder.id, name: folder.name ?? "" });
     }
 
     for (const file of imagesInFolder) {
-      uniqueFiles.set(file.id, file);
+      const fromFileName = parseDateKeyFromFolderLabel(file.name);
+      const key = Math.max(folderSortKey, fromFileName);
+      uniqueFiles.set(file.id, {
+        ...file,
+        folderSortKey: key,
+      });
     }
   }
 
@@ -178,6 +230,9 @@ async function getGoogleDriveImages(): Promise<DriveImage[]> {
       const description = file.description ?? "";
       const tags = extractHashtags(description);
       const story = extractStory(description);
+      const tagDateKey = Number((tags[0] ?? "").replace("#", "")) || 0;
+      const effectiveFolderKey =
+        file.folderSortKey > 0 ? file.folderSortKey : tagDateKey;
 
       return {
         id: file.id,
@@ -189,6 +244,7 @@ async function getGoogleDriveImages(): Promise<DriveImage[]> {
         locationTag: tags[1],
         momentTag: tags[2],
         withTag: tags[3],
+        folderSortKey: effectiveFolderKey,
         thumbnailUrl: `https://lh3.googleusercontent.com/d/${file.id}=w800`,
         originalUrl: `https://lh3.googleusercontent.com/d/${file.id}`,
         downloadUrl: `https://drive.google.com/uc?export=download&id=${file.id}`,
@@ -200,11 +256,8 @@ async function getGoogleDriveImages(): Promise<DriveImage[]> {
       };
     })
     .sort((a, b) => {
-      const dateA = Number((a.dateTag ?? "").replace("#", "")) || 0;
-      const dateB = Number((b.dateTag ?? "").replace("#", "")) || 0;
-
-      if (dateA !== dateB) {
-        return dateB - dateA;
+      if (a.folderSortKey !== b.folderSortKey) {
+        return b.folderSortKey - a.folderSortKey;
       }
 
       return b.name.localeCompare(a.name, undefined, {
@@ -529,13 +582,27 @@ export default function Home() {
 
   const sortedFilteredImages = useMemo(
     () =>
-      [...filteredImages].sort((a, b) =>
-        sortOrder === "popular"
-          ? (likesByPhoto[b.id] ?? 0) - (likesByPhoto[a.id] ?? 0)
-          : sortOrder === "latest"
-            ? a.name.localeCompare(b.name, undefined, { numeric: true })
-            : b.name.localeCompare(a.name, undefined, { numeric: true })
-      ),
+      [...filteredImages].sort((a, b) => {
+        if (sortOrder === "popular") {
+          return (likesByPhoto[b.id] ?? 0) - (likesByPhoto[a.id] ?? 0);
+        }
+        if (sortOrder === "latest") {
+          if (a.folderSortKey !== b.folderSortKey) {
+            return b.folderSortKey - a.folderSortKey;
+          }
+          return b.name.localeCompare(a.name, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+        }
+        if (a.folderSortKey !== b.folderSortKey) {
+          return a.folderSortKey - b.folderSortKey;
+        }
+        return a.name.localeCompare(b.name, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+      }),
     [filteredImages, sortOrder, likesByPhoto]
   );
 
