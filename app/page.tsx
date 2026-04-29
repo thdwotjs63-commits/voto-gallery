@@ -225,7 +225,9 @@ export default function Home() {
   const [selectedLocationTag, setSelectedLocationTag] = useState("all");
   const [selectedMomentTag, setSelectedMomentTag] = useState("all");
   const [selectedWithTag, setSelectedWithTag] = useState("all");
-  const [sortOrder, setSortOrder] = useState<"latest" | "oldest">("latest");
+  const [sortOrder, setSortOrder] = useState<"latest" | "oldest" | "popular">(
+    "latest"
+  );
   const [activeBestIndex, setActiveBestIndex] = useState(0);
   const [showTopButton, setShowTopButton] = useState(false);
   const [showStickyHeader, setShowStickyHeader] = useState(false);
@@ -550,11 +552,13 @@ export default function Home() {
   const sortedFilteredImages = useMemo(
     () =>
       [...filteredImages].sort((a, b) =>
-        sortOrder === "latest"
-          ? a.name.localeCompare(b.name, undefined, { numeric: true })
-          : b.name.localeCompare(a.name, undefined, { numeric: true })
+        sortOrder === "popular"
+          ? (likesByPhoto[b.id] ?? 0) - (likesByPhoto[a.id] ?? 0)
+          : sortOrder === "latest"
+            ? a.name.localeCompare(b.name, undefined, { numeric: true })
+            : b.name.localeCompare(a.name, undefined, { numeric: true })
       ),
-    [filteredImages, sortOrder]
+    [filteredImages, sortOrder, likesByPhoto]
   );
 
   const bestPicks = useMemo(
@@ -665,12 +669,15 @@ export default function Home() {
             <select
               value={sortOrder}
               onChange={(event) =>
-                setSortOrder(event.target.value as "latest" | "oldest")
+                  setSortOrder(
+                    event.target.value as "latest" | "oldest" | "popular"
+                  )
               }
               className="min-h-11 shrink-0 rounded-full bg-zinc-100 px-3 text-xs text-zinc-700 outline-none"
             >
               <option value="latest">최신순</option>
               <option value="oldest">오래된 순</option>
+                <option value="popular">인기순</option>
             </select>
           </div>
         </div>
@@ -1001,6 +1008,17 @@ export default function Home() {
                 >
                   오래된 순
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setSortOrder("popular")}
+                  className={`shrink-0 rounded-full px-3 py-1 text-xs ${
+                    sortOrder === "popular"
+                      ? "bg-zinc-300 text-zinc-900"
+                      : "bg-zinc-100 text-zinc-600"
+                  }`}
+                >
+                  인기순
+                </button>
               </div>
             </div>
 
@@ -1073,12 +1091,15 @@ export default function Home() {
               <select
                 value={sortOrder}
                 onChange={(event) =>
-                  setSortOrder(event.target.value as "latest" | "oldest")
+                  setSortOrder(
+                    event.target.value as "latest" | "oldest" | "popular"
+                  )
                 }
                 className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 outline-none ring-0"
               >
                 <option value="latest">최신순</option>
                 <option value="oldest">오래된 순</option>
+                <option value="popular">인기순</option>
               </select>
             </div>
 
