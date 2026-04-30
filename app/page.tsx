@@ -1382,114 +1382,118 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mb-8 hidden md:flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedDateTag("all");
-                  setSelectedLocationTag("all");
-                  setSelectedMomentTag("all");
-                  setSelectedWithTag("all");
-                }}
-                className={`${FILTER_PILL_BASE} ${FILTER_PILL_INACTIVE}`}
-              >
-                전체 보기
-              </button>
-              <FilterDropdown
-                label="DATE"
-                selected={selectedDateTag}
-                options={dropdownTags.date}
-                groups={dateYearGroups}
-                onSelect={setSelectedDateTag}
-                allLabel="all"
-                className="w-[22rem]"
-              />
-
-              <FilterDropdown
-                label="LOCATION"
-                selected={selectedLocationTag}
-                options={dropdownTags.location.map((tag) => ({
-                  value: tag,
-                  label: tag,
-                }))}
-                onSelect={setSelectedLocationTag}
-                allLabel="all"
-                className="w-[13rem]"
-              />
-
-              <FilterDropdown
-                label="WITH"
-                selected={selectedWithTag}
-                options={dropdownTags.with.map((tag) => ({
-                  value: tag,
-                  label: tag,
-                }))}
-                onSelect={setSelectedWithTag}
-                allLabel="all"
-                className="w-[12rem]"
-              />
-
-              <span className={FILTER_SECTION_LABEL}>Moment</span>
-              <button
-                type="button"
-                onClick={() => setSelectedMomentTag("all")}
-                className={`${FILTER_PILL_BASE} ${
-                  selectedMomentTag === "all"
-                    ? FILTER_PILL_ACTIVE
-                    : FILTER_PILL_INACTIVE
-                }`}
-              >
-                all
-              </button>
-              {dropdownTags.moment.map((tag) => (
+            <div className="mb-8 hidden md:block space-y-3">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
-                  key={`d-moment-${tag}`}
                   type="button"
-                  onClick={() => setSelectedMomentTag(tag)}
+                  onClick={() => {
+                    setSelectedDateTag("all");
+                    setSelectedLocationTag("all");
+                    setSelectedMomentTag("all");
+                    setSelectedWithTag("all");
+                  }}
+                  className={`${FILTER_PILL_BASE} ${FILTER_PILL_INACTIVE}`}
+                >
+                  전체 보기
+                </button>
+                <FilterDropdown
+                  label="DATE"
+                  selected={selectedDateTag}
+                  options={dropdownTags.date}
+                  groups={dateYearGroups}
+                  onSelect={setSelectedDateTag}
+                  allLabel="all"
+                  className="w-[22rem]"
+                />
+                <FilterDropdown
+                  label="LOCATION"
+                  selected={selectedLocationTag}
+                  options={dropdownTags.location.map((tag) => ({
+                    value: tag,
+                    label: tag,
+                  }))}
+                  onSelect={setSelectedLocationTag}
+                  allLabel="all"
+                  className="w-[13rem]"
+                />
+                <FilterDropdown
+                  label="WITH"
+                  selected={selectedWithTag}
+                  options={dropdownTags.with.map((tag) => ({
+                    value: tag,
+                    label: tag,
+                  }))}
+                  onSelect={setSelectedWithTag}
+                  allLabel="all"
+                  className="w-[12rem]"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className={FILTER_SECTION_LABEL}>Moment</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMomentTag("all")}
                   className={`${FILTER_PILL_BASE} ${
-                    selectedMomentTag === tag
+                    selectedMomentTag === "all"
                       ? FILTER_PILL_ACTIVE
                       : FILTER_PILL_INACTIVE
                   }`}
                 >
-                  {tag}
+                  all
                 </button>
-              ))}
+                {dropdownTags.moment.map((tag) => (
+                  <button
+                    key={`d-moment-${tag}`}
+                    type="button"
+                    onClick={() => setSelectedMomentTag(tag)}
+                    className={`${FILTER_PILL_BASE} ${
+                      selectedMomentTag === tag
+                        ? FILTER_PILL_ACTIVE
+                        : FILTER_PILL_INACTIVE
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
 
-              <span className={FILTER_SECTION_LABEL}>Sort</span>
-              <button
-                type="button"
-                onClick={() => setSortOrder("latest")}
-                className={`${FILTER_PILL_BASE} ${
-                  sortOrder === "latest"
-                    ? FILTER_PILL_ACTIVE
-                    : FILTER_PILL_INACTIVE
-                }`}
-              >
-                최신순
-              </button>
-              <button
-                type="button"
-                onClick={() => setSortOrder("oldest")}
-                className={`${FILTER_PILL_BASE} ${
-                  sortOrder === "oldest"
-                    ? FILTER_PILL_ACTIVE
-                    : FILTER_PILL_INACTIVE
-                }`}
-              >
-                오래된 순
-              </button>
-              <button
-                type="button"
-                onClick={() => setSortOrder("popular")}
-                className={`${FILTER_PILL_BASE} ${
-                  sortOrder === "popular"
-                    ? FILTER_PILL_ACTIVE
-                    : FILTER_PILL_INACTIVE
-                }`}
-              >
-                인기순
-              </button>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className={FILTER_SECTION_LABEL}>Sort</span>
+                <button
+                  type="button"
+                  onClick={() => setSortOrder("latest")}
+                  className={`${FILTER_PILL_BASE} ${
+                    sortOrder === "latest"
+                      ? FILTER_PILL_ACTIVE
+                      : FILTER_PILL_INACTIVE
+                  }`}
+                >
+                  최신순
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSortOrder("oldest")}
+                  className={`${FILTER_PILL_BASE} ${
+                    sortOrder === "oldest"
+                      ? FILTER_PILL_ACTIVE
+                      : FILTER_PILL_INACTIVE
+                  }`}
+                >
+                  오래된 순
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSortOrder("popular")}
+                  className={`${FILTER_PILL_BASE} ${
+                    sortOrder === "popular"
+                      ? FILTER_PILL_ACTIVE
+                      : FILTER_PILL_INACTIVE
+                  }`}
+                >
+                  인기순
+                </button>
+              </div>
             </div>
 
             <AnimatePresence mode="wait">
