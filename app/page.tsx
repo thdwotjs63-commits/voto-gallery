@@ -25,6 +25,14 @@ import type { DriveImage } from "@/lib/drive-gallery-data";
 /** 트윗 작성창에 넣을 갤러리 제목 */
 const GALLERY_SHARE_TITLE = "voto gallery — Captured Moments of Kim Da-in";
 
+declare global {
+  interface Window {
+    enableVotoAdminBypass?: () => void;
+    disableVotoAdminBypass?: () => void;
+    votoAdminBypassStatus?: () => boolean;
+  }
+}
+
 type PhotoLikeRow = {
   id: number;
   photo_id: string;
@@ -272,6 +280,54 @@ export default function Home() {
 
     return () => {
       mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const setAdminBypass = (enabled: boolean) => {
+      if (enabled) {
+        window.localStorage.setItem("is_admin", "true");
+      } else {
+        window.localStorage.removeItem("is_admin");
+      }
+    };
+
+    window.enableVotoAdminBypass = () => setAdminBypass(true);
+    window.disableVotoAdminBypass = () => setAdminBypass(false);
+    window.votoAdminBypassStatus = () =>
+      window.localStorage.getItem("is_admin") === "true";
+
+    const isAdminBypass = window.localStorage.getItem("is_admin") === "true";
+    if (isAdminBypass) {
+      return () => {
+        delete window.enableVotoAdminBypass;
+        delete window.disableVotoAdminBypass;
+        delete window.votoAdminBypassStatus;
+      };
+    }
+
+    const storageKey = "voto_visitor_session_id";
+    let sessionId = window.localStorage.getItem(storageKey);
+    if (!sessionId) {
+      sessionId = window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+      window.localStorage.setItem(storageKey, sessionId);
+    }
+
+    void fetch("/api/visitors/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+      keepalive: true,
+    }).catch(() => {
+      // Swallow tracking errors; this should never block rendering.
+    });
+
+    return () => {
+      delete window.enableVotoAdminBypass;
+      delete window.disableVotoAdminBypass;
+      delete window.votoAdminBypassStatus;
     };
   }, []);
 
