@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import Image from "next/image";
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
@@ -31,6 +38,7 @@ const CONTENT_MAX_LENGTH = 180;
 const NICKNAME_MAX_LENGTH = 24;
 
 const GALLERY_PAGE_SIZE = 12;
+const GRID_MIN_VISIBLE_COUNT = 20;
 
 const THUMB_BLUR_DATA_URL =
   "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjZTBlMGUwIi8+PC9zdmc+";
@@ -38,7 +46,126 @@ const THUMB_BLUR_DATA_URL =
 const THUMB_SIZES =
   "(max-width: 640px) 92vw, (max-width: 768px) 48vw, (max-width: 1024px) 31vw, (max-width: 1280px) 24vw, 20vw";
 
-function GalleryThumbnail({ image }: { image: DriveImage }) {
+const THUMB_SIZES_COMPACT =
+  "(max-width: 640px) 28vw, (max-width: 1024px) 16vw, 11vw";
+
+const FEED_SCROLL_POLL_MS = 50;
+const FEED_SCROLL_MAX_MS = 2000;
+
+function scrollToPhoto(photoDriveId: string) {
+  const el = document.getElementById(`photo-${photoDriveId}`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function GalleryFeedScrollOrchestrator({
+  scrollSession,
+  scrollTargetRef,
+  onScrollPriorityClear,
+}: {
+  scrollSession: number;
+  scrollTargetRef: MutableRefObject<string | null>;
+  onScrollPriorityClear: () => void;
+}) {
+  const onClearRef = useRef(onScrollPriorityClear);
+  onClearRef.current = onScrollPriorityClear;
+
+  useEffect(() => {
+    const rawId = scrollTargetRef.current;
+    if (!rawId) return;
+
+    let finished = false;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+    const htmlEl = document.documentElement;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = htmlEl.style.overflow;
+    let elapsed = 0;
+    let lockActive = false;
+
+    const blockWheel: EventListener = (event) => {
+      event.preventDefault();
+    };
+
+    const releaseScrollLock = () => {
+      if (!lockActive) return;
+      lockActive = false;
+      document.body.style.overflow = previousBodyOverflow;
+      htmlEl.style.overflow = previousHtmlOverflow;
+      window.removeEventListener("wheel", blockWheel);
+    };
+
+    const applyScrollLock = () => {
+      if (lockActive) return;
+      lockActive = true;
+      document.body.style.overflow = "hidden";
+      htmlEl.style.overflow = "hidden";
+      window.addEventListener("wheel", blockWheel, { passive: false });
+    };
+
+    const complete = () => {
+      if (finished) return;
+      finished = true;
+      if (intervalId !== undefined) {
+        clearInterval(intervalId);
+        intervalId = undefined;
+      }
+      scrollTargetRef.current = null;
+      onClearRef.current();
+      releaseScrollLock();
+    };
+
+    applyScrollLock();
+
+    const tryScrollToTarget = () => {
+      if (finished) return true;
+      const id = scrollTargetRef.current;
+      if (!id) {
+        complete();
+        return true;
+      }
+      const el = document.getElementById(`photo-${id}`);
+      if (el) {
+        scrollToPhoto(id);
+        complete();
+        return true;
+      }
+      return false;
+    };
+
+    if (tryScrollToTarget()) {
+      return () => {
+        finished = true;
+        if (intervalId !== undefined) clearInterval(intervalId);
+        releaseScrollLock();
+      };
+    }
+
+    intervalId = setInterval(() => {
+      if (finished) return;
+      if (tryScrollToTarget()) return;
+      elapsed += FEED_SCROLL_POLL_MS;
+      if (elapsed >= FEED_SCROLL_MAX_MS) {
+        complete();
+      }
+    }, FEED_SCROLL_POLL_MS);
+
+    return () => {
+      finished = true;
+      if (intervalId !== undefined) clearInterval(intervalId);
+      releaseScrollLock();
+    };
+  }, [scrollSession, scrollTargetRef]);
+
+  return null;
+}
+
+function GalleryThumbnail({
+  image,
+  sizes = THUMB_SIZES,
+}: {
+  image: DriveImage;
+  sizes?: string;
+}) {
   const [sharp, setSharp] = useState(false);
   return (
     <div className="relative size-full">
@@ -46,7 +173,7 @@ function GalleryThumbnail({ image }: { image: DriveImage }) {
         src={image.thumbnailUrl}
         alt={image.name}
         fill
-        sizes={THUMB_SIZES}
+        sizes={sizes}
         quality={60}
         placeholder="blur"
         blurDataURL={THUMB_BLUR_DATA_URL}
@@ -74,7 +201,6 @@ export default function Home() {
     "latest"
   );
   const [activeBestIndex, setActiveBestIndex] = useState(0);
-  const [showTopButton, setShowTopButton] = useState(false);
   const [showStickyHeader, setShowStickyHeader] = useState(false);
   const [guestbookEntries, setGuestbookEntries] = useState<GuestbookEntry[]>([]);
   const [guestNickname, setGuestNickname] = useState("");
@@ -84,13 +210,20 @@ export default function Home() {
   const likesRef = useRef<Record<string, number>>({});
   const lastLikeClickAtRef = useRef<Record<string, number>>({});
   const galleryRef = useRef<HTMLDivElement | null>(null);
-  const guestbookRef = useRef<HTMLElement | null>(null);
   const [heroScrollY, setHeroScrollY] = useState(0);
   const [heroVisible, setHeroVisible] = useState(false);
   const lastScrollYRef = useRef(0);
   const lastGuestSubmitRef = useRef<{ content: string; at: number } | null>(null);
   const [visibleCount, setVisibleCount] = useState(GALLERY_PAGE_SIZE);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const gridListRef = useRef<HTMLElement | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "feed">("feed");
+  const [guestbookModalOpen, setGuestbookModalOpen] = useState(false);
+  const feedScrollTargetIdRef = useRef<string | null>(null);
+  const [feedScrollSession, setFeedScrollSession] = useState(0);
+  const [feedScrollPriorityId, setFeedScrollPriorityId] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -146,7 +279,6 @@ export default function Home() {
       const previousY = lastScrollYRef.current;
 
       setHeroScrollY(currentY);
-      setShowTopButton(currentY > 320);
 
       if (currentY < 80) {
         setShowStickyHeader(false);
@@ -429,6 +561,12 @@ export default function Home() {
     [sortedFilteredImages, visibleCount]
   );
 
+  const fetchNextPage = useCallback(() => {
+    setVisibleCount((previous) =>
+      Math.min(previous + GALLERY_PAGE_SIZE, filteredTotal)
+    );
+  }, [filteredTotal]);
+
   useEffect(() => {
     setVisibleCount(GALLERY_PAGE_SIZE);
   }, [
@@ -450,16 +588,66 @@ export default function Home() {
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
         observer.unobserve(node);
-        setVisibleCount((previous) =>
-          Math.min(previous + GALLERY_PAGE_SIZE, filteredTotal)
-        );
+        fetchNextPage();
       },
       { root: null, rootMargin: "320px 0px", threshold: 0 }
     );
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [visibleCount, filteredTotal]);
+  }, [visibleCount, filteredTotal, viewMode, fetchNextPage]);
+
+  useEffect(() => {
+    if (viewMode !== "grid") return;
+    if (visibleCount >= filteredTotal) return;
+
+    const measureAndLoad = () => {
+      const minRequired = Math.min(GRID_MIN_VISIBLE_COUNT, filteredTotal);
+      const needsMinBatch = visibleCount < minRequired;
+      const gridHeight = gridListRef.current?.getBoundingClientRect().height ?? 0;
+      const needsMoreByHeight =
+        gridHeight > 0 && gridHeight < window.innerHeight;
+
+      if (needsMinBatch || needsMoreByHeight) {
+        fetchNextPage();
+      }
+    };
+
+    const rafId = window.requestAnimationFrame(measureAndLoad);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [viewMode, visibleCount, filteredTotal, fetchNextPage]);
+
+  const handleGridThumbNavigate = (photoId: string) => {
+    const idx = sortedFilteredImages.findIndex((img) => img.id === photoId);
+    if (idx < 0) return;
+    feedScrollTargetIdRef.current = photoId;
+    setFeedScrollPriorityId(photoId);
+    setFeedScrollSession((n) => n + 1);
+    setVisibleCount((c) => Math.max(c, idx + 1));
+    setViewMode("feed");
+  };
+
+  useEffect(() => {
+    if (viewMode === "grid") {
+      setFeedScrollPriorityId(null);
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (!guestbookModalOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setGuestbookModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [guestbookModalOpen]);
 
   const bestPicks = useMemo(
     () =>
@@ -483,10 +671,6 @@ export default function Home() {
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const scrollToGuestbook = () => {
-    guestbookRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   return (
@@ -1003,72 +1187,149 @@ export default function Home() {
               </select>
             </div>
 
-            <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {visibleGalleryImages.map((image) => (
-              <article key={image.id} className="mb-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setLightboxIndex(
-                      sortedFilteredImages.findIndex((img) => img.id === image.id)
-                    )
-                  }
-                  className={`relative block w-full overflow-hidden rounded-sm bg-zinc-100 ${
-                    image.ratio === "portrait" ? "aspect-[2/3]" : "aspect-[3/2]"
-                  }`}
+            <AnimatePresence mode="wait">
+              {viewMode === "grid" ? (
+                <motion.section
+                  key="gallery-grid"
+                  ref={gridListRef}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                  className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8"
                 >
-                  <GalleryThumbnail image={image} />
-                </button>
-
-                <div className="mt-2 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => handleLike(image.id)}
-                    disabled={Boolean(likingByPhoto[image.id])}
-                    className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    ♥ {likesByPhoto[image.id] ?? 0}
-                  </button>
-                  <a
-                    href={image.downloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 transition hover:bg-zinc-200"
-                    aria-label={`Download ${image.name}`}
-                  >
-                    ↓ Download
-                  </a>
-                </div>
-
-                {image.tags.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {image.tags.map((tag) => (
+                  {visibleGalleryImages.map((image) => (
+                    <article
+                      key={image.id}
+                      id={`photo-${image.id}`}
+                      className="mb-0"
+                    >
                       <button
-                        key={`${image.id}-${tag}`}
                         type="button"
-                        onClick={() => {
-                          if (image.dateTag === tag) setSelectedDateTag(tag);
-                          if (image.locationTag === tag) setSelectedLocationTag(tag);
-                          if (image.momentTag === tag) setSelectedMomentTag(tag);
-                          if (image.withTag === tag) setSelectedWithTag(tag);
-                        }}
-                        className="rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] lowercase text-zinc-600 transition hover:bg-zinc-200"
+                        onClick={() => handleGridThumbNavigate(image.id)}
+                        className={`relative block w-full overflow-hidden rounded-sm bg-zinc-100 ${
+                          image.ratio === "portrait"
+                            ? "aspect-[3/4]"
+                            : "aspect-[4/3]"
+                        }`}
                       >
-                        {tag}
+                        <GalleryThumbnail
+                          image={image}
+                          sizes={THUMB_SIZES_COMPACT}
+                        />
+                        <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/55 px-1 py-0.5 text-[9px] font-medium text-white tabular-nums">
+                          ♥{likesByPhoto[image.id] ?? 0}
+                        </span>
                       </button>
-                    ))}
-                  </div>
-                ) : null}
-              </article>
-              ))}
-              {visibleCount < filteredTotal ? (
-                <div
-                  ref={loadMoreRef}
-                  className="col-span-full min-h-12 shrink-0"
-                  aria-hidden
-                />
-              ) : null}
-            </section>
+                    </article>
+                  ))}
+                  {visibleCount < filteredTotal ? (
+                    <div
+                      ref={loadMoreRef}
+                      className="col-span-full min-h-12 shrink-0"
+                      aria-hidden
+                    />
+                  ) : null}
+                </motion.section>
+              ) : (
+                <motion.section
+                  key="gallery-feed"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                  className="flex flex-col gap-14 sm:gap-16"
+                >
+                  <GalleryFeedScrollOrchestrator
+                    scrollSession={feedScrollSession}
+                    scrollTargetRef={feedScrollTargetIdRef}
+                    onScrollPriorityClear={() => setFeedScrollPriorityId(null)}
+                  />
+                  {visibleGalleryImages.map((image) => (
+                    <article
+                      key={image.id}
+                      id={`photo-${image.id}`}
+                      className="scroll-mt-28"
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLightboxIndex(
+                            sortedFilteredImages.findIndex(
+                              (img) => img.id === image.id
+                            )
+                          )
+                        }
+                        className="relative mx-auto block w-full max-w-4xl overflow-hidden rounded-lg bg-zinc-100"
+                        style={{
+                          aspectRatio: `${image.width} / ${image.height}`,
+                        }}
+                      >
+                        <Image
+                          src={image.originalUrl}
+                          alt={image.name}
+                          fill
+                          className="object-contain"
+                          sizes="(max-width: 1024px) 92vw, 896px"
+                          quality={88}
+                          priority={image.id === feedScrollPriorityId}
+                          placeholder="blur"
+                          blurDataURL={THUMB_BLUR_DATA_URL}
+                        />
+                      </button>
+
+                      <div className="mx-auto mt-3 flex max-w-4xl items-center justify-between px-1">
+                        <button
+                          type="button"
+                          onClick={() => handleLike(image.id)}
+                          disabled={Boolean(likingByPhoto[image.id])}
+                          className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          ♥ {likesByPhoto[image.id] ?? 0}
+                        </button>
+                        <a
+                          href={image.downloadUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 transition hover:bg-zinc-200"
+                          aria-label={`Download ${image.name}`}
+                        >
+                          ↓ Download
+                        </a>
+                      </div>
+
+                      {image.tags.length > 0 ? (
+                        <div className="mx-auto mt-2 flex max-w-4xl flex-wrap gap-2 px-1">
+                          {image.tags.map((tag) => (
+                            <button
+                              key={`${image.id}-${tag}`}
+                              type="button"
+                              onClick={() => {
+                                if (image.dateTag === tag) setSelectedDateTag(tag);
+                                if (image.locationTag === tag)
+                                  setSelectedLocationTag(tag);
+                                if (image.momentTag === tag) setSelectedMomentTag(tag);
+                                if (image.withTag === tag) setSelectedWithTag(tag);
+                              }}
+                              className="rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] lowercase text-zinc-600 transition hover:bg-zinc-200"
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </article>
+                  ))}
+                  {visibleCount < filteredTotal ? (
+                    <div
+                      ref={loadMoreRef}
+                      className="min-h-12 w-full shrink-0"
+                      aria-hidden
+                    />
+                  ) : null}
+                </motion.section>
+              )}
+            </AnimatePresence>
           </>
         ) : (
           <p className="text-sm text-zinc-500">
@@ -1078,87 +1339,136 @@ export default function Home() {
         )}
       </main>
 
-      <section
-        ref={guestbookRef}
-        className="mt-16 rounded-2xl border border-zinc-800/70 bg-zinc-950 px-4 py-6 text-zinc-100 sm:px-6 sm:py-8"
-      >
-        <h3 className="text-lg font-medium tracking-wide">Message for Dain</h3>
-        <p className="mt-2 text-sm text-zinc-400">
-          다인이에게 이쁜 응원의 말을 남겨주세요.
-        </p>
-
-        <form onSubmit={handleGuestbookSubmit} className="mt-5 space-y-3">
-          <input
-            type="text"
-            value={guestNickname}
-            onChange={(event) => setGuestNickname(event.target.value)}
-            placeholder="Nickname"
-            maxLength={NICKNAME_MAX_LENGTH}
-            className="min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
-          />
-          <div className="-mt-1 text-right text-[11px] text-zinc-500">
-            {guestNickname.length}/{NICKNAME_MAX_LENGTH}
-          </div>
-          <textarea
-            value={guestContent}
-            onChange={(event) => setGuestContent(event.target.value)}
-            placeholder="Write your message..."
-            maxLength={CONTENT_MAX_LENGTH}
-            rows={4}
-            className="min-h-28 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
-          />
-          <div className="-mt-1 text-right text-[11px] text-zinc-500">
-            {guestContent.length}/{CONTENT_MAX_LENGTH}
-          </div>
-          {guestbookError ? (
-            <p className="text-xs text-rose-400">{guestbookError}</p>
-          ) : null}
-          <button
-            type="submit"
-            disabled={guestSubmitting}
-            className="min-h-11 rounded-full bg-white/90 px-5 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {guestSubmitting ? "Sending..." : "Send Message"}
-          </button>
-        </form>
-
-        <div className="mt-6 space-y-3">
-          <AnimatePresence initial={false}>
-            {guestbookEntries.map((entry) => (
-              <motion.article
-                key={entry.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.25 }}
-                className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-zinc-100">{entry.nickname}</p>
-                  <p className="text-[11px] text-zinc-500">
-                    {new Date(entry.created_at).toLocaleString("ko-KR", {
-                      month: "2-digit",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </div>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
-                  {entry.content}
-                </p>
-              </motion.article>
-            ))}
-          </AnimatePresence>
-          {guestbookEntries.length === 0 ? (
-            <p className="text-sm text-zinc-500">Be the first to leave a message.</p>
-          ) : null}
-        </div>
-      </section>
-
       <footer className="mt-20 border-t border-zinc-200/80 py-6 text-center text-xs text-zinc-500">
         © 2025 VOTO. All rights reserved.
       </footer>
+
+      <AnimatePresence>
+        {guestbookModalOpen ? (
+          <motion.div
+            key="guestbook-modal"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <button
+              type="button"
+              aria-label="모달 닫기"
+              className="absolute inset-0 bg-zinc-950/55 backdrop-blur-md"
+              onClick={() => setGuestbookModalOpen(false)}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="guestbook-modal-title"
+              initial={{ opacity: 0, y: 20, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 14, scale: 0.98 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className="relative z-10 flex max-h-[min(85dvh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-zinc-800/90 bg-zinc-950 text-zinc-100 shadow-2xl"
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-zinc-800/80 px-5 py-4">
+                <h3
+                  id="guestbook-modal-title"
+                  className="text-lg font-medium tracking-wide"
+                >
+                  Message for Dain
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setGuestbookModalOpen(false)}
+                  aria-label="닫기"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
+                >
+                  <span className="text-xl leading-none" aria-hidden>
+                    ×
+                  </span>
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+                <p className="text-sm text-zinc-400">
+                  다인이에게 이쁜 응원의 말을 남겨주세요.
+                </p>
+
+                <form onSubmit={handleGuestbookSubmit} className="mt-5 space-y-3">
+                  <input
+                    type="text"
+                    value={guestNickname}
+                    onChange={(event) => setGuestNickname(event.target.value)}
+                    placeholder="Nickname"
+                    maxLength={NICKNAME_MAX_LENGTH}
+                    className="min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
+                  />
+                  <div className="-mt-1 text-right text-[11px] text-zinc-500">
+                    {guestNickname.length}/{NICKNAME_MAX_LENGTH}
+                  </div>
+                  <textarea
+                    value={guestContent}
+                    onChange={(event) => setGuestContent(event.target.value)}
+                    placeholder="Write your message..."
+                    maxLength={CONTENT_MAX_LENGTH}
+                    rows={4}
+                    className="min-h-28 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
+                  />
+                  <div className="-mt-1 text-right text-[11px] text-zinc-500">
+                    {guestContent.length}/{CONTENT_MAX_LENGTH}
+                  </div>
+                  {guestbookError ? (
+                    <p className="text-xs text-rose-400">{guestbookError}</p>
+                  ) : null}
+                  <button
+                    type="submit"
+                    disabled={guestSubmitting}
+                    className="min-h-11 rounded-full bg-white/90 px-5 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {guestSubmitting ? "Sending..." : "Send Message"}
+                  </button>
+                </form>
+
+                <div className="mt-6 space-y-3">
+                  <AnimatePresence initial={false}>
+                    {guestbookEntries.map((entry) => (
+                      <motion.article
+                        key={entry.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.25 }}
+                        className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium text-zinc-100">
+                            {entry.nickname}
+                          </p>
+                          <p className="text-[11px] text-zinc-500">
+                            {new Date(entry.created_at).toLocaleString("ko-KR", {
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        </div>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
+                          {entry.content}
+                        </p>
+                      </motion.article>
+                    ))}
+                  </AnimatePresence>
+                  {guestbookEntries.length === 0 ? (
+                    <p className="text-sm text-zinc-500">
+                      Be the first to leave a message.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <Lightbox
         open={lightboxIndex >= 0}
@@ -1225,28 +1535,42 @@ export default function Home() {
         }
       `}</style>
 
-      <button
-        type="button"
-        onClick={scrollToTop}
-        aria-label="Scroll to top"
-        className={`fixed bottom-5 right-5 z-40 h-11 w-11 rounded-full border border-white/40 bg-white/70 text-lg text-zinc-800 shadow-md backdrop-blur-md transition-all duration-300 ${
-          showTopButton
-            ? "translate-y-0 opacity-100"
-            : "pointer-events-none translate-y-3 opacity-0"
-        }`}
-      >
-        ↑
-      </button>
+      <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
+        <button
+          type="button"
+          onClick={scrollToTop}
+          aria-label="Scroll to top"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-white/70 text-lg text-zinc-800 shadow-md backdrop-blur-md transition hover:bg-white/85"
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode((m) => (m === "feed" ? "grid" : "feed"))}
+          aria-label={
+            viewMode === "feed" ? "모아 보기로 전환" : "크게 보기로 전환"
+          }
+          className="flex min-h-11 min-w-[4.75rem] flex-col items-center justify-center rounded-full border border-white/40 bg-white/70 px-2.5 py-1 text-[10px] font-semibold leading-tight text-zinc-800 shadow-md backdrop-blur-md transition hover:bg-white/85"
+        >
+          {viewMode === "feed" ? (
+            <>
+              <span>모아보기</span>
+              <span className="text-[9px] font-normal text-zinc-500">Grid</span>
+            </>
+          ) : (
+            <>
+              <span>크게보기</span>
+              <span className="text-[9px] font-normal text-zinc-500">Feed</span>
+            </>
+          )}
+        </button>
+      </div>
 
       <button
         type="button"
-        onClick={scrollToGuestbook}
+        onClick={() => setGuestbookModalOpen(true)}
         aria-label="응원메시지 남기기"
-        className={`fixed bottom-5 left-5 z-40 min-h-11 rounded-full border border-white/35 bg-white/70 px-3 text-xs text-zinc-800 shadow-md backdrop-blur-md transition-all duration-300 ${
-          showTopButton
-            ? "translate-y-0 opacity-100"
-            : "pointer-events-none translate-y-3 opacity-0"
-        }`}
+        className="fixed bottom-5 left-5 z-40 min-h-11 rounded-full border border-white/35 bg-white/70 px-3 text-xs text-zinc-800 shadow-md backdrop-blur-md transition hover:bg-white/85"
       >
         응원메시지 남기기
       </button>
