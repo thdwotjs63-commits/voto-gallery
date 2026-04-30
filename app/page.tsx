@@ -11,27 +11,8 @@ import "swiper/css";
 import "swiper/css/effect-fade";
 import "swiper/css/pagination";
 import { AnimatePresence, motion } from "framer-motion";
-import { supabase } from "@/lib/supabase-client";
-
-type DriveImage = {
-  id: string;
-  name: string;
-  description: string;
-  story?: string;
-  tags: string[];
-  dateTag?: string;
-  locationTag?: string;
-  momentTag?: string;
-  withTag?: string;
-  /** YYYYMMDD from parent folder name (e.g. 260413 → 20260413); 0 if none */
-  folderSortKey: number;
-  thumbnailUrl: string;
-  originalUrl: string;
-  downloadUrl: string;
-  ratio: "portrait" | "landscape";
-  width: number;
-  height: number;
-};
+import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
+import type { DriveImage } from "@/lib/drive-gallery-data";
 
 type PhotoLikeRow = {
   id: number;
@@ -49,222 +30,33 @@ const BANNED_WORDS = ["씨발", "병신", "개새끼", "지랄", "fuck", "shit",
 const CONTENT_MAX_LENGTH = 180;
 const NICKNAME_MAX_LENGTH = 24;
 
-const REQUIRED_ENV_KEYS = [
-  "NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY",
-  "NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_ID",
-] as const;
+const GALLERY_PAGE_SIZE = 12;
 
-function extractHashtags(text: string): string[] {
-  const matches = text.match(/#[\p{L}\p{N}_-]+/gu) ?? [];
-  return Array.from(new Set(matches.map((tag) => tag.toLowerCase())));
-}
+const THUMB_BLUR_DATA_URL =
+  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjZTBlMGUwIi8+PC9zdmc+";
 
-function extractStory(text: string): string | undefined {
-  const withoutHashtags = text.replace(/#[\p{L}\p{N}_-]+/gu, " ");
-  const normalized = withoutHashtags.replace(/\s+/g, " ").trim();
-  return normalized.length > 0 ? normalized : undefined;
-}
+const THUMB_SIZES =
+  "(max-width: 640px) 92vw, (max-width: 768px) 48vw, (max-width: 1024px) 31vw, (max-width: 1280px) 24vw, 20vw";
 
-/** Parse calendar date from folder/file label: YYYYMMDD or YYMMDD (YY 00–69 → 20YY) */
-function parseDateKeyFromFolderLabel(text: string): number {
-  let best = 0;
-  const eight = text.match(/\b(19\d{6}|20\d{6})\b/g);
-  if (eight) {
-    for (const m of eight) {
-      const n = Number(m);
-      if (n > best) best = n;
-    }
-  }
-  const stripped = text.replace(/\b(19\d{6}|20\d{6})\b/g, " ");
-  const yymmdd = stripped.matchAll(/\b(\d{2})(\d{2})(\d{2})\b/g);
-  for (const m of yymmdd) {
-    const yy = Number(m[1]);
-    const mm = Number(m[2]);
-    const dd = Number(m[3]);
-    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) continue;
-    const yyyy = yy >= 70 ? 1900 + yy : 2000 + yy;
-    const key = yyyy * 10000 + mm * 100 + dd;
-    if (key > best) best = key;
-  }
-  return best;
-}
-
-async function getGoogleDriveImages(): Promise<DriveImage[]> {
-  const envApiKey = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY;
-  const envFolderId = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_ID;
-
-  const apiKey = envApiKey;
-  const folderId = envFolderId;
-
-  console.log("[Google Drive] Config source: .env.local");
-
-  if (!apiKey || !folderId) {
-    const missingKeys = REQUIRED_ENV_KEYS.filter((key) => !process.env[key]);
-    console.log("[Google Drive] Env check:", {
-      NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY: Boolean(envApiKey),
-      NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_ID: Boolean(envFolderId),
-    });
-    console.log(
-      "[Google Drive] Missing env keys:",
-      missingKeys.length > 0 ? missingKeys.join(", ") : "(unknown)"
-    );
-    throw new Error(
-      `Missing environment variables: ${
-        missingKeys.length > 0 ? missingKeys.join(", ") : "unknown"
-      }`
-    );
-  }
-
-  const resolvedApiKey = apiKey;
-
-  async function fetchFiles<T>(query: string, fields: string): Promise<T[]> {
-    let pageToken: string | undefined;
-    const items: T[] = [];
-
-    do {
-      const params = new URLSearchParams({
-        key: resolvedApiKey,
-        pageSize: "1000",
-        q: query,
-        fields: `nextPageToken,files(${fields})`,
-      });
-
-      if (pageToken) {
-        params.set("pageToken", pageToken);
-      }
-
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
-        { cache: "no-store" }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Google Drive API error: ${response.status}`);
-      }
-
-      const data = (await response.json()) as {
-        nextPageToken?: string;
-        files?: T[];
-      };
-
-      items.push(...(data.files ?? []));
-      pageToken = data.nextPageToken;
-    } while (pageToken);
-
-    return items;
-  }
-
-  let rootFolderName = "";
-  try {
-    const rootRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
-        folderId
-      )}?fields=name&key=${encodeURIComponent(resolvedApiKey)}`,
-      { cache: "no-store" }
-    );
-    if (rootRes.ok) {
-      const rootData = (await rootRes.json()) as { name?: string };
-      rootFolderName = rootData.name ?? "";
-    }
-  } catch {
-    /* ignore */
-  }
-
-  type QueueItem = { id: string; name: string };
-  const queue: QueueItem[] = [{ id: folderId, name: rootFolderName }];
-  const visitedFolderIds = new Set<string>();
-  const uniqueFiles = new Map<
-    string,
-    {
-      id: string;
-      name: string;
-      description?: string;
-      imageMediaMetadata?: { width?: number; height?: number };
-      folderSortKey: number;
-    }
-  >();
-
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) break;
-    const { id: currentFolderId, name: currentFolderName } = current;
-    if (visitedFolderIds.has(currentFolderId)) continue;
-    visitedFolderIds.add(currentFolderId);
-
-    const folderSortKey = parseDateKeyFromFolderLabel(currentFolderName);
-
-    const [subfolders, imagesInFolder] = await Promise.all([
-      fetchFiles<{ id: string; name: string }>(
-        `'${currentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-        "id,name"
-      ),
-      fetchFiles<{
-        id: string;
-        name: string;
-        description?: string;
-        imageMediaMetadata?: { width?: number; height?: number };
-      }>(
-        `'${currentFolderId}' in parents and mimeType contains 'image/' and trashed = false`,
-        "id,name,description,imageMediaMetadata(width,height)"
-      ),
-    ]);
-
-    for (const folder of subfolders) {
-      queue.push({ id: folder.id, name: folder.name ?? "" });
-    }
-
-    for (const file of imagesInFolder) {
-      const fromFileName = parseDateKeyFromFolderLabel(file.name);
-      const key = Math.max(folderSortKey, fromFileName);
-      uniqueFiles.set(file.id, {
-        ...file,
-        folderSortKey: key,
-      });
-    }
-  }
-
-  return Array.from(uniqueFiles.values())
-    .map((file) => {
-      const width = file.imageMediaMetadata?.width ?? 1200;
-      const height = file.imageMediaMetadata?.height ?? 1800;
-      const description = file.description ?? "";
-      const tags = extractHashtags(description);
-      const story = extractStory(description);
-      const tagDateKey = Number((tags[0] ?? "").replace("#", "")) || 0;
-      const effectiveFolderKey =
-        file.folderSortKey > 0 ? file.folderSortKey : tagDateKey;
-
-      return {
-        id: file.id,
-        name: file.name,
-        description,
-        story,
-        tags,
-        dateTag: tags[0],
-        locationTag: tags[1],
-        momentTag: tags[2],
-        withTag: tags[3],
-        folderSortKey: effectiveFolderKey,
-        thumbnailUrl: `https://lh3.googleusercontent.com/d/${file.id}=w800`,
-        originalUrl: `https://lh3.googleusercontent.com/d/${file.id}`,
-        downloadUrl: `https://drive.google.com/uc?export=download&id=${file.id}`,
-        ratio: (width >= height ? "landscape" : "portrait") as
-          | "landscape"
-          | "portrait",
-        width,
-        height,
-      };
-    })
-    .sort((a, b) => {
-      if (a.folderSortKey !== b.folderSortKey) {
-        return b.folderSortKey - a.folderSortKey;
-      }
-
-      return b.name.localeCompare(a.name, undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
-    });
+function GalleryThumbnail({ image }: { image: DriveImage }) {
+  const [sharp, setSharp] = useState(false);
+  return (
+    <div className="relative size-full">
+      <Image
+        src={image.thumbnailUrl}
+        alt={image.name}
+        fill
+        sizes={THUMB_SIZES}
+        quality={60}
+        placeholder="blur"
+        blurDataURL={THUMB_BLUR_DATA_URL}
+        className={`object-contain transition-[opacity,filter] duration-700 ease-out ${
+          sharp ? "opacity-100 [filter:blur(0px)]" : "opacity-90 [filter:blur(14px)]"
+        }`}
+        onLoadingComplete={() => setSharp(true)}
+      />
+    </div>
+  );
 }
 
 export default function Home() {
@@ -297,13 +89,28 @@ export default function Home() {
   const [heroVisible, setHeroVisible] = useState(false);
   const lastScrollYRef = useRef(0);
   const lastGuestSubmitRef = useRef<{ content: string; at: number } | null>(null);
+  const [visibleCount, setVisibleCount] = useState(GALLERY_PAGE_SIZE);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
     const load = async () => {
       try {
-        const driveImages = await getGoogleDriveImages();
+        const response = await fetch("/api/drive-gallery");
+        const payload = (await response.json()) as
+          | DriveImage[]
+          | { error?: string };
+
+        if (!response.ok) {
+          const message =
+            typeof (payload as { error?: string }).error === "string"
+              ? (payload as { error: string }).error
+              : `Gallery request failed (${response.status})`;
+          throw new Error(message);
+        }
+
+        const driveImages = payload as DriveImage[];
         if (mounted) {
           setImages(driveImages);
         }
@@ -361,6 +168,8 @@ export default function Home() {
   }, [likesByPhoto]);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
     const photoIds = images.map((image) => image.id);
     if (photoIds.length === 0) return;
 
@@ -397,6 +206,8 @@ export default function Home() {
   }, [images]);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
     let mounted = true;
 
     const loadGuestbook = async () => {
@@ -469,6 +280,11 @@ export default function Home() {
       return;
     }
 
+    if (!isSupabaseConfigured) {
+      setGuestbookError("게스트북을 사용하려면 Supabase 환경 변수를 설정해 주세요.");
+      return;
+    }
+
     setGuestSubmitting(true);
     try {
       const { data, error: insertError } = await supabase
@@ -496,7 +312,7 @@ export default function Home() {
   };
 
   const handleLike = async (photoId: string) => {
-    if (likingByPhoto[photoId]) return;
+    if (!isSupabaseConfigured || likingByPhoto[photoId]) return;
 
     const now = Date.now();
     const lastClick = lastLikeClickAtRef.current[photoId] ?? 0;
@@ -605,6 +421,45 @@ export default function Home() {
       }),
     [filteredImages, sortOrder, likesByPhoto]
   );
+
+  const filteredTotal = sortedFilteredImages.length;
+
+  const visibleGalleryImages = useMemo(
+    () => sortedFilteredImages.slice(0, visibleCount),
+    [sortedFilteredImages, visibleCount]
+  );
+
+  useEffect(() => {
+    setVisibleCount(GALLERY_PAGE_SIZE);
+  }, [
+    selectedDateTag,
+    selectedLocationTag,
+    selectedMomentTag,
+    selectedWithTag,
+    sortOrder,
+    images.length,
+  ]);
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || visibleCount >= filteredTotal) {
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        observer.unobserve(node);
+        setVisibleCount((previous) =>
+          Math.min(previous + GALLERY_PAGE_SIZE, filteredTotal)
+        );
+      },
+      { root: null, rootMargin: "320px 0px", threshold: 0 }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [visibleCount, filteredTotal]);
 
   const bestPicks = useMemo(
     () =>
@@ -1149,7 +1004,7 @@ export default function Home() {
             </div>
 
             <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {sortedFilteredImages.map((image) => (
+              {visibleGalleryImages.map((image) => (
               <article key={image.id} className="mb-2">
                 <button
                   type="button"
@@ -1162,14 +1017,7 @@ export default function Home() {
                     image.ratio === "portrait" ? "aspect-[2/3]" : "aspect-[3/2]"
                   }`}
                 >
-                  <Image
-                    src={image.thumbnailUrl}
-                    alt={image.name}
-                    fill
-                    className="object-contain"
-                    sizes="(max-width: 640px) 92vw, (max-width: 768px) 48vw, (max-width: 1024px) 31vw, (max-width: 1280px) 24vw, 20vw"
-                    quality={60}
-                  />
+                  <GalleryThumbnail image={image} />
                 </button>
 
                 <div className="mt-2 flex items-center justify-between">
@@ -1213,6 +1061,13 @@ export default function Home() {
                 ) : null}
               </article>
               ))}
+              {visibleCount < filteredTotal ? (
+                <div
+                  ref={loadMoreRef}
+                  className="col-span-full min-h-12 shrink-0"
+                  aria-hidden
+                />
+              ) : null}
             </section>
           </>
         ) : (
