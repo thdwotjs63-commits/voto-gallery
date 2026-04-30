@@ -18,12 +18,24 @@ import "swiper/css";
 import "swiper/css/effect-fade";
 import "swiper/css/pagination";
 import { AnimatePresence, motion } from "framer-motion";
-import { Instagram, Link2, Share2, Twitter } from "lucide-react";
+import { ChevronDown, Instagram, Link2, Share2, Twitter } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 import type { DriveImage } from "@/lib/drive-gallery-data";
 
 /** 트윗 작성창에 넣을 갤러리 제목 */
 const GALLERY_SHARE_TITLE = "voto gallery — Captured Moments of Kim Da-in";
+const FILTER_PILL_BASE =
+  "min-h-11 shrink-0 rounded-full border border-[#00287A] px-3.5 py-2 text-xs font-medium transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90";
+const FILTER_PILL_ACTIVE = "bg-[#00287A] text-white";
+const FILTER_PILL_INACTIVE = "bg-white text-[#00287A]";
+const FILTER_SECTION_LABEL =
+  "text-[11px] font-semibold uppercase tracking-wider text-[#00287A]/80";
+const FILTER_DROPDOWN_TRIGGER =
+  "flex min-h-11 w-full items-center justify-between gap-2 rounded-full border border-[#00287A] px-3.5 py-2 text-xs font-medium transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90";
+const FILTER_DROPDOWN_TRIGGER_ACTIVE = "!bg-[#00287A] !text-white";
+const FILTER_DROPDOWN_TRIGGER_INACTIVE = "!bg-white !text-[#00287A]";
+const FILTER_DROPDOWN_MENU =
+  "absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-72 overflow-auto rounded-2xl border border-[#00287A]/25 bg-white/90 p-2 shadow-[0_18px_38px_rgba(0,40,122,0.18)] backdrop-blur-[10px]";
 
 declare global {
   interface Window {
@@ -44,6 +56,184 @@ type GuestbookEntry = {
   content: string;
   created_at: string;
 };
+
+type DropdownOption = {
+  value: string;
+  label: string;
+  sortKey?: number;
+};
+
+type DropdownGroup = {
+  label: string;
+  options: DropdownOption[];
+};
+
+function getDateYearGroups(dateOptions: DropdownOption[]): DropdownGroup[] {
+  const map = new Map<string, DropdownOption[]>();
+
+  for (const option of dateOptions) {
+    const year = option.label.slice(0, 4).match(/^\d{4}$/)
+      ? option.label.slice(0, 4)
+      : "기타";
+    if (!map.has(year)) map.set(year, []);
+    map.get(year)?.push(option);
+  }
+
+  return Array.from(map.entries())
+    .sort(([a], [b]) => {
+      if (a === "기타") return 1;
+      if (b === "기타") return -1;
+      return b.localeCompare(a);
+    })
+    .map(([label, options]) => ({
+      label,
+      options: [...options].sort((a, b) => (b.sortKey ?? 0) - (a.sortKey ?? 0)),
+    }));
+}
+
+function FilterDropdown({
+  label,
+  selected,
+  options,
+  onSelect,
+  groups,
+  allLabel = "all",
+  className = "",
+}: {
+  label: string;
+  selected: string;
+  options: DropdownOption[];
+  onSelect: (value: string) => void;
+  groups?: DropdownGroup[];
+  allLabel?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!wrapRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  const selectedOption = options.find((option) => option.value === selected);
+  const display = selected === "all" ? allLabel : selectedOption?.label ?? selected;
+  const isAllSelected = selected === "all";
+
+  return (
+    <div ref={wrapRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={`${FILTER_DROPDOWN_TRIGGER} ${
+          isAllSelected
+            ? FILTER_DROPDOWN_TRIGGER_INACTIVE
+            : FILTER_DROPDOWN_TRIGGER_ACTIVE
+        }`}
+        aria-expanded={open}
+      >
+        <span className="truncate">
+          <span
+            className={`mr-1 text-[10px] uppercase ${
+              isAllSelected ? "text-[#00287A]/75" : "text-white/75"
+            }`}
+          >
+            {label}
+          </span>
+          <span className={isAllSelected ? "text-[#00287A]" : "text-white"}>
+            {display}
+          </span>
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            key={`${label}-menu`}
+            initial={{ opacity: 0, y: 8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.98 }}
+            transition={{ duration: 0.18, ease: "easeInOut" }}
+            className={FILTER_DROPDOWN_MENU}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                onSelect("all");
+                setOpen(false);
+              }}
+              className={`mb-1 w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                selected === "all"
+                  ? "bg-[#00287A] text-white"
+                  : "text-[#00287A] hover:bg-[#00287A]/10"
+              }`}
+            >
+              {allLabel}
+            </button>
+
+            {(groups && groups.length > 0
+              ? groups.map((group) => (
+                  <div key={`${label}-${group.label}`} className="mb-1">
+                    <p className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-[#00287A]/70">
+                      {group.label}
+                    </p>
+                    {group.options.map((option) => (
+                      <button
+                        key={`${label}-${option.value}`}
+                        type="button"
+                        onClick={() => {
+                          onSelect(option.value);
+                          setOpen(false);
+                        }}
+                        className={`mb-1 w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                          selected === option.value
+                            ? "bg-[#00287A] text-white"
+                            : "text-[#00287A] hover:bg-[#00287A]/10"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                ))
+              : [
+                  <div key={`${label}-flat`}>
+                    {options.map((option) => (
+                      <button
+                        key={`${label}-${option.value}`}
+                        type="button"
+                        onClick={() => {
+                          onSelect(option.value);
+                          setOpen(false);
+                        }}
+                        className={`mb-1 w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                          selected === option.value
+                            ? "bg-[#00287A] text-white"
+                            : "text-[#00287A] hover:bg-[#00287A]/10"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>,
+                ])}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 const BANNED_WORDS = ["씨발", "병신", "개새끼", "지랄", "fuck", "shit", "bitch"];
 const CONTENT_MAX_LENGTH = 180;
@@ -538,12 +728,17 @@ export default function Home() {
   const dropdownTags = useMemo(
     () => ({
       date: Array.from(
-        new Set(
+        new Map(
           images
-            .map((image) => image.dateTag)
-            .filter((tag): tag is string => Boolean(tag))
-        )
-      ).sort((a, b) => a.localeCompare(b)),
+            .map((image) => ({
+              value: image.folderName,
+              label: image.scheduleDisplay || image.folderName,
+              sortKey: image.scheduleDateKey || image.folderSortKey || 0,
+            }))
+            .filter((item) => Boolean(item.value))
+            .map((item) => [item.value, item] as const)
+        ).values()
+      ).sort((a, b) => (b.sortKey ?? 0) - (a.sortKey ?? 0)),
       location: Array.from(
         new Set(
           images
@@ -568,11 +763,15 @@ export default function Home() {
     }),
     [images]
   );
+  const dateYearGroups = useMemo(
+    () => getDateYearGroups(dropdownTags.date),
+    [dropdownTags.date]
+  );
 
   const filteredImages = useMemo(
     () =>
       images.filter((image) => {
-        if (selectedDateTag !== "all" && image.dateTag !== selectedDateTag) {
+        if (selectedDateTag !== "all" && image.folderName !== selectedDateTag) {
           return false;
         }
         if (
@@ -834,26 +1033,26 @@ export default function Home() {
                 setSelectedMomentTag("all");
                 setSelectedWithTag("all");
               }}
-              className="min-h-11 shrink-0 rounded-full bg-zinc-100 px-3 text-xs text-zinc-700"
+              className="min-h-11 shrink-0 rounded-full border border-[#00287A] bg-white px-3.5 text-xs font-medium text-[#00287A] transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90"
             >
               전체
             </button>
             <select
               value={selectedDateTag}
               onChange={(event) => setSelectedDateTag(event.target.value)}
-              className="min-h-11 shrink-0 rounded-full bg-zinc-100 px-3 text-xs text-zinc-700 outline-none"
+              className="min-h-11 shrink-0 rounded-full border border-[#00287A] bg-white px-3.5 text-xs font-medium text-[#00287A] outline-none transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90"
             >
               <option value="all">Date</option>
-              {dropdownTags.date.map((tag) => (
-                <option key={`sticky-date-${tag}`} value={tag}>
-                  {tag}
+              {dropdownTags.date.map((option) => (
+                <option key={`sticky-date-${option.value}`} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
             <select
               value={selectedLocationTag}
               onChange={(event) => setSelectedLocationTag(event.target.value)}
-              className="min-h-11 shrink-0 rounded-full bg-zinc-100 px-3 text-xs text-zinc-700 outline-none"
+              className="min-h-11 shrink-0 rounded-full border border-[#00287A] bg-white px-3.5 text-xs font-medium text-[#00287A] outline-none transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90"
             >
               <option value="all">Location</option>
               {dropdownTags.location.map((tag) => (
@@ -865,7 +1064,7 @@ export default function Home() {
             <select
               value={selectedMomentTag}
               onChange={(event) => setSelectedMomentTag(event.target.value)}
-              className="min-h-11 shrink-0 rounded-full bg-zinc-100 px-3 text-xs text-zinc-700 outline-none"
+              className="min-h-11 shrink-0 rounded-full border border-[#00287A] bg-white px-3.5 text-xs font-medium text-[#00287A] outline-none transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90"
             >
               <option value="all">Moment</option>
               {dropdownTags.moment.map((tag) => (
@@ -877,7 +1076,7 @@ export default function Home() {
             <select
               value={selectedWithTag}
               onChange={(event) => setSelectedWithTag(event.target.value)}
-              className="min-h-11 shrink-0 rounded-full bg-zinc-100 px-3 text-xs text-zinc-700 outline-none"
+              className="min-h-11 shrink-0 rounded-full border border-[#00287A] bg-white px-3.5 text-xs font-medium text-[#00287A] outline-none transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90"
             >
               <option value="all">With</option>
               {dropdownTags.with.map((tag) => (
@@ -893,7 +1092,7 @@ export default function Home() {
                     event.target.value as "latest" | "oldest" | "popular"
                   )
               }
-              className="min-h-11 shrink-0 rounded-full bg-zinc-100 px-3 text-xs text-zinc-700 outline-none"
+              className="min-h-11 shrink-0 rounded-full border border-[#00287A] bg-white px-3.5 text-xs font-medium text-[#00287A] outline-none transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90"
             >
               <option value="latest">최신순</option>
               <option value="oldest">오래된 순</option>
@@ -1073,84 +1272,56 @@ export default function Home() {
                   setSelectedMomentTag("all");
                   setSelectedWithTag("all");
                 }}
-                className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600 transition hover:bg-zinc-200"
+                className={`${FILTER_PILL_BASE} ${FILTER_PILL_INACTIVE}`}
               >
                 전체 보기
               </button>
 
-              <div className="space-y-2">
-                <div className="text-[11px] uppercase tracking-wider text-zinc-500">Date</div>
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDateTag("all")}
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs ${
-                      selectedDateTag === "all"
-                        ? "bg-zinc-300 text-zinc-900"
-                        : "bg-zinc-100 text-zinc-600"
-                    }`}
-                  >
-                    all
-                  </button>
-                  {dropdownTags.date.map((tag) => (
-                    <button
-                      key={`m-date-${tag}`}
-                      type="button"
-                      onClick={() => setSelectedDateTag(tag)}
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs ${
-                        selectedDateTag === tag
-                          ? "bg-zinc-300 text-zinc-900"
-                          : "bg-zinc-100 text-zinc-600"
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <FilterDropdown
+                label="DATE"
+                selected={selectedDateTag}
+                options={dropdownTags.date}
+                groups={dateYearGroups}
+                onSelect={setSelectedDateTag}
+                allLabel="all"
+                className="w-full"
+              />
 
-              <div className="space-y-2">
-                <div className="text-[11px] uppercase tracking-wider text-zinc-500">Location</div>
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLocationTag("all")}
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs ${
-                      selectedLocationTag === "all"
-                        ? "bg-zinc-300 text-zinc-900"
-                        : "bg-zinc-100 text-zinc-600"
-                    }`}
-                  >
-                    all
-                  </button>
-                  {dropdownTags.location.map((tag) => (
-                    <button
-                      key={`m-location-${tag}`}
-                      type="button"
-                      onClick={() => setSelectedLocationTag(tag)}
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs ${
-                        selectedLocationTag === tag
-                          ? "bg-zinc-300 text-zinc-900"
-                          : "bg-zinc-100 text-zinc-600"
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <FilterDropdown
+                label="LOCATION"
+                selected={selectedLocationTag}
+                options={dropdownTags.location.map((tag) => ({
+                  value: tag,
+                  label: tag,
+                }))}
+                onSelect={setSelectedLocationTag}
+                allLabel="all"
+                className="w-full"
+              />
+
+              <FilterDropdown
+                label="WITH"
+                selected={selectedWithTag}
+                options={dropdownTags.with.map((tag) => ({
+                  value: tag,
+                  label: tag,
+                }))}
+                onSelect={setSelectedWithTag}
+                allLabel="all"
+                className="w-full"
+              />
 
               <div className="flex gap-2 overflow-x-auto pb-1">
-                <div className="text-[11px] uppercase tracking-wider text-zinc-500 self-center">
+                <div className={`${FILTER_SECTION_LABEL} self-center`}>
                   Moment
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedMomentTag("all")}
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs ${
+                  className={`${FILTER_PILL_BASE} ${
                     selectedMomentTag === "all"
-                      ? "bg-zinc-300 text-zinc-900"
-                      : "bg-zinc-100 text-zinc-600"
+                      ? FILTER_PILL_ACTIVE
+                      : FILTER_PILL_INACTIVE
                   }`}
                 >
                   all
@@ -1160,10 +1331,10 @@ export default function Home() {
                     key={`m-moment-${tag}`}
                     type="button"
                     onClick={() => setSelectedMomentTag(tag)}
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs ${
+                    className={`${FILTER_PILL_BASE} ${
                       selectedMomentTag === tag
-                        ? "bg-zinc-300 text-zinc-900"
-                        : "bg-zinc-100 text-zinc-600"
+                        ? FILTER_PILL_ACTIVE
+                        : FILTER_PILL_INACTIVE
                     }`}
                   >
                     {tag}
@@ -1172,47 +1343,16 @@ export default function Home() {
               </div>
 
               <div className="flex gap-2 overflow-x-auto pb-1">
-                <div className="text-[11px] uppercase tracking-wider text-zinc-500 self-center">
-                  With
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedWithTag("all")}
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs ${
-                    selectedWithTag === "all"
-                      ? "bg-zinc-300 text-zinc-900"
-                      : "bg-zinc-100 text-zinc-600"
-                  }`}
-                >
-                  all
-                </button>
-                {dropdownTags.with.map((tag) => (
-                  <button
-                    key={`m-with-${tag}`}
-                    type="button"
-                    onClick={() => setSelectedWithTag(tag)}
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs ${
-                      selectedWithTag === tag
-                        ? "bg-zinc-300 text-zinc-900"
-                        : "bg-zinc-100 text-zinc-600"
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                <div className="text-[11px] uppercase tracking-wider text-zinc-500 self-center">
+                <div className={`${FILTER_SECTION_LABEL} self-center`}>
                   Sort
                 </div>
                 <button
                   type="button"
                   onClick={() => setSortOrder("latest")}
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs ${
+                  className={`${FILTER_PILL_BASE} ${
                     sortOrder === "latest"
-                      ? "bg-zinc-300 text-zinc-900"
-                      : "bg-zinc-100 text-zinc-600"
+                      ? FILTER_PILL_ACTIVE
+                      : FILTER_PILL_INACTIVE
                   }`}
                 >
                   최신순
@@ -1220,10 +1360,10 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setSortOrder("oldest")}
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs ${
+                  className={`${FILTER_PILL_BASE} ${
                     sortOrder === "oldest"
-                      ? "bg-zinc-300 text-zinc-900"
-                      : "bg-zinc-100 text-zinc-600"
+                      ? FILTER_PILL_ACTIVE
+                      : FILTER_PILL_INACTIVE
                   }`}
                 >
                   오래된 순
@@ -1231,10 +1371,10 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setSortOrder("popular")}
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs ${
+                  className={`${FILTER_PILL_BASE} ${
                     sortOrder === "popular"
-                      ? "bg-zinc-300 text-zinc-900"
-                      : "bg-zinc-100 text-zinc-600"
+                      ? FILTER_PILL_ACTIVE
+                      : FILTER_PILL_INACTIVE
                   }`}
                 >
                   인기순
@@ -1242,7 +1382,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mb-8 hidden md:flex flex-wrap items-center gap-2">
+            <div className="mb-8 hidden md:flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
                 onClick={() => {
@@ -1251,76 +1391,105 @@ export default function Home() {
                   setSelectedMomentTag("all");
                   setSelectedWithTag("all");
                 }}
-                className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600 transition hover:bg-zinc-200"
+                className={`${FILTER_PILL_BASE} ${FILTER_PILL_INACTIVE}`}
               >
                 전체 보기
               </button>
+              <FilterDropdown
+                label="DATE"
+                selected={selectedDateTag}
+                options={dropdownTags.date}
+                groups={dateYearGroups}
+                onSelect={setSelectedDateTag}
+                allLabel="all"
+                className="w-[22rem]"
+              />
 
-              <select
-                value={selectedDateTag}
-                onChange={(event) => setSelectedDateTag(event.target.value)}
-                className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 outline-none ring-0"
-              >
-                <option value="all">Date</option>
-                {dropdownTags.date.map((tag) => (
-                  <option key={tag} value={tag}>
-                    {tag}
-                  </option>
-                ))}
-              </select>
+              <FilterDropdown
+                label="LOCATION"
+                selected={selectedLocationTag}
+                options={dropdownTags.location.map((tag) => ({
+                  value: tag,
+                  label: tag,
+                }))}
+                onSelect={setSelectedLocationTag}
+                allLabel="all"
+                className="w-[13rem]"
+              />
 
-              <select
-                value={selectedLocationTag}
-                onChange={(event) => setSelectedLocationTag(event.target.value)}
-                className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 outline-none ring-0"
-              >
-                <option value="all">Location</option>
-                {dropdownTags.location.map((tag) => (
-                  <option key={tag} value={tag}>
-                    {tag}
-                  </option>
-                ))}
-              </select>
+              <FilterDropdown
+                label="WITH"
+                selected={selectedWithTag}
+                options={dropdownTags.with.map((tag) => ({
+                  value: tag,
+                  label: tag,
+                }))}
+                onSelect={setSelectedWithTag}
+                allLabel="all"
+                className="w-[12rem]"
+              />
 
-              <select
-                value={selectedMomentTag}
-                onChange={(event) => setSelectedMomentTag(event.target.value)}
-                className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 outline-none ring-0"
+              <span className={FILTER_SECTION_LABEL}>Moment</span>
+              <button
+                type="button"
+                onClick={() => setSelectedMomentTag("all")}
+                className={`${FILTER_PILL_BASE} ${
+                  selectedMomentTag === "all"
+                    ? FILTER_PILL_ACTIVE
+                    : FILTER_PILL_INACTIVE
+                }`}
               >
-                <option value="all">Moment</option>
-                {dropdownTags.moment.map((tag) => (
-                  <option key={tag} value={tag}>
-                    {tag}
-                  </option>
-                ))}
-              </select>
+                all
+              </button>
+              {dropdownTags.moment.map((tag) => (
+                <button
+                  key={`d-moment-${tag}`}
+                  type="button"
+                  onClick={() => setSelectedMomentTag(tag)}
+                  className={`${FILTER_PILL_BASE} ${
+                    selectedMomentTag === tag
+                      ? FILTER_PILL_ACTIVE
+                      : FILTER_PILL_INACTIVE
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
 
-              <select
-                value={selectedWithTag}
-                onChange={(event) => setSelectedWithTag(event.target.value)}
-                className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 outline-none ring-0"
+              <span className={FILTER_SECTION_LABEL}>Sort</span>
+              <button
+                type="button"
+                onClick={() => setSortOrder("latest")}
+                className={`${FILTER_PILL_BASE} ${
+                  sortOrder === "latest"
+                    ? FILTER_PILL_ACTIVE
+                    : FILTER_PILL_INACTIVE
+                }`}
               >
-                <option value="all">With</option>
-                {dropdownTags.with.map((tag) => (
-                  <option key={tag} value={tag}>
-                    {tag}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={sortOrder}
-                onChange={(event) =>
-                  setSortOrder(
-                    event.target.value as "latest" | "oldest" | "popular"
-                  )
-                }
-                className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 outline-none ring-0"
+                최신순
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortOrder("oldest")}
+                className={`${FILTER_PILL_BASE} ${
+                  sortOrder === "oldest"
+                    ? FILTER_PILL_ACTIVE
+                    : FILTER_PILL_INACTIVE
+                }`}
               >
-                <option value="latest">최신순</option>
-                <option value="oldest">오래된 순</option>
-                <option value="popular">인기순</option>
-              </select>
+                오래된 순
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortOrder("popular")}
+                className={`${FILTER_PILL_BASE} ${
+                  sortOrder === "popular"
+                    ? FILTER_PILL_ACTIVE
+                    : FILTER_PILL_INACTIVE
+                }`}
+              >
+                인기순
+              </button>
             </div>
 
             <AnimatePresence mode="wait">
@@ -1441,13 +1610,21 @@ export default function Home() {
                               key={`${image.id}-${tag}`}
                               type="button"
                               onClick={() => {
-                                if (image.dateTag === tag) setSelectedDateTag(tag);
+                                if (image.dateTag === tag) {
+                                  setSelectedDateTag(image.folderName);
+                                }
                                 if (image.locationTag === tag)
                                   setSelectedLocationTag(tag);
                                 if (image.momentTag === tag) setSelectedMomentTag(tag);
                                 if (image.withTag === tag) setSelectedWithTag(tag);
                               }}
-                              className="rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] lowercase text-zinc-600 transition hover:bg-zinc-200"
+                              className={`${FILTER_PILL_BASE} ${
+                                selectedLocationTag === tag ||
+                                selectedMomentTag === tag ||
+                                selectedWithTag === tag
+                                  ? FILTER_PILL_ACTIVE
+                                  : FILTER_PILL_INACTIVE
+                              } lowercase text-[11px]`}
                             >
                               {tag}
                             </button>

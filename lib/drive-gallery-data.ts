@@ -8,6 +8,11 @@ export type DriveImage = {
   locationTag?: string;
   momentTag?: string;
   withTag?: string;
+  folderName: string;
+  scheduleDateKey: number;
+  scheduleLabel: string;
+  scheduleDisplay: string;
+  scheduleYear: string;
   folderSortKey: number;
   thumbnailUrl: string;
   originalUrl: string;
@@ -54,6 +59,39 @@ function parseDateKeyFromFolderLabel(text: string): number {
     if (key > best) best = key;
   }
   return best;
+}
+
+function parseScheduleFromFolderName(folderName: string): {
+  dateKey: number;
+  label: string;
+  display: string;
+  year: string;
+} {
+  const trimmed = folderName.trim();
+  const match = trimmed.match(/^(\d{8})_(.+)$/);
+  if (!match) {
+    const fallbackKey = parseDateKeyFromFolderLabel(trimmed);
+    const fallbackYear =
+      fallbackKey >= 10000000 ? String(Math.floor(fallbackKey / 10000)) : "기타";
+    return {
+      dateKey: fallbackKey,
+      label: trimmed || "미분류",
+      display: trimmed || "미분류",
+      year: fallbackYear,
+    };
+  }
+
+  const ymd = match[1];
+  const label = match[2].trim() || "미분류";
+  const yyyy = ymd.slice(0, 4);
+  const mm = ymd.slice(4, 6);
+  const dd = ymd.slice(6, 8);
+  return {
+    dateKey: Number(ymd),
+    label,
+    display: `${yyyy}.${mm}.${dd} - ${label}`,
+    year: yyyy,
+  };
 }
 
 const DRIVE_FETCH_INIT = { next: { revalidate: 300 } } as const;
@@ -138,6 +176,7 @@ export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
       description?: string;
       imageMediaMetadata?: { width?: number; height?: number };
       folderSortKey: number;
+      folderName: string;
     }
   >();
 
@@ -176,6 +215,7 @@ export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
       uniqueFiles.set(file.id, {
         ...file,
         folderSortKey: key,
+        folderName: currentFolderName || "미분류",
       });
     }
   }
@@ -188,8 +228,13 @@ export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
       const tags = extractHashtags(description);
       const story = extractStory(description);
       const tagDateKey = Number((tags[0] ?? "").replace("#", "")) || 0;
+      const schedule = parseScheduleFromFolderName(file.folderName);
       const effectiveFolderKey =
-        file.folderSortKey > 0 ? file.folderSortKey : tagDateKey;
+        file.folderSortKey > 0
+          ? file.folderSortKey
+          : schedule.dateKey > 0
+            ? schedule.dateKey
+            : tagDateKey;
 
       return {
         id: file.id,
@@ -201,6 +246,11 @@ export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
         locationTag: tags[1],
         momentTag: tags[2],
         withTag: tags[3],
+        folderName: file.folderName,
+        scheduleDateKey: schedule.dateKey,
+        scheduleLabel: schedule.label,
+        scheduleDisplay: schedule.display,
+        scheduleYear: schedule.year,
         folderSortKey: effectiveFolderKey,
         thumbnailUrl: `https://lh3.googleusercontent.com/d/${file.id}=w800`,
         originalUrl: `https://lh3.googleusercontent.com/d/${file.id}`,
