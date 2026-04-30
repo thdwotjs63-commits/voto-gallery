@@ -18,7 +18,16 @@ import "swiper/css";
 import "swiper/css/effect-fade";
 import "swiper/css/pagination";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Instagram, Link2, Share2, Twitter } from "lucide-react";
+import {
+  ChevronDown,
+  Heart,
+  Instagram,
+  LayoutGrid,
+  Link2,
+  Share2,
+  StretchHorizontal,
+  Twitter,
+} from "lucide-react";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 import type { DriveImage } from "@/lib/drive-gallery-data";
 
@@ -989,6 +998,25 @@ export default function Home() {
     setShareMenuOpen(false);
   };
 
+  const applyTagToggle = (
+    tag: string,
+    type: "date" | "location" | "moment" | "with"
+  ) => {
+    if (type === "date") {
+      setSelectedDateTag((prev) => (prev === tag ? "all" : tag));
+      return;
+    }
+    if (type === "location") {
+      setSelectedLocationTag((prev) => (prev === tag ? "all" : tag));
+      return;
+    }
+    if (type === "moment") {
+      setSelectedMomentTag((prev) => (prev === tag ? "all" : tag));
+      return;
+    }
+    setSelectedWithTag((prev) => (prev === tag ? "all" : tag));
+  };
+
   useEffect(() => {
     if (!shareMenuOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1024,80 +1052,154 @@ export default function Home() {
               © 2025 VOTO. All rights reserved.
             </span>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedDateTag("all");
-                setSelectedLocationTag("all");
-                setSelectedMomentTag("all");
-                setSelectedWithTag("all");
-              }}
-              className="min-h-11 shrink-0 rounded-full border border-[#00287A] bg-white px-3.5 text-xs font-medium text-[#00287A] transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90"
-            >
-              전체
-            </button>
-            <select
-              value={selectedDateTag}
-              onChange={(event) => setSelectedDateTag(event.target.value)}
-              className="min-h-11 shrink-0 rounded-full border border-[#00287A] bg-white px-3.5 text-xs font-medium text-[#00287A] outline-none transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90"
-            >
-              <option value="all">Date</option>
-              {dropdownTags.date.map((option) => (
-                <option key={`sticky-date-${option.value}`} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={selectedLocationTag}
-              onChange={(event) => setSelectedLocationTag(event.target.value)}
-              className="min-h-11 shrink-0 rounded-full border border-[#00287A] bg-white px-3.5 text-xs font-medium text-[#00287A] outline-none transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90"
-            >
-              <option value="all">Location</option>
-              {dropdownTags.location.map((tag) => (
-                <option key={`sticky-location-${tag}`} value={tag}>
-                  {tag}
-                </option>
-              ))}
-            </select>
-            <select
-              value={selectedMomentTag}
-              onChange={(event) => setSelectedMomentTag(event.target.value)}
-              className="min-h-11 shrink-0 rounded-full border border-[#00287A] bg-white px-3.5 text-xs font-medium text-[#00287A] outline-none transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90"
-            >
-              <option value="all">Moment</option>
-              {dropdownTags.moment.map((tag) => (
-                <option key={`sticky-moment-${tag}`} value={tag}>
-                  {tag}
-                </option>
-              ))}
-            </select>
-            <select
-              value={selectedWithTag}
-              onChange={(event) => setSelectedWithTag(event.target.value)}
-              className="min-h-11 shrink-0 rounded-full border border-[#00287A] bg-white px-3.5 text-xs font-medium text-[#00287A] outline-none transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90"
-            >
-              <option value="all">With</option>
-              {dropdownTags.with.map((tag) => (
-                <option key={`sticky-with-${tag}`} value={tag}>
-                  {tag}
-                </option>
-              ))}
-            </select>
-            <select
-              value={sortOrder}
-              onChange={(event) =>
-                  setSortOrder(
-                    event.target.value as "latest" | "oldest" | "popular"
-                  )
-              }
-              className="min-h-11 shrink-0 rounded-full border border-[#00287A] bg-white px-3.5 text-xs font-medium text-[#00287A] outline-none transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90"
-            >
-              <option value="latest">최신순</option>
-              <option value="oldest">오래된 순</option>
-                <option value="popular">인기순</option>
-            </select>
+          <div className="space-y-2 pb-1">
+            <div className="md:hidden overflow-x-auto whitespace-nowrap hide-scrollbar">
+              <div className="inline-flex items-center gap-2 pr-1">
+                <FilterDropdown
+                  label="DATE"
+                  selected={selectedDateTag}
+                  options={dropdownTags.date}
+                  groups={dateYearGroups}
+                  onSelect={setSelectedDateTag}
+                  allLabel="all"
+                  className="w-[17.5rem] shrink-0"
+                />
+                <FilterDropdown
+                  label="LOCATION"
+                  selected={selectedLocationTag}
+                  options={dropdownTags.location.map((tag) => ({
+                    value: tag,
+                    label: tag,
+                  }))}
+                  onSelect={setSelectedLocationTag}
+                  allLabel="all"
+                  className="w-[11.5rem] shrink-0"
+                />
+                <FilterDropdown
+                  label="WITH"
+                  selected={selectedWithTag}
+                  options={dropdownTags.with.map((tag) => ({
+                    value: tag,
+                    label: tag,
+                  }))}
+                  onSelect={setSelectedWithTag}
+                  allLabel="all"
+                  className="w-[10.5rem] shrink-0"
+                />
+                <FilterDropdown
+                  label="MOMENT"
+                  selected={selectedMomentTag}
+                  options={dropdownTags.moment.map((tag) => ({
+                    value: tag,
+                    label: tag,
+                  }))}
+                  onSelect={setSelectedMomentTag}
+                  allLabel="all"
+                  className="w-[11rem] shrink-0"
+                />
+                <FilterDropdown
+                  label="SORT"
+                  selected={sortOrder}
+                  options={[
+                    { value: "latest", label: "최신순" },
+                    { value: "oldest", label: "오래된 순" },
+                    { value: "popular", label: "인기순" },
+                  ]}
+                  onSelect={(value) =>
+                    setSortOrder(value as "latest" | "oldest" | "popular")
+                  }
+                  allLabel="기본"
+                  className="w-[10rem] shrink-0"
+                />
+              </div>
+            </div>
+
+            <div className="hidden md:grid md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.25fr)_minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(0,1fr)] md:gap-2">
+              <FilterDropdown
+                label="DATE"
+                selected={selectedDateTag}
+                options={dropdownTags.date}
+                groups={dateYearGroups}
+                onSelect={setSelectedDateTag}
+                allLabel="all"
+                className="w-full"
+              />
+              <FilterDropdown
+                label="LOCATION"
+                selected={selectedLocationTag}
+                options={dropdownTags.location.map((tag) => ({
+                  value: tag,
+                  label: tag,
+                }))}
+                onSelect={setSelectedLocationTag}
+                allLabel="all"
+                className="w-full"
+              />
+              <FilterDropdown
+                label="WITH"
+                selected={selectedWithTag}
+                options={dropdownTags.with.map((tag) => ({
+                  value: tag,
+                  label: tag,
+                }))}
+                onSelect={setSelectedWithTag}
+                allLabel="all"
+                className="w-full"
+              />
+              <FilterDropdown
+                label="MOMENT"
+                selected={selectedMomentTag}
+                options={dropdownTags.moment.map((tag) => ({
+                  value: tag,
+                  label: tag,
+                }))}
+                onSelect={setSelectedMomentTag}
+                allLabel="all"
+                className="w-full"
+              />
+              <FilterDropdown
+                label="SORT"
+                selected={sortOrder}
+                options={[
+                  { value: "latest", label: "최신순" },
+                  { value: "oldest", label: "오래된 순" },
+                  { value: "popular", label: "인기순" },
+                ]}
+                onSelect={(value) =>
+                  setSortOrder(value as "latest" | "oldest" | "popular")
+                }
+                allLabel="기본"
+                className="w-full"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setGuestbookModalOpen(true)}
+                className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-[#b18f00] bg-[#FFD200] px-3 py-2 text-[12px] font-bold text-black shadow-[0_6px_12px_rgba(0,0,0,0.16)] transition duration-150 active:scale-95"
+              >
+                <Heart className="h-4 w-4" aria-hidden />
+                Cheers
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode((m) => (m === "feed" ? "grid" : "feed"))}
+                className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-[#b18f00] bg-[#FFD200] px-3 py-2 text-[12px] font-bold text-black shadow-[0_6px_12px_rgba(0,0,0,0.16)] transition duration-150 active:scale-95"
+              >
+                {viewMode === "feed" ? (
+                  <>
+                    <LayoutGrid className="h-4 w-4" aria-hidden />
+                    Grid
+                  </>
+                ) : (
+                  <>
+                    <StretchHorizontal className="h-4 w-4" aria-hidden />
+                    Feed
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1128,33 +1230,45 @@ export default function Home() {
           }`}
           style={{ transform: `translate3d(0, ${heroTextTranslate}px, 0)` }}
         >
-          <h1 className="text-3xl font-medium tracking-wide sm:text-4xl md:text-5xl">
-            Captured Moments of Kim Da-in
-          </h1>
-          <p className="mt-4 text-sm tracking-[0.24em] text-zinc-200 sm:text-base">
-            Photography by Voto.
+          <p className="mt-1 text-[15px] font-bold tracking-[0.18em] text-zinc-100 sm:text-[19px]">
+            No.3 Captain, Kim Dain
+          </p>
+          <p className="mt-1 text-[11px] tracking-[0.2em] text-zinc-200 sm:text-xs">
+            Hyundai Hillstate Volleyball Team
           </p>
 
-          <a
-            href="https://www.instagram.com/voto_v3?igsh=NDZrcGhndXQybzNm&utm_source=qr"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-4 py-2 text-sm text-white/90 transition hover:-translate-y-0.5 hover:bg-white/20 hover:text-white"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
+            <a
+              href="https://www.instagram.com/voto_v3?igsh=NDZrcGhndXQybzNm&utm_source=qr"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/35 bg-white/10 px-3 py-2 text-[12px] font-semibold text-white/90 shadow-[0_8px_16px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:bg-white/20 hover:text-white active:scale-95"
+              aria-label="Instagram 바로가기"
             >
-              <rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" strokeWidth="1.8" />
-              <circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="1.8" />
-              <circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" />
-            </svg>
-            <span>@voto_v3</span>
-          </a>
+              <Instagram className="h-4.5 w-4.5" aria-hidden />
+              <span>voto</span>
+            </a>
+            <button
+              type="button"
+              onClick={() => void handleCopyPageLink()}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/35 bg-white/10 text-white/90 shadow-[0_8px_16px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:bg-white/20 hover:text-white active:scale-95"
+              aria-label="공유 링크 복사"
+            >
+              <Share2 className="h-4.5 w-4.5" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => setGuestbookModalOpen(true)}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/35 bg-white/10 px-3 py-2 text-[12px] font-semibold text-white shadow-[0_8px_16px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:bg-white/20 active:scale-95"
+            >
+              <Heart className="h-4 w-4" aria-hidden />
+              응원메시지 남기기
+            </button>
+          </div>
+
+          <p className="mt-6 text-[11px] tracking-[0.2em] text-zinc-300 sm:text-xs">
+            Photography by Voto.
+          </p>
 
           <button
             type="button"
@@ -1615,12 +1729,17 @@ export default function Home() {
                               type="button"
                               onClick={() => {
                                 if (image.dateTag === tag) {
-                                  setSelectedDateTag(image.folderName);
+                                  applyTagToggle(image.folderName, "date");
                                 }
-                                if (image.locationTag === tag)
-                                  setSelectedLocationTag(tag);
-                                if (image.momentTag === tag) setSelectedMomentTag(tag);
-                                if (image.withTag === tag) setSelectedWithTag(tag);
+                                if (image.locationTag === tag) {
+                                  applyTagToggle(tag, "location");
+                                }
+                                if (image.momentTag === tag) {
+                                  applyTagToggle(tag, "moment");
+                                }
+                                if (image.withTag === tag) {
+                                  applyTagToggle(tag, "with");
+                                }
                               }}
                               className={`${FILTER_PILL_BASE} ${
                                 selectedLocationTag === tag ||
@@ -1657,7 +1776,7 @@ export default function Home() {
       </main>
 
       <footer className="mt-20 border-t border-zinc-200/80 py-6 text-center text-xs text-zinc-500">
-        © 2025 VOTO. All rights reserved.
+        Photography by Voto.
       </footer>
 
       <AnimatePresence>
@@ -1850,6 +1969,13 @@ export default function Home() {
         .swiper-pagination-bullet-active {
           background: #ffffff;
         }
+        .hide-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
       `}</style>
 
       <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
@@ -1867,18 +1993,12 @@ export default function Home() {
           aria-label={
             viewMode === "feed" ? "모아 보기로 전환" : "크게 보기로 전환"
           }
-          className="flex min-h-11 min-w-[4.75rem] flex-col items-center justify-center rounded-full border border-white/40 bg-white/70 px-2.5 py-1 text-[10px] font-semibold leading-tight text-zinc-800 shadow-md backdrop-blur-md transition hover:bg-white/85"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#b18f00] bg-[#FFD200] text-black shadow-[0_8px_14px_rgba(0,0,0,0.18)] backdrop-blur-md transition duration-150 active:scale-95"
         >
           {viewMode === "feed" ? (
-            <>
-              <span>모아보기</span>
-              <span className="text-[9px] font-normal text-zinc-500">Grid</span>
-            </>
+            <LayoutGrid className="h-4.5 w-4.5" aria-hidden />
           ) : (
-            <>
-              <span>크게보기</span>
-              <span className="text-[9px] font-normal text-zinc-500">Feed</span>
-            </>
+            <StretchHorizontal className="h-4.5 w-4.5" aria-hidden />
           )}
         </button>
       </div>
@@ -1942,14 +2062,6 @@ export default function Home() {
             <Share2 className="h-[18px] w-[18px]" strokeWidth={2} />
           </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setGuestbookModalOpen(true)}
-          aria-label="응원메시지 남기기"
-          className="min-h-11 rounded-full border border-white/35 bg-white/70 px-3 text-xs text-zinc-800 shadow-md backdrop-blur-md transition hover:bg-white/85"
-        >
-          응원메시지 남기기
-        </button>
       </div>
 
       <AnimatePresence>
