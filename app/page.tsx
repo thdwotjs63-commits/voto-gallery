@@ -249,6 +249,8 @@ const CONTENT_MAX_LENGTH = 180;
 const NICKNAME_MAX_LENGTH = 24;
 
 const GALLERY_PAGE_SIZE = 12;
+const GRID_INITIAL_LOAD = 50;
+const GRID_PAGE_SIZE = 24;
 const GRID_MIN_VISIBLE_COUNT = 20;
 
 const THUMB_BLUR_DATA_URL =
@@ -834,13 +836,15 @@ export default function Home() {
   );
 
   const fetchNextPage = useCallback(() => {
+    const pageSize = viewMode === "grid" ? GRID_PAGE_SIZE : GALLERY_PAGE_SIZE;
     setVisibleCount((previous) =>
-      Math.min(previous + GALLERY_PAGE_SIZE, filteredTotal)
+      Math.min(previous + pageSize, filteredTotal)
     );
-  }, [filteredTotal]);
+  }, [filteredTotal, viewMode]);
 
   useEffect(() => {
-    setVisibleCount(GALLERY_PAGE_SIZE);
+    const initial = viewMode === "grid" ? GRID_INITIAL_LOAD : GALLERY_PAGE_SIZE;
+    setVisibleCount(Math.min(initial, filteredTotal || initial));
   }, [
     selectedDateTag,
     selectedLocationTag,
@@ -848,6 +852,8 @@ export default function Home() {
     selectedWithTag,
     sortOrder,
     images.length,
+    viewMode,
+    filteredTotal,
   ]);
 
   useEffect(() => {
@@ -862,7 +868,7 @@ export default function Home() {
         observer.unobserve(node);
         fetchNextPage();
       },
-      { root: null, rootMargin: "320px 0px", threshold: 0 }
+      { root: null, rootMargin: "1200px 0px", threshold: 0 }
     );
 
     observer.observe(node);
@@ -889,6 +895,29 @@ export default function Home() {
     return () => window.cancelAnimationFrame(rafId);
   }, [viewMode, visibleCount, filteredTotal, fetchNextPage]);
 
+  useEffect(() => {
+    if (viewMode !== "grid") return;
+    if (visibleCount >= filteredTotal) return;
+
+    const maybeLoadByScroll = () => {
+      if (visibleCount >= filteredTotal) return;
+      const scrollBottom = window.scrollY + window.innerHeight;
+      const docHeight = document.documentElement.scrollHeight;
+      if (docHeight - scrollBottom < 1200) {
+        fetchNextPage();
+      }
+    };
+
+    window.addEventListener("scroll", maybeLoadByScroll, { passive: true });
+    window.addEventListener("resize", maybeLoadByScroll);
+    maybeLoadByScroll();
+
+    return () => {
+      window.removeEventListener("scroll", maybeLoadByScroll);
+      window.removeEventListener("resize", maybeLoadByScroll);
+    };
+  }, [viewMode, visibleCount, filteredTotal, fetchNextPage]);
+
   const handleGridThumbNavigate = (photoId: string) => {
     const idx = sortedFilteredImages.findIndex((img) => img.id === photoId);
     if (idx < 0) return;
@@ -897,6 +926,19 @@ export default function Home() {
     setFeedScrollSession((n) => n + 1);
     setVisibleCount((c) => Math.max(c, idx + 1));
     setViewMode("feed");
+  };
+
+  const handleViewModeToggle = () => {
+    setViewMode((prev) => {
+      const next = prev === "feed" ? "grid" : "feed";
+      if (next === "grid") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        setVisibleCount(Math.min(GRID_INITIAL_LOAD, filteredTotal || GRID_INITIAL_LOAD));
+      } else {
+        setVisibleCount(Math.min(GALLERY_PAGE_SIZE, filteredTotal || GALLERY_PAGE_SIZE));
+      }
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -1184,7 +1226,7 @@ export default function Home() {
               </button>
               <button
                 type="button"
-                onClick={() => setViewMode((m) => (m === "feed" ? "grid" : "feed"))}
+                onClick={handleViewModeToggle}
                 className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-[#b18f00] bg-[#FFD200] px-3 py-2 text-[12px] font-bold text-black shadow-[0_6px_12px_rgba(0,0,0,0.16)] transition duration-150 active:scale-95"
               >
                 {viewMode === "feed" ? (
@@ -1989,7 +2031,7 @@ export default function Home() {
         </button>
         <button
           type="button"
-          onClick={() => setViewMode((m) => (m === "feed" ? "grid" : "feed"))}
+          onClick={handleViewModeToggle}
           aria-label={
             viewMode === "feed" ? "모아 보기로 전환" : "크게 보기로 전환"
           }
