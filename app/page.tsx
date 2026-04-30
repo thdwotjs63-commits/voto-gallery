@@ -736,11 +736,51 @@ export default function Home() {
     }
   };
 
-  const dropdownTags = useMemo(
-    () => ({
+  const dropdownTags = useMemo(() => {
+    const matches = (
+      image: DriveImage,
+      {
+        ignoreDate = false,
+        ignoreLocation = false,
+        ignoreMoment = false,
+        ignoreWith = false,
+      }: {
+        ignoreDate?: boolean;
+        ignoreLocation?: boolean;
+        ignoreMoment?: boolean;
+        ignoreWith?: boolean;
+      } = {}
+    ) => {
+      if (!ignoreDate && selectedDateTag !== "all" && image.folderName !== selectedDateTag) {
+        return false;
+      }
+      if (
+        !ignoreLocation &&
+        selectedLocationTag !== "all" &&
+        image.locationTag !== selectedLocationTag
+      ) {
+        return false;
+      }
+      if (!ignoreMoment && selectedMomentTag !== "all" && image.momentTag !== selectedMomentTag) {
+        return false;
+      }
+      if (!ignoreWith && selectedWithTag !== "all" && image.withTag !== selectedWithTag) {
+        return false;
+      }
+      return true;
+    };
+
+    const dateCandidates = images.filter((image) => matches(image, { ignoreDate: true }));
+    const locationCandidates = images.filter((image) =>
+      matches(image, { ignoreLocation: true })
+    );
+    const momentCandidates = images.filter((image) => matches(image, { ignoreMoment: true }));
+    const withCandidates = images.filter((image) => matches(image, { ignoreWith: true }));
+
+    return {
       date: Array.from(
         new Map(
-          images
+          dateCandidates
             .map((image) => ({
               value: image.folderName,
               label: image.scheduleDisplay || image.folderName,
@@ -752,32 +792,67 @@ export default function Home() {
       ).sort((a, b) => (b.sortKey ?? 0) - (a.sortKey ?? 0)),
       location: Array.from(
         new Set(
-          images
+          locationCandidates
             .map((image) => image.locationTag)
             .filter((tag): tag is string => Boolean(tag))
         )
       ).sort((a, b) => a.localeCompare(b)),
       moment: Array.from(
         new Set(
-          images
+          momentCandidates
             .map((image) => image.momentTag)
             .filter((tag): tag is string => Boolean(tag))
         )
       ).sort((a, b) => a.localeCompare(b)),
       with: Array.from(
         new Set(
-          images
+          withCandidates
             .map((image) => image.withTag)
             .filter((tag): tag is string => Boolean(tag))
         )
       ).sort((a, b) => a.localeCompare(b)),
-    }),
-    [images]
-  );
+    };
+  }, [
+    images,
+    selectedDateTag,
+    selectedLocationTag,
+    selectedMomentTag,
+    selectedWithTag,
+  ]);
   const dateYearGroups = useMemo(
     () => getDateYearGroups(dropdownTags.date),
     [dropdownTags.date]
   );
+
+  useEffect(() => {
+    if (
+      selectedDateTag !== "all" &&
+      !dropdownTags.date.some((option) => option.value === selectedDateTag)
+    ) {
+      setSelectedDateTag("all");
+    }
+    if (
+      selectedLocationTag !== "all" &&
+      !dropdownTags.location.includes(selectedLocationTag)
+    ) {
+      setSelectedLocationTag("all");
+    }
+    if (selectedMomentTag !== "all" && !dropdownTags.moment.includes(selectedMomentTag)) {
+      setSelectedMomentTag("all");
+    }
+    if (selectedWithTag !== "all" && !dropdownTags.with.includes(selectedWithTag)) {
+      setSelectedWithTag("all");
+    }
+  }, [
+    dropdownTags.date,
+    dropdownTags.location,
+    dropdownTags.moment,
+    dropdownTags.with,
+    selectedDateTag,
+    selectedLocationTag,
+    selectedMomentTag,
+    selectedWithTag,
+  ]);
 
   const filteredImages = useMemo(
     () =>
