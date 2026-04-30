@@ -18,75 +18,12 @@ import "swiper/css";
 import "swiper/css/effect-fade";
 import "swiper/css/pagination";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  Instagram,
-  Link2,
-  MessageCircle,
-  Share2,
-  Twitter,
-} from "lucide-react";
+import { Instagram, Link2, Share2, Twitter } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 import type { DriveImage } from "@/lib/drive-gallery-data";
 
-declare global {
-  interface Window {
-    Kakao?: {
-      init: (key: string) => void;
-      isInitialized: () => boolean;
-      Share: { sendDefault: (options: Record<string, unknown>) => void };
-    };
-  }
-}
-
-const KAKAO_JS_SDK_URL =
-  "https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js";
-
-const SHARE_PAGE_TITLE = "voto gallery — Captured Moments of Kim Da-in";
-
-function loadKakaoSdk(): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
-
-  const existing = document.getElementById(
-    "kakao-js-sdk"
-  ) as HTMLScriptElement | null;
-  if (existing?.dataset.loaded === "1" && window.Kakao) {
-    return Promise.resolve();
-  }
-  if (window.Kakao) {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.id = "kakao-js-sdk";
-    script.src = KAKAO_JS_SDK_URL;
-    script.async = true;
-    script.crossOrigin = "anonymous";
-    script.onload = () => {
-      script.dataset.loaded = "1";
-      resolve();
-    };
-    script.onerror = () =>
-      reject(new Error("Failed to load Kakao JavaScript SDK"));
-    document.head.appendChild(script);
-  });
-}
-
-/** 스크립트 onload 이후 `window.Kakao`가 붙을 때까지 대기 (SDK 번들 타이밍) */
-async function waitForKakaoGlobal(
-  maxMs = 4000,
-  stepMs = 50
-): Promise<NonNullable<Window["Kakao"]>> {
-  const start = Date.now();
-  while (Date.now() - start < maxMs) {
-    const k = window.Kakao;
-    if (k) return k;
-    await new Promise<void>((resolve) => {
-      window.setTimeout(resolve, stepMs);
-    });
-  }
-  throw new Error("Kakao SDK global not available after script load");
-}
+/** 트윗 작성창에 넣을 갤러리 제목 */
+const GALLERY_SHARE_TITLE = "voto gallery — Captured Moments of Kim Da-in";
 
 type PhotoLikeRow = {
   id: number;
@@ -292,8 +229,8 @@ export default function Home() {
     null
   );
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
-  const [copyToastVisible, setCopyToastVisible] = useState(false);
-  const [instaHintOpen, setInstaHintOpen] = useState(false);
+  const [shareToast, setShareToast] = useState<string | null>(null);
+  const shareToastTimerRef = useRef<number | null>(null);
   const shareWrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -744,115 +681,77 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const showCopyToast = () => {
-    setCopyToastVisible(true);
-    window.setTimeout(() => setCopyToastVisible(false), 2600);
+  const showShareToast = (message: string) => {
+    if (shareToastTimerRef.current) {
+      clearTimeout(shareToastTimerRef.current);
+    }
+    setShareToast(message);
+    shareToastTimerRef.current = window.setTimeout(() => {
+      setShareToast(null);
+      shareToastTimerRef.current = null;
+    }, 3800);
+  };
+
+  const copyCurrentPageUrl = async (): Promise<boolean> => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const handleCopyPageLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      showCopyToast();
+    const ok = await copyCurrentPageUrl();
+    if (ok) {
+      showShareToast("주소가 복사되었습니다. 원하는 곳에 붙여넣으세요!");
       setShareMenuOpen(false);
-    } catch {
+    } else {
       window.prompt("주소를 복사해 주세요:", window.location.href);
     }
   };
 
   const handleTwitterShare = () => {
-    const pageUrl = encodeURIComponent(window.location.href);
-    const text = encodeURIComponent(SHARE_PAGE_TITLE);
+    const href = window.location.href;
+    const draft = `${GALLERY_SHARE_TITLE}\n\n${href}`;
     window.open(
-      `https://twitter.com/intent/tweet?url=${pageUrl}&text=${text}`,
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(draft)}`,
       "_blank",
       "noopener,noreferrer"
     );
     setShareMenuOpen(false);
   };
 
-  const handleKakaoShare = async () => {
-    const key = process.env.NEXT_PUBLIC_KAKAO_API_KEY?.trim();
-    console.log(
-      "[Kakao] NEXT_PUBLIC_KAKAO_API_KEY",
-      key
-        ? `injected=yes, length=${key.length}`
-        : "injected=no (missing or empty)"
-    );
-
-    if (!key) {
-      window.alert("Kakao API 키가 설정되지 않았습니다.");
-      return;
+  const handleInstagramShare = async () => {
+    const ok = await copyCurrentPageUrl();
+    if (ok) {
+      showShareToast(
+        "링크를 복사했습니다. 인스타 스토리나 프로필에 공유해 보세요!"
+      );
+    } else {
+      window.prompt("주소를 복사해 주세요:", window.location.href);
     }
-    try {
-      await loadKakaoSdk();
-
-      let Kakao: NonNullable<Window["Kakao"]>;
-      try {
-        Kakao = await waitForKakaoGlobal();
-      } catch {
-        window.alert(
-          "카카오 SDK를 불러오는 중입니다. 잠시 후 다시 시도해 주세요."
-        );
-        return;
-      }
-
-      if (!Kakao.isInitialized()) {
-        Kakao.init(key);
-      }
-
-      if (!Kakao.Share?.sendDefault) {
-        console.error("[Kakao] Kakao.Share.sendDefault is undefined", {
-          hasShare: Boolean(Kakao.Share),
-          keys: Kakao ? Object.keys(Kakao) : [],
-        });
-        throw new Error("Kakao.Share.sendDefault unavailable");
-      }
-
-      const pageUrl = window.location.href;
-      const first = images[0];
-      const imageUrl = first?.thumbnailUrl ?? first?.originalUrl ?? "";
-
-      if (imageUrl) {
-        Kakao.Share.sendDefault({
-          objectType: "feed",
-          content: {
-            title: SHARE_PAGE_TITLE,
-            description: "Photography by Voto.",
-            imageUrl,
-            link: { mobileWebUrl: pageUrl, webUrl: pageUrl },
-          },
-          buttons: [
-            {
-              title: "웹에서 보기",
-              link: { mobileWebUrl: pageUrl, webUrl: pageUrl },
-            },
-          ],
-        });
-      } else {
-        Kakao.Share.sendDefault({
-          objectType: "text",
-          text: `${SHARE_PAGE_TITLE}\n${pageUrl}`,
-          link: { mobileWebUrl: pageUrl, webUrl: pageUrl },
-        });
-      }
-      setShareMenuOpen(false);
-    } catch (err) {
-      console.error(err);
-      window.alert("카카오톡 공유를 불러오지 못했습니다.");
-    }
+    setShareMenuOpen(false);
   };
 
   useEffect(() => {
-    if (!shareMenuOpen && !instaHintOpen) return;
+    if (!shareMenuOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setShareMenuOpen(false);
-        setInstaHintOpen(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [shareMenuOpen, instaHintOpen]);
+  }, [shareMenuOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (shareToastTimerRef.current) {
+        clearTimeout(shareToastTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <>
@@ -1757,23 +1656,11 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.96 }}
                 transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute bottom-full left-0 mb-2 flex w-[13.5rem] flex-col gap-1 rounded-2xl border border-white/40 bg-white/55 p-2 shadow-lg backdrop-blur-md"
+                className="absolute bottom-full left-0 mb-2 flex w-[15.5rem] flex-col gap-1 rounded-2xl border border-white/40 bg-white/55 p-2 shadow-lg backdrop-blur-md"
                 role="menu"
                 aria-label="공유 메뉴"
                 onPointerDown={(event) => event.stopPropagation()}
               >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => void handleKakaoShare()}
-                  className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-medium text-zinc-800 transition hover:bg-white/60"
-                >
-                  <MessageCircle
-                    className="h-[18px] w-[18px] shrink-0 text-[#3C1E1E]"
-                    aria-hidden
-                  />
-                  카카오톡
-                </button>
                 <button
                   type="button"
                   role="menuitem"
@@ -1795,10 +1682,7 @@ export default function Home() {
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => {
-                    setShareMenuOpen(false);
-                    setInstaHintOpen(true);
-                  }}
+                  onClick={() => void handleInstagramShare()}
                   className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-medium text-zinc-800 transition hover:bg-white/60"
                 >
                   <Instagram
@@ -1832,69 +1716,17 @@ export default function Home() {
       </div>
 
       <AnimatePresence>
-        {copyToastVisible ? (
+        {shareToast ? (
           <motion.div
-            key="copy-toast"
+            key={shareToast}
             role="status"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.2 }}
-            className="fixed bottom-[5.5rem] left-5 z-[60] max-w-[min(92vw,20rem)] rounded-full border border-white/40 bg-zinc-900/88 px-4 py-2.5 text-center text-xs font-medium text-white shadow-lg backdrop-blur-md sm:bottom-[5.75rem]"
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="fixed bottom-[5.75rem] left-5 z-[60] max-w-[min(calc(100vw-2.5rem),22rem)] rounded-2xl border border-white/45 bg-zinc-950/82 px-4 py-3.5 text-left text-[13px] font-medium leading-snug text-white shadow-xl backdrop-blur-md sm:bottom-24"
           >
-            링크가 복사되었습니다!
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {instaHintOpen ? (
-          <motion.div
-            key="insta-hint"
-            className="fixed inset-0 z-[55] flex items-center justify-center p-4 sm:p-6"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <button
-              type="button"
-              aria-label="닫기"
-              className="absolute inset-0 bg-zinc-950/45 backdrop-blur-sm"
-              onClick={() => setInstaHintOpen(false)}
-            />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="insta-hint-title"
-              initial={{ opacity: 0, scale: 0.96, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.98, y: 8 }}
-              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-              className="relative z-10 w-full max-w-sm rounded-2xl border border-white/40 bg-white/75 p-6 text-center shadow-2xl backdrop-blur-md"
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 text-white">
-                <Instagram className="h-5 w-5" aria-hidden />
-              </div>
-              <h3
-                id="insta-hint-title"
-                className="text-sm font-semibold text-zinc-900"
-              >
-                인스타그램에 공유하기
-              </h3>
-              <p className="mt-3 text-sm leading-relaxed text-zinc-700">
-                인스타그램은 직접 공유가 어려워요. 링크를 복사해 인스타 스토리나
-                프로필에 공유해 보세요!
-              </p>
-              <button
-                type="button"
-                onClick={() => setInstaHintOpen(false)}
-                className="mt-5 min-h-10 w-full rounded-full border border-zinc-300/80 bg-white/80 text-sm font-medium text-zinc-800 transition hover:bg-white"
-              >
-                확인
-              </button>
-            </motion.div>
+            {shareToast}
           </motion.div>
         ) : null}
       </AnimatePresence>
