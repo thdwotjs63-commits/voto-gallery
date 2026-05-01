@@ -39,7 +39,6 @@ import type { DriveImage } from "@/lib/drive-gallery-data";
 import {
   buildPhotoDetailPageUrl,
   buildPhotoShareClipboardText,
-  PHOTO_SHARE_CLIPBOARD_BYLINE,
 } from "@/lib/photo-share";
 
 /** 트윗 작성창에 넣을 갤러리 제목 */
@@ -1259,11 +1258,8 @@ export default function Home() {
 
       if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
         try {
-          await navigator.share({
-            title: "Kim Dain | Voto Gallery",
-            text: PHOTO_SHARE_CLIPBOARD_BYLINE,
-            url,
-          });
+          // title/text 없이 url만 전달 — 카카오톡 등에서 링크·본문이 두 말풍선으로 쪼개지는 현상 완화
+          await navigator.share({ url });
           showShareToast("해당 사진의 공유 링크가 준비되었습니다.");
           return true;
         } catch (err) {

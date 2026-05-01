@@ -6,11 +6,10 @@ import { SITE_URL } from "@/lib/seo-metadata";
  */
 export const PHOTO_SHARE_CLIPBOARD_BYLINE = "Kim Dain | Voto Gallery";
 
-/** 홈(`/?photo=`)만 사용해 공유·딥링크 시 별도 라우트 404를 피한다. */
+/** 카카오 등 미리보기 봇을 위해 공유 URL은 서버 메타가 있는 `/share/[id]`를 쓴다. */
 export function buildPhotoDetailPageUrl(photoId: string): string {
   const base = SITE_URL.replace(/\/$/, "") || "https://daeni.kr";
-  const url = new URL(`${base}/`);
-  url.searchParams.set("photo", photoId);
+  const url = new URL(`${base}/share/${encodeURIComponent(photoId)}`);
   return url.toString();
 }
 
