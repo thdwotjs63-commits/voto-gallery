@@ -151,22 +151,29 @@ function mapDriveFileRowToImage(file: DriveFileRow): DriveImage {
   };
 }
 
+const DRIVE_FETCH_NO_STORE = { cache: "no-store" as const };
+
 /**
  * 갤러리 전체 순회에 없어도, 파일 ID로 Drive에서 직접 메타를 읽는다.
  * (공유 링크 404 방지 — API 키로 해당 파일을 읽을 수 있을 때만 성공)
  */
-export async function fetchDriveImageById(fileId: string): Promise<DriveImage | null> {
+export async function fetchDriveImageById(
+  fileId: string,
+  depth = 0,
+  visited: Set<string> = new Set()
+): Promise<DriveImage | null> {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY;
   if (!apiKey) {
     throw new Error("Missing NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY");
   }
 
   const rawId = fileId.trim();
-  if (!rawId) return null;
+  if (!rawId || depth > 6 || visited.has(rawId)) return null;
+  visited.add(rawId);
 
   const driveApiKey = apiKey;
   const fields =
-    "id,name,mimeType,description,imageMediaMetadata(width,height),parents";
+    "id,name,mimeType,shortcutDetails,description,imageMediaMetadata(width,height),parents";
 
   const fileUrl = new URL(
     `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(rawId)}`
@@ -175,7 +182,7 @@ export async function fetchDriveImageById(fileId: string): Promise<DriveImage | 
   fileUrl.searchParams.set("key", driveApiKey);
   fileUrl.searchParams.set("supportsAllDrives", "true");
 
-  const fileRes = await fetch(fileUrl.toString(), DRIVE_FETCH_INIT);
+  const fileRes = await fetch(fileUrl.toString(), DRIVE_FETCH_NO_STORE);
 
   if (fileRes.status === 404 || !fileRes.ok) {
     return null;
@@ -188,9 +195,20 @@ export async function fetchDriveImageById(fileId: string): Promise<DriveImage | 
     description?: string;
     imageMediaMetadata?: { width?: number; height?: number };
     parents?: string[];
+    shortcutDetails?: { targetId?: string; targetMimeType?: string };
   };
 
-  if (!file.id || !file.name || !file.mimeType?.startsWith("image/")) {
+  if (!file.id || !file.name || !file.mimeType) {
+    return null;
+  }
+
+  if (file.mimeType === "application/vnd.google-apps.shortcut") {
+    const targetId = file.shortcutDetails?.targetId?.trim();
+    if (!targetId) return null;
+    return fetchDriveImageById(targetId, depth + 1, visited);
+  }
+
+  if (!file.mimeType.startsWith("image/")) {
     return null;
   }
 
@@ -203,7 +221,7 @@ export async function fetchDriveImageById(fileId: string): Promise<DriveImage | 
     parentUrl.searchParams.set("fields", "name");
     parentUrl.searchParams.set("key", driveApiKey);
     parentUrl.searchParams.set("supportsAllDrives", "true");
-    const parentRes = await fetch(parentUrl.toString(), DRIVE_FETCH_INIT);
+    const parentRes = await fetch(parentUrl.toString(), DRIVE_FETCH_NO_STORE);
     if (parentRes.ok) {
       const parentData = (await parentRes.json()) as { name?: string };
       const n = parentData.name?.trim();
