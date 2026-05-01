@@ -31,7 +31,7 @@ import {
   StretchHorizontal,
   Twitter,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { GalleryChangelog } from "@/components/gallery-changelog";
 import { PhotoDetailModal } from "@/components/photo-detail-modal";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
@@ -402,6 +402,17 @@ const THUMB_SIZES_COMPACT =
 
 const FEED_SCROLL_POLL_MS = 50;
 const FEED_SCROLL_MAX_MS = 2000;
+const QUERY_DATE = "date";
+const QUERY_PLACE = "place";
+const QUERY_MOMENT = "moment";
+const QUERY_WITH = "with";
+const QUERY_SORT = "sort";
+const QUERY_PHOTO = "photo";
+const QUERY_VIEW = "view";
+const SCROLL_RESTORE_PHOTO_KEY = "voto_restore_photo_id";
+const SCROLL_RESTORE_Y_KEY = "voto_restore_scroll_y";
+const SCROLL_RESTORE_VIEW_KEY = "voto_restore_view_mode";
+const SCROLL_RESTORE_GRID_VISIBLE_KEY = "voto_restore_grid_visible";
 
 function scrollToPhoto(photoDriveId: string) {
   const el = document.getElementById(`photo-${photoDriveId}`);
@@ -539,6 +550,7 @@ function GalleryThumbnail({
 
 export default function Home() {
   const router = useRouter();
+  const pathname = usePathname();
   const [images, setImages] = useState<DriveImage[]>([]);
   const [likesByPhoto, setLikesByPhoto] = useState<Record<string, number>>({});
   const [likingByPhoto, setLikingByPhoto] = useState<Record<string, boolean>>({});
@@ -565,6 +577,8 @@ export default function Home() {
   const likesRef = useRef<Record<string, number>>({});
   const lastLikeClickAtRef = useRef<Record<string, number>>({});
   const galleryRef = useRef<HTMLDivElement | null>(null);
+  const sortAnchorMobileRef = useRef<HTMLDivElement | null>(null);
+  const sortAnchorDesktopRef = useRef<HTMLDivElement | null>(null);
   const [heroScrollY, setHeroScrollY] = useState(0);
   const [heroVisible, setHeroVisible] = useState(false);
   const lastScrollYRef = useRef(0);
@@ -573,6 +587,8 @@ export default function Home() {
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const gridListRef = useRef<HTMLElement | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "feed">("feed");
+  const viewModeRef = useRef(viewMode);
+  const visibleCountRef = useRef(visibleCount);
   const [guestbookModalOpen, setGuestbookModalOpen] = useState(false);
   const feedScrollTargetIdRef = useRef<string | null>(null);
   const [feedScrollSession, setFeedScrollSession] = useState(0);
@@ -581,9 +597,22 @@ export default function Home() {
   );
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [shareToast, setShareToast] = useState<string | null>(null);
+  const [urlQueryString, setUrlQueryString] = useState("");
   const shareToastTimerRef = useRef<number | null>(null);
   const shareWrapRef = useRef<HTMLDivElement | null>(null);
   const photoParamHandledRef = useRef<string | null>(null);
+  const didHydrateFiltersFromUrlRef = useRef(false);
+  const didRestoreScrollFromSessionRef = useRef(false);
+  const skipNextUrlHydrationRef = useRef(false);
+  const lastDateLocationSelectionRef = useRef<{ date: string; location: string } | null>(null);
+
+  useEffect(() => {
+    viewModeRef.current = viewMode;
+  }, [viewMode]);
+
+  useEffect(() => {
+    visibleCountRef.current = visibleCount;
+  }, [visibleCount]);
 
   useEffect(() => {
     let mounted = true;
@@ -707,6 +736,46 @@ export default function Home() {
   useEffect(() => {
     likesRef.current = likesByPhoto;
   }, [likesByPhoto]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const syncFromLocation = () => {
+      setUrlQueryString(window.location.search);
+    };
+    syncFromLocation();
+    window.addEventListener("popstate", syncFromLocation);
+    return () => window.removeEventListener("popstate", syncFromLocation);
+  }, []);
+
+  const parsedUrlParams = useMemo(
+    () => new URLSearchParams(urlQueryString.replace(/^\?/, "")),
+    [urlQueryString]
+  );
+  const urlDate = (parsedUrlParams.get(QUERY_DATE) ?? "all").trim() || "all";
+  const urlPlace =
+    (parsedUrlParams.get(QUERY_PLACE) ?? parsedUrlParams.get("location") ?? "all").trim() ||
+    "all";
+  const urlMoment = (parsedUrlParams.get(QUERY_MOMENT) ?? "all").trim() || "all";
+  const urlWith = (parsedUrlParams.get(QUERY_WITH) ?? "all").trim() || "all";
+  const rawUrlSort = (parsedUrlParams.get(QUERY_SORT) ?? "latest").trim();
+  const urlSort: "latest" | "oldest" | "popular" =
+    rawUrlSort === "oldest" || rawUrlSort === "popular" ? rawUrlSort : "latest";
+  const rawUrlView = (parsedUrlParams.get(QUERY_VIEW) ?? "feed").trim().toLowerCase();
+  const urlViewMode: "grid" | "feed" = rawUrlView === "grid" ? "grid" : "feed";
+
+  useEffect(() => {
+    if (skipNextUrlHydrationRef.current) {
+      skipNextUrlHydrationRef.current = false;
+      return;
+    }
+    setSelectedDateTag((prev) => (prev === urlDate ? prev : urlDate));
+    setSelectedLocationTag((prev) => (prev === urlPlace ? prev : urlPlace));
+    setSelectedMomentTag((prev) => (prev === urlMoment ? prev : urlMoment));
+    setSelectedWithTag((prev) => (prev === urlWith ? prev : urlWith));
+    setSortOrder((prev) => (prev === urlSort ? prev : urlSort));
+    setViewMode((prev) => (prev === urlViewMode ? prev : urlViewMode));
+    didHydrateFiltersFromUrlRef.current = true;
+  }, [urlDate, urlMoment, urlPlace, urlSort, urlViewMode, urlWith]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -990,6 +1059,8 @@ export default function Home() {
   );
 
   useEffect(() => {
+    if (loading) return;
+    if (images.length === 0) return;
     if (
       selectedDateTag !== "all" &&
       !dropdownTags.date.some((option) => option.value === selectedDateTag)
@@ -1017,6 +1088,8 @@ export default function Home() {
     selectedLocationTag,
     selectedMomentTag,
     selectedWithTag,
+    loading,
+    images.length,
   ]);
 
   const filteredImages = useMemo(
@@ -1052,10 +1125,182 @@ export default function Home() {
 
   const filteredTotal = sortedFilteredImages.length;
 
+  useEffect(() => {
+    if (!didHydrateFiltersFromUrlRef.current) return;
+
+    const params = new URLSearchParams(urlQueryString.replace(/^\?/, ""));
+    const setOrDelete = (key: string, value: string, fallback: string) => {
+      if (!value || value === fallback) {
+        params.delete(key);
+        return;
+      }
+      params.set(key, value);
+    };
+
+    setOrDelete(QUERY_DATE, selectedDateTag, "all");
+    setOrDelete(QUERY_PLACE, selectedLocationTag, "all");
+    setOrDelete(QUERY_MOMENT, selectedMomentTag, "all");
+    setOrDelete(QUERY_WITH, selectedWithTag, "all");
+    setOrDelete(QUERY_SORT, sortOrder, "latest");
+    setOrDelete(QUERY_VIEW, viewMode, "feed");
+    params.delete("location");
+
+    const nextQuery = params.toString();
+    const currentQuery = urlQueryString.replace(/^\?/, "");
+    if (nextQuery === currentQuery) return;
+
+    const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
+    skipNextUrlHydrationRef.current = true;
+    window.history.pushState(null, "", nextUrl);
+    setUrlQueryString(nextQuery ? `?${nextQuery}` : "");
+  }, [
+    pathname,
+    selectedDateTag,
+    selectedLocationTag,
+    selectedMomentTag,
+    selectedWithTag,
+    sortOrder,
+    urlQueryString,
+    viewMode,
+  ]);
+
   const visibleGalleryImages = useMemo(
     () => sortedFilteredImages.slice(0, visibleCount),
     [sortedFilteredImages, visibleCount]
   );
+
+  useEffect(() => {
+    const previous = lastDateLocationSelectionRef.current;
+    lastDateLocationSelectionRef.current = {
+      date: selectedDateTag,
+      location: selectedLocationTag,
+    };
+    if (!previous) return;
+
+    const justResetToAll =
+      selectedDateTag === "all" &&
+      selectedLocationTag === "all" &&
+      (previous.date !== "all" || previous.location !== "all");
+    if (!justResetToAll) return;
+    if (sortedFilteredImages.length === 0) return;
+
+    setVisibleCount((count) => Math.max(count, 1));
+    const firstPhotoId = sortedFilteredImages[0]?.id;
+    if (!firstPhotoId) return;
+
+    window.requestAnimationFrame(() => {
+      scrollToPhoto(firstPhotoId);
+    });
+  }, [selectedDateTag, selectedLocationTag, sortedFilteredImages]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const persistScrollState = () => {
+      const nodes = document.querySelectorAll<HTMLElement>('[id^="photo-"]');
+      const topCandidate = Array.from(nodes).find((node) => node.getBoundingClientRect().bottom > 120);
+      const photoId = topCandidate?.id.replace("photo-", "");
+      if (photoId) {
+        window.sessionStorage.setItem(SCROLL_RESTORE_PHOTO_KEY, photoId);
+      }
+      window.sessionStorage.setItem(SCROLL_RESTORE_Y_KEY, String(window.scrollY));
+      window.sessionStorage.setItem(SCROLL_RESTORE_VIEW_KEY, viewModeRef.current);
+      if (viewModeRef.current === "grid") {
+        window.sessionStorage.setItem(
+          SCROLL_RESTORE_GRID_VISIBLE_KEY,
+          String(visibleCountRef.current)
+        );
+      }
+    };
+
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(() => {
+        raf = 0;
+        persistScrollState();
+      });
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("pagehide", persistScrollState);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("pagehide", persistScrollState);
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (viewMode !== "grid") return;
+    const initial = Math.min(GRID_INITIAL_LOAD, filteredTotal || GRID_INITIAL_LOAD);
+    setVisibleCount(initial);
+  }, [
+    selectedDateTag,
+    selectedLocationTag,
+    selectedMomentTag,
+    selectedWithTag,
+    sortOrder,
+    images.length,
+    filteredTotal,
+    viewMode,
+  ]);
+
+  useEffect(() => {
+    if (didRestoreScrollFromSessionRef.current) return;
+    if (loading) return;
+    if (sortedFilteredImages.length === 0) return;
+    const params = new URLSearchParams(urlQueryString.replace(/^\?/, ""));
+    if (params.get(QUERY_PHOTO)) return;
+    if (typeof window === "undefined") return;
+
+    const urlSaysGrid = params.get(QUERY_VIEW)?.toLowerCase() === "grid";
+    const sessionView = window.sessionStorage.getItem(SCROLL_RESTORE_VIEW_KEY);
+    const restoreAsGrid =
+      urlSaysGrid || (sessionView === "grid" && params.get(QUERY_VIEW) == null);
+
+    const savedY = Number(window.sessionStorage.getItem(SCROLL_RESTORE_Y_KEY) ?? "");
+
+    if (restoreAsGrid) {
+      didRestoreScrollFromSessionRef.current = true;
+      setViewMode((prev) => (prev === "grid" ? prev : "grid"));
+      const savedVisibleRaw = window.sessionStorage.getItem(SCROLL_RESTORE_GRID_VISIBLE_KEY);
+      const savedVisible = Number.parseInt(savedVisibleRaw ?? "", 10);
+      const cap = sortedFilteredImages.length;
+      if (Number.isFinite(savedVisible) && savedVisible > 0) {
+        setVisibleCount((c) => Math.max(c, Math.min(savedVisible, cap)));
+      } else {
+        setVisibleCount((c) => Math.max(c, Math.min(GRID_INITIAL_LOAD, cap)));
+      }
+      if (Number.isFinite(savedY) && savedY > 0) {
+        window.requestAnimationFrame(() => {
+          window.scrollTo({ top: savedY, behavior: "auto" });
+        });
+      }
+      return;
+    }
+
+    const savedPhotoId = window.sessionStorage.getItem(SCROLL_RESTORE_PHOTO_KEY)?.trim();
+    if (savedPhotoId) {
+      const idx = sortedFilteredImages.findIndex((img) => img.id === savedPhotoId);
+      if (idx >= 0) {
+        didRestoreScrollFromSessionRef.current = true;
+        setViewMode("feed");
+        setVisibleCount((c) => Math.max(c, idx + 1));
+        feedScrollTargetIdRef.current = savedPhotoId;
+        setFeedScrollPriorityId(savedPhotoId);
+        setFeedScrollSession((n) => n + 1);
+        return;
+      }
+    }
+
+    if (Number.isFinite(savedY) && savedY > 0) {
+      didRestoreScrollFromSessionRef.current = true;
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: savedY, behavior: "auto" });
+      });
+    }
+  }, [loading, sortedFilteredImages, urlQueryString]);
 
   const fetchNextPage = useCallback(() => {
     const pageSize = viewMode === "grid" ? GRID_PAGE_SIZE : GALLERY_PAGE_SIZE;
@@ -1064,8 +1309,10 @@ export default function Home() {
     );
   }, [filteredTotal, viewMode]);
 
+  // 그리드는 위 이펙트 + 스크롤 복원이 담당. 피드일 때만 초기 개수를 맞춘다(viewMode로 한 프레임 URL 지연도 처리).
   useEffect(() => {
-    const initial = viewMode === "grid" ? GRID_INITIAL_LOAD : GALLERY_PAGE_SIZE;
+    if (viewMode === "grid" || urlViewMode === "grid") return;
+    const initial = GALLERY_PAGE_SIZE;
     setVisibleCount(Math.min(initial, filteredTotal || initial));
   }, [
     selectedDateTag,
@@ -1074,8 +1321,9 @@ export default function Home() {
     selectedWithTag,
     sortOrder,
     images.length,
-    viewMode,
     filteredTotal,
+    urlViewMode,
+    viewMode,
   ]);
 
   useEffect(() => {
@@ -1140,21 +1388,15 @@ export default function Home() {
     };
   }, [viewMode, visibleCount, filteredTotal, fetchNextPage]);
 
-  const handleGridThumbNavigate = (photoId: string) => {
-    const idx = sortedFilteredImages.findIndex((img) => img.id === photoId);
-    if (idx < 0) return;
-    feedScrollTargetIdRef.current = photoId;
-    setFeedScrollPriorityId(photoId);
-    setFeedScrollSession((n) => n + 1);
-    setVisibleCount((c) => Math.max(c, idx + 1));
-    setViewMode("feed");
-  };
-
   const handleViewModeToggle = () => {
+    const desktopAnchor = sortAnchorDesktopRef.current;
+    const mobileAnchor = sortAnchorMobileRef.current;
+    const anchor =
+      desktopAnchor && desktopAnchor.offsetParent !== null ? desktopAnchor : mobileAnchor;
+    anchor?.scrollIntoView({ behavior: "smooth", block: "start" });
     setViewMode((prev) => {
       const next = prev === "feed" ? "grid" : "feed";
       if (next === "grid") {
-        window.scrollTo({ top: 0, behavior: "smooth" });
         setVisibleCount(Math.min(GRID_INITIAL_LOAD, filteredTotal || GRID_INITIAL_LOAD));
       } else {
         setVisibleCount(Math.min(GALLERY_PAGE_SIZE, filteredTotal || GALLERY_PAGE_SIZE));
@@ -1222,12 +1464,17 @@ export default function Home() {
 
   const closePhotoDetailModal = useCallback(() => {
     setPhotoDetailModalImage(null);
-    router.replace("/", { scroll: false });
-  }, [router]);
+    const params = new URLSearchParams(urlQueryString);
+    params.delete(QUERY_PHOTO);
+    const nextQuery = params.toString();
+    skipNextUrlHydrationRef.current = true;
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    setUrlQueryString(nextQuery ? `?${nextQuery}` : "");
+  }, [pathname, router, urlQueryString]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const raw = new URLSearchParams(window.location.search).get("photo");
+    const params = new URLSearchParams(urlQueryString);
+    const raw = params.get(QUERY_PHOTO);
     const photoId = raw?.trim() ?? "";
     if (!photoId) {
       photoParamHandledRef.current = null;
@@ -1241,7 +1488,12 @@ export default function Home() {
       if (photoParamHandledRef.current !== `missing:${photoId}`) {
         photoParamHandledRef.current = `missing:${photoId}`;
         showShareToast("링크의 사진을 찾을 수 없습니다.");
-        router.replace("/", { scroll: false });
+        const nextParams = new URLSearchParams(urlQueryString);
+        nextParams.delete(QUERY_PHOTO);
+        const nextQuery = nextParams.toString();
+        skipNextUrlHydrationRef.current = true;
+        router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+        setUrlQueryString(nextQuery ? `?${nextQuery}` : "");
       }
       return;
     }
@@ -1251,7 +1503,7 @@ export default function Home() {
     photoParamHandledRef.current = openKey;
     setLightboxIndex(-1);
     setPhotoDetailModalImage(found);
-  }, [loading, images, router, showShareToast]);
+  }, [images, loading, pathname, router, showShareToast, urlQueryString]);
 
   const copyPhotoShareLink = useCallback(
     async (photoId: string) => {
@@ -1859,7 +2111,7 @@ export default function Home() {
                 ))}
               </div>
 
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              <div ref={sortAnchorMobileRef} className="flex gap-2 overflow-x-auto pb-1">
                 <div className={`${FILTER_SECTION_LABEL} self-center`}>
                   Sort
                 </div>
@@ -1978,7 +2230,7 @@ export default function Home() {
                 ))}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5">
+              <div ref={sortAnchorDesktopRef} className="flex flex-wrap items-center gap-2.5">
                 <span className={FILTER_SECTION_LABEL}>Sort</span>
                 <button
                   type="button"
@@ -2035,7 +2287,12 @@ export default function Home() {
                     >
                       <button
                         type="button"
-                        onClick={() => handleGridThumbNavigate(image.id)}
+                        onClick={() => {
+                          const idx = sortedFilteredImages.findIndex(
+                            (img) => img.id === image.id
+                          );
+                          if (idx >= 0) setLightboxIndex(idx);
+                        }}
                         className={`relative block w-full overflow-hidden rounded-sm bg-zinc-100 ${
                           image.ratio === "portrait"
                             ? "aspect-[3/4]"
