@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { fetchDriveGalleryImages } from "@/lib/drive-gallery-data";
 import { buildPhotoMetadata } from "@/lib/seo-metadata";
 
 type SharePageProps = {
@@ -17,12 +18,17 @@ export async function generateMetadata({ params }: SharePageProps): Promise<Meta
   const { id: rawId } = await params;
   const photoId = decodePhotoId(rawId).trim();
   const safeId = encodeURIComponent(photoId);
-  const imageUrl = `https://lh3.googleusercontent.com/d/${safeId}=w1200`;
+  const images = await fetchDriveGalleryImages();
+  const image = images.find((item) => item.id === photoId);
+  const imageUrl = image?.originalUrl ?? `https://lh3.googleusercontent.com/d/${safeId}`;
+  const title = image?.name || "Kim Dain | Voto Gallery";
 
   return buildPhotoMetadata({
-    title: "Kim Dain | Voto Gallery",
+    title,
     description: "김다인 갤러리 사진을 확인해보세요.",
     imageUrl,
+    imageWidth: image?.width,
+    imageHeight: image?.height,
     path: `/share/${safeId}`,
   });
 }

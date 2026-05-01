@@ -2607,55 +2607,105 @@ export default function Home() {
         }}
         render={{
           slide: ({ slide }) => {
-            const sharePhotoId =
-              sortedFilteredImages.find((img) => img.originalUrl === slide.src)?.id ?? "";
+            const currentImage = sortedFilteredImages[lightboxIndex];
+            const hasStory = Boolean((slide as { story?: string }).story);
             return (
-            <div className="relative h-full w-full">
-              <Image
-                src={slide.src}
-                alt={slide.alt || "gallery image"}
-                fill
-                className="object-contain"
-                sizes="100vw"
-                quality={95}
-                priority
-              />
-              <div className="absolute bottom-4 right-4 flex items-center gap-2">
-                <button
-                  type="button"
-                  data-photo-share={sharePhotoId || undefined}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    if (sharePhotoId) void copyPhotoShareLink(sharePhotoId);
-                  }}
-                  className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={!sharePhotoId}
-                  aria-label="이 사진 공유 링크 복사"
-                >
-                  <Share2 className="mr-1 inline h-3.5 w-3.5" aria-hidden />
-                  Share
-                </button>
-                <a
-                  href={(slide as { downloadUrl?: string }).downloadUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
-                >
-                  ↓ Download
-                </a>
-              </div>
-              {(slide as { story?: string }).story ? (
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-5 pb-6 pt-12 text-left text-zinc-100 sm:px-8">
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-300">
-                    Author&apos;s Note
-                  </p>
-                  <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-100/95 sm:text-[15px]">
-                    {(slide as { story?: string }).story}
-                  </p>
+              <div className="relative h-full w-full">
+                <Image
+                  src={slide.src}
+                  alt={slide.alt || "gallery image"}
+                  fill
+                  className="object-contain"
+                  sizes="100vw"
+                  quality={95}
+                  priority
+                />
+                {(() => {
+                  if (!currentImage) return null;
+                  const tags = [
+                    currentImage.scheduleDisplay || currentImage.folderName,
+                    currentImage.locationTag,
+                    currentImage.withTag,
+                  ].filter(Boolean);
+                  if (tags.length === 0) return null;
+                  return (
+                    <div
+                      className={`absolute left-4 z-10 flex flex-wrap gap-1.5 ${
+                        hasStory ? "bottom-20" : "bottom-4"
+                      }`}
+                    >
+                      {tags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => {
+                            if (tag === (currentImage.scheduleDisplay || currentImage.folderName)) {
+                              setSelectedDateTag(currentImage.folderName);
+                            } else if (tag === currentImage.locationTag) {
+                              setSelectedLocationTag(tag as string);
+                            } else if (tag === currentImage.withTag) {
+                              setSelectedWithTag(tag as string);
+                            }
+                            setViewMode("grid");
+                            setVisibleCount(
+                              Math.min(GRID_INITIAL_LOAD, filteredTotal || GRID_INITIAL_LOAD)
+                            );
+                            setLightboxIndex(-1);
+                          }}
+                          className="rounded-full bg-black/60 px-2.5 py-1 text-[11px] text-white transition hover:bg-black/75"
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+                <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentImage) void handleLike(currentImage.id);
+                    }}
+                    disabled={Boolean(currentImage && likingByPhoto[currentImage.id])}
+                    className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75 disabled:opacity-60"
+                    aria-label="좋아요"
+                  >
+                    <Heart className="mr-1 inline h-3.5 w-3.5" aria-hidden />
+                    {currentImage ? (likesByPhoto[currentImage.id] ?? 0) : 0}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (currentImage) void copyPhotoShareLink(currentImage.id);
+                    }}
+                    className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
+                    aria-label="이 사진 공유 링크 복사"
+                  >
+                    <Share2 className="mr-1 inline h-3.5 w-3.5" aria-hidden />
+                    Share
+                  </button>
+                  <a
+                    href={(slide as { downloadUrl?: string }).downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
+                  >
+                    ↓ Download
+                  </a>
                 </div>
-              ) : null}
-            </div>
+                {(slide as { story?: string }).story ? (
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-5 pb-6 pt-12 text-left text-zinc-100 sm:px-8">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-300">
+                      Author&apos;s Note
+                    </p>
+                    <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-100/95 sm:text-[15px]">
+                      {(slide as { story?: string }).story}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
             );
           },
         }}
