@@ -596,10 +596,12 @@ export default function Home() {
     null
   );
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [quizBubbleOpen, setQuizBubbleOpen] = useState(false);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const [urlQueryString, setUrlQueryString] = useState("");
   const shareToastTimerRef = useRef<number | null>(null);
   const shareWrapRef = useRef<HTMLDivElement | null>(null);
+  const quizWrapRef = useRef<HTMLDivElement | null>(null);
   const photoParamHandledRef = useRef<string | null>(null);
   const didHydrateFiltersFromUrlRef = useRef(false);
   const didRestoreScrollFromSessionRef = useRef(false);
@@ -1620,6 +1622,28 @@ export default function Home() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [shareMenuOpen]);
+
+  useEffect(() => {
+    if (!quizBubbleOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setQuizBubbleOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [quizBubbleOpen]);
+
+  useEffect(() => {
+    if (!quizBubbleOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (quizWrapRef.current?.contains(target)) return;
+      setQuizBubbleOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => window.removeEventListener("pointerdown", onPointerDown, true);
+  }, [quizBubbleOpen]);
 
   useEffect(() => {
     return () => {
@@ -2712,6 +2736,30 @@ export default function Home() {
       />
 
       <style jsx global>{`
+        @keyframes quiz-volleyball-bounce {
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+          35% {
+            transform: translateY(-10px);
+          }
+          55% {
+            transform: translateY(3px);
+          }
+          75% {
+            transform: translateY(-4px);
+          }
+        }
+        .quiz-volleyball-btn:hover,
+        .quiz-volleyball-btn:focus-visible {
+          animation: quiz-volleyball-bounce 0.55s ease-out;
+        }
+        @media (hover: none) {
+          .quiz-volleyball-btn:active {
+            animation: quiz-volleyball-bounce 0.55s ease-out;
+          }
+        }
         .swiper-pagination-bullet {
           width: 7px;
           height: 7px;
@@ -2730,7 +2778,7 @@ export default function Home() {
         }
       `}</style>
 
-      <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
+      <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-4">
         <button
           type="button"
           onClick={scrollToTop}
@@ -2755,7 +2803,58 @@ export default function Home() {
         </button>
       </div>
 
-      <div className="fixed bottom-5 left-5 z-40 flex flex-col items-start gap-2">
+      <div className="fixed bottom-5 left-5 z-40 flex flex-col items-start gap-4">
+        <div ref={quizWrapRef} className="relative flex flex-col items-start">
+          <AnimatePresence>
+            {quizBubbleOpen ? (
+              <motion.div
+                key="quiz-bubble"
+                initial={{ opacity: 0, y: 10, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="absolute bottom-full left-0 mb-2 w-[15rem] rounded-2xl border-2 border-[#00287A] bg-white px-3 py-3 shadow-[0_10px_24px_rgba(0,40,122,0.2)]"
+                role="dialog"
+                aria-label="퀴즈 안내"
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <p className="text-sm font-bold text-[#00287A]">오늘의 퀴즈 풀기!</p>
+                <p className="mt-1 text-xs leading-snug text-[#00287A]/90">
+                  현대건설 배구 퀴즈 페이지로 이동합니다.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuizBubbleOpen(false);
+                      router.push("/quiz");
+                    }}
+                    className="min-h-9 flex-1 rounded-full bg-[#00287A] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-95"
+                  >
+                    이동
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuizBubbleOpen(false)}
+                    className="min-h-9 rounded-full border border-[#00287A]/50 bg-white/90 px-3 py-1.5 text-xs font-medium text-[#00287A] transition hover:bg-white"
+                  >
+                    닫기
+                  </button>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+          <motion.button
+            type="button"
+            aria-label="퀴즈 실행"
+            aria-expanded={quizBubbleOpen}
+            onClick={() => setQuizBubbleOpen((open) => !open)}
+            whileTap={{ scale: 0.94 }}
+            className="quiz-volleyball-btn flex h-11 w-11 items-center justify-center rounded-full bg-[#FFD200] text-lg leading-none shadow-[0_6px_16px_rgba(0,40,122,0.22)] transition active:scale-95"
+          >
+            <span aria-hidden>🏐</span>
+          </motion.button>
+        </div>
         <div ref={shareWrapRef} className="relative flex flex-col items-start">
           <AnimatePresence>
             {shareMenuOpen ? (
@@ -2825,7 +2924,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed bottom-[5.75rem] left-5 z-[60] max-w-[min(calc(100vw-2.5rem),22rem)] rounded-2xl border border-white/45 bg-zinc-950/82 px-4 py-3.5 text-left text-[13px] font-medium leading-snug text-white shadow-xl backdrop-blur-md sm:bottom-24"
+            className="fixed bottom-[8.25rem] left-5 z-[60] max-w-[min(calc(100vw-2.5rem),22rem)] rounded-2xl border border-white/45 bg-zinc-950/82 px-4 py-3.5 text-left text-[13px] font-medium leading-snug text-white shadow-xl backdrop-blur-md sm:bottom-[9rem]"
           >
             {shareToast}
           </motion.div>
