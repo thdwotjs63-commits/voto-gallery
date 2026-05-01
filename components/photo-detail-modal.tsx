@@ -1,23 +1,24 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import type { DriveImage } from "@/lib/drive-gallery-data";
 
 const THUMB_BLUR_DATA_URL =
   "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjZTBlMGUwIi8+PC9zdmc+";
 
-export function PhotoDetailView({ image }: { image: DriveImage }) {
-  const router = useRouter();
+type PhotoDetailModalProps = {
+  image: DriveImage;
+  onClose: () => void;
+};
 
+export function PhotoDetailModal({ image, onClose }: PhotoDetailModalProps) {
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        router.push("/");
+        onClose();
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -25,7 +26,7 @@ export function PhotoDetailView({ image }: { image: DriveImage }) {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [router]);
+  }, [onClose]);
 
   return (
     <div
@@ -35,15 +36,16 @@ export function PhotoDetailView({ image }: { image: DriveImage }) {
       aria-labelledby="photo-detail-title"
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-        <Link
-          href="/"
-          className="text-sm font-medium tracking-wide text-white/90 underline-offset-4 hover:text-white hover:underline"
-        >
-          ← 갤러리
-        </Link>
         <button
           type="button"
-          onClick={() => router.push("/")}
+          onClick={onClose}
+          className="text-left text-sm font-medium tracking-wide text-white/90 underline-offset-4 hover:text-white hover:underline"
+        >
+          ← 갤러리
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
           className="flex h-10 w-10 items-center justify-center rounded-full text-2xl leading-none text-white/80 transition hover:bg-white/10 hover:text-white"
           aria-label="닫기"
         >

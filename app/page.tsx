@@ -31,7 +31,9 @@ import {
   StretchHorizontal,
   Twitter,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { GalleryChangelog } from "@/components/gallery-changelog";
+import { PhotoDetailModal } from "@/components/photo-detail-modal";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 import type { DriveImage } from "@/lib/drive-gallery-data";
 import {
@@ -535,12 +537,16 @@ function GalleryThumbnail({
 }
 
 export default function Home() {
+  const router = useRouter();
   const [images, setImages] = useState<DriveImage[]>([]);
   const [likesByPhoto, setLikesByPhoto] = useState<Record<string, number>>({});
   const [likingByPhoto, setLikingByPhoto] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState(-1);
+  const [photoDetailModalImage, setPhotoDetailModalImage] = useState<DriveImage | null>(
+    null
+  );
   const [selectedDateTag, setSelectedDateTag] = useState("all");
   const [selectedLocationTag, setSelectedLocationTag] = useState("all");
   const [selectedMomentTag, setSelectedMomentTag] = useState("all");
@@ -576,6 +582,7 @@ export default function Home() {
   const [shareToast, setShareToast] = useState<string | null>(null);
   const shareToastTimerRef = useRef<number | null>(null);
   const shareWrapRef = useRef<HTMLDivElement | null>(null);
+  const photoParamHandledRef = useRef<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -669,6 +676,7 @@ export default function Home() {
 
   useEffect(() => {
     setLightboxIndex(-1);
+    setPhotoDetailModalImage(null);
   }, [selectedDateTag, selectedLocationTag, selectedMomentTag, selectedWithTag]);
 
   useEffect(() => {
@@ -1041,36 +1049,6 @@ export default function Home() {
     [filteredImages, sortOrder, likesByPhoto]
   );
 
-  const photoShareLastKeyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || sortedFilteredImages.length === 0) return;
-    const photoId = new URLSearchParams(window.location.search).get("photo");
-    if (!photoId) {
-      photoShareLastKeyRef.current = null;
-      return;
-    }
-    const idx = sortedFilteredImages.findIndex((img) => img.id === photoId);
-    if (idx < 0) return;
-
-    const scrollKey = `${photoId}|${idx}|${selectedDateTag}|${selectedLocationTag}|${selectedMomentTag}|${selectedWithTag}|${sortOrder}`;
-    if (photoShareLastKeyRef.current === scrollKey) return;
-    photoShareLastKeyRef.current = scrollKey;
-
-    setViewMode("feed");
-    setVisibleCount((c) => Math.max(c, idx + 1));
-    feedScrollTargetIdRef.current = photoId;
-    setFeedScrollPriorityId(photoId);
-    setFeedScrollSession((n) => n + 1);
-  }, [
-    sortedFilteredImages,
-    selectedDateTag,
-    selectedLocationTag,
-    selectedMomentTag,
-    selectedWithTag,
-    sortOrder,
-  ]);
-
   const filteredTotal = sortedFilteredImages.length;
 
   const visibleGalleryImages = useMemo(
@@ -1240,6 +1218,39 @@ export default function Home() {
       shareToastTimerRef.current = null;
     }, 3800);
   }, []);
+
+  const closePhotoDetailModal = useCallback(() => {
+    setPhotoDetailModalImage(null);
+    router.replace("/", { scroll: false });
+  }, [router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = new URLSearchParams(window.location.search).get("photo");
+    const photoId = raw?.trim() ?? "";
+    if (!photoId) {
+      photoParamHandledRef.current = null;
+      return;
+    }
+    if (loading) return;
+    if (images.length === 0) return;
+
+    const found = images.find((img) => img.id === photoId);
+    if (!found) {
+      if (photoParamHandledRef.current !== `missing:${photoId}`) {
+        photoParamHandledRef.current = `missing:${photoId}`;
+        showShareToast("링크의 사진을 찾을 수 없습니다.");
+        router.replace("/", { scroll: false });
+      }
+      return;
+    }
+
+    const openKey = `open:${photoId}`;
+    if (photoParamHandledRef.current === openKey) return;
+    photoParamHandledRef.current = openKey;
+    setLightboxIndex(-1);
+    setPhotoDetailModalImage(found);
+  }, [loading, images, router, showShareToast]);
 
   const copyPhotoShareLink = useCallback(
     async (photoId: string) => {
@@ -2282,8 +2293,12 @@ export default function Home() {
         ) : null}
       </AnimatePresence>
 
+      {photoDetailModalImage ? (
+        <PhotoDetailModal image={photoDetailModalImage} onClose={closePhotoDetailModal} />
+      ) : null}
+
       <Lightbox
-        open={lightboxIndex >= 0}
+        open={lightboxIndex >= 0 && !photoDetailModalImage}
         close={() => setLightboxIndex(-1)}
         index={lightboxIndex}
         plugins={[Zoom]}
