@@ -3,8 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import {
   fetchDriveGalleryImages,
-  fetchDriveImageById,
-  type DriveImage,
+  resolveGalleryPhotoForPage,
 } from "@/lib/drive-gallery-data";
 import { buildPhotoMetadata } from "@/lib/seo-metadata";
 import { PhotoDetailView } from "./photo-detail-view";
@@ -15,24 +14,12 @@ const getGalleryImages = cache(fetchDriveGalleryImages);
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function decodePhotoIdParam(raw: string): string {
-  try {
-    return decodeURIComponent(raw);
-  } catch {
-    return raw;
-  }
-}
-
 type PageProps = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id: rawId } = await params;
-  const id = decodePhotoIdParam(rawId);
   const images = await getGalleryImages();
-  let image: DriveImage | undefined = images.find((img) => img.id === id);
-  if (!image) {
-    image = (await fetchDriveImageById(id)) ?? undefined;
-  }
+  const image = await resolveGalleryPhotoForPage(rawId, images);
   if (!image) {
     return { title: "Photo | Voto Gallery" };
   }
@@ -47,12 +34,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function PhotoPage({ params }: PageProps) {
   const { id: rawId } = await params;
-  const id = decodePhotoIdParam(rawId);
   const images = await getGalleryImages();
-  let image: DriveImage | undefined = images.find((img) => img.id === id);
-  if (!image) {
-    image = (await fetchDriveImageById(id)) ?? undefined;
-  }
+  const image = await resolveGalleryPhotoForPage(rawId, images);
   if (!image) {
     notFound();
   }

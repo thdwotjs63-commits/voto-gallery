@@ -96,6 +96,12 @@ function parseScheduleFromFolderName(folderName: string): {
 
 const DRIVE_FETCH_INIT = { next: { revalidate: 300 } } as const;
 
+/** 팀/공유 드라이브 안의 파일도 list/get 이 동작하도록 */
+const DRIVE_LIST_EXTRA_PARAMS = {
+  supportsAllDrives: "true",
+  includeItemsFromAllDrives: "true",
+} as const;
+
 type DriveFileRow = {
   id: string;
   name: string;
@@ -162,12 +168,14 @@ export async function fetchDriveImageById(fileId: string): Promise<DriveImage | 
   const fields =
     "id,name,mimeType,description,imageMediaMetadata(width,height),parents";
 
-  const fileRes = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
-      rawId
-    )}?fields=${encodeURIComponent(fields)}&key=${encodeURIComponent(driveApiKey)}`,
-    DRIVE_FETCH_INIT
+  const fileUrl = new URL(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(rawId)}`
   );
+  fileUrl.searchParams.set("fields", fields);
+  fileUrl.searchParams.set("key", driveApiKey);
+  fileUrl.searchParams.set("supportsAllDrives", "true");
+
+  const fileRes = await fetch(fileUrl.toString(), DRIVE_FETCH_INIT);
 
   if (fileRes.status === 404 || !fileRes.ok) {
     return null;
@@ -189,12 +197,13 @@ export async function fetchDriveImageById(fileId: string): Promise<DriveImage | 
   let folderName = "미분류";
   const parentId = file.parents?.[0];
   if (parentId) {
-    const parentRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
-        parentId
-      )}?fields=name&key=${encodeURIComponent(driveApiKey)}`,
-      DRIVE_FETCH_INIT
+    const parentUrl = new URL(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(parentId)}`
     );
+    parentUrl.searchParams.set("fields", "name");
+    parentUrl.searchParams.set("key", driveApiKey);
+    parentUrl.searchParams.set("supportsAllDrives", "true");
+    const parentRes = await fetch(parentUrl.toString(), DRIVE_FETCH_INIT);
     if (parentRes.ok) {
       const parentData = (await parentRes.json()) as { name?: string };
       const n = parentData.name?.trim();
@@ -213,6 +222,36 @@ export async function fetchDriveImageById(fileId: string): Promise<DriveImage | 
     folderName,
     folderSortKey,
   });
+}
+
+function decodePhotoIdFromRoute(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * `/photo/[id]` 라우트용: 갤러리 목록 매칭 후 단일 파일 조회(공유 드라이브 포함).
+ */
+export async function resolveGalleryPhotoForPage(
+  rawId: string,
+  listImages: DriveImage[]
+): Promise<DriveImage | null> {
+  const decoded = decodePhotoIdFromRoute(rawId).trim();
+  const rawTrim = rawId.trim();
+  const candidates = [...new Set([decoded, rawTrim].filter(Boolean))];
+
+  for (const candidate of candidates) {
+    const fromList = listImages.find((img) => img.id === candidate);
+    if (fromList) return fromList;
+  }
+  for (const candidate of candidates) {
+    const fromDrive = await fetchDriveImageById(candidate);
+    if (fromDrive) return fromDrive;
+  }
+  return null;
 }
 
 export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
@@ -241,6 +280,7 @@ export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
         pageSize: "1000",
         q: query,
         fields: `nextPageToken,files(${fields})`,
+        ...DRIVE_LIST_EXTRA_PARAMS,
       });
 
       if (pageToken) {
@@ -270,12 +310,13 @@ export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
 
   let rootFolderName = "";
   try {
-    const rootRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
-        driveFolderId
-      )}?fields=name&key=${encodeURIComponent(driveApiKey)}`,
-      DRIVE_FETCH_INIT
+    const rootMetaUrl = new URL(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(driveFolderId)}`
     );
+    rootMetaUrl.searchParams.set("fields", "name");
+    rootMetaUrl.searchParams.set("key", driveApiKey);
+    rootMetaUrl.searchParams.set("supportsAllDrives", "true");
+    const rootRes = await fetch(rootMetaUrl.toString(), DRIVE_FETCH_INIT);
     if (rootRes.ok) {
       const rootData = (await rootRes.json()) as { name?: string };
       rootFolderName = rootData.name ?? "";
