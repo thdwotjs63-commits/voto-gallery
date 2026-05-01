@@ -1,7 +1,25 @@
 import type { Metadata } from "next";
 
-export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://voto-gallery.vercel.app";
+/** 환경 변수 누락·오타 시에도 절대 URL 메타가 깨지지 않도록 */
+const FALLBACK_SITE_URL = "https://daeni.kr";
+
+function resolveSiteUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!raw) {
+    return FALLBACK_SITE_URL;
+  }
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return FALLBACK_SITE_URL;
+    }
+    return parsed.origin;
+  } catch {
+    return FALLBACK_SITE_URL;
+  }
+}
+
+export const SITE_URL = resolveSiteUrl();
 
 export const DEFAULT_OG_IMAGE_URL =
   process.env.NEXT_PUBLIC_DEFAULT_OG_IMAGE_URL?.trim() ||
