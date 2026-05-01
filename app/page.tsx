@@ -2588,6 +2588,9 @@ export default function Home() {
         open={lightboxIndex >= 0 && !photoDetailModalImage}
         close={() => setLightboxIndex(-1)}
         index={lightboxIndex}
+        on={{
+          view: ({ index }) => setLightboxIndex(index),
+        }}
         plugins={[Zoom]}
         zoom={{ maxZoomPixelRatio: 3, zoomInMultiplier: 2 }}
         slides={sortedFilteredImages.map((image) => ({
@@ -2603,7 +2606,10 @@ export default function Home() {
           button: { color: "#ffffff", filter: "drop-shadow(0 1px 4px rgba(0,0,0,0.5))" },
         }}
         render={{
-          slide: ({ slide }) => (
+          slide: ({ slide }) => {
+            const sharePhotoId =
+              sortedFilteredImages.find((img) => img.originalUrl === slide.src)?.id ?? "";
+            return (
             <div className="relative h-full w-full">
               <Image
                 src={slide.src}
@@ -2614,14 +2620,31 @@ export default function Home() {
                 quality={95}
                 priority
               />
-              <a
-                href={(slide as { downloadUrl?: string }).downloadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="absolute bottom-4 right-4 rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
-              >
-                ↓ Download
-              </a>
+              <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  data-photo-share={sharePhotoId || undefined}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (sharePhotoId) void copyPhotoShareLink(sharePhotoId);
+                  }}
+                  className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={!sharePhotoId}
+                  aria-label="이 사진 공유 링크 복사"
+                >
+                  <Share2 className="mr-1 inline h-3.5 w-3.5" aria-hidden />
+                  Share
+                </button>
+                <a
+                  href={(slide as { downloadUrl?: string }).downloadUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
+                >
+                  ↓ Download
+                </a>
+              </div>
               {(slide as { story?: string }).story ? (
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-5 pb-6 pt-12 text-left text-zinc-100 sm:px-8">
                   <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-300">
@@ -2633,7 +2656,8 @@ export default function Home() {
                 </div>
               ) : null}
             </div>
-          ),
+            );
+          },
         }}
       />
 
