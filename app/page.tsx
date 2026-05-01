@@ -161,6 +161,7 @@ function FilterDropdown({
   allLabel = "all",
   className = "",
   showOptionCounts = false,
+  showZeroOptionCounts = false,
   optionCounts,
 }: {
   label: string;
@@ -171,6 +172,7 @@ function FilterDropdown({
   allLabel?: string;
   className?: string;
   showOptionCounts?: boolean;
+  showZeroOptionCounts?: boolean;
   optionCounts?: Record<string, number>;
 }) {
   const [open, setOpen] = useState(false);
@@ -284,16 +286,16 @@ function FilterDropdown({
                         onSelect(option.value);
                         setOpen(false);
                       }}
-                      className={`mb-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                      className={`mb-1 flex w-full items-center justify-between gap-2 rounded-xl px-3 py-3 text-left text-sm transition ${
                         selected === option.value
                           ? "bg-[#00287A] text-white"
                           : "text-[#00287A] hover:bg-[#00287A]/10"
                       }`}
                     >
                       <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                      {n !== null && n > 0 ? (
+                      {n !== null && (showZeroOptionCounts || n > 0) ? (
                         <span
-                          className={`shrink-0 text-[11px] tabular-nums ${
+                          className={`shrink-0 pl-2 text-right text-[11px] tabular-nums ${
                             selected === option.value ? "text-white/70" : "text-zinc-400"
                           }`}
                         >
@@ -315,16 +317,16 @@ function FilterDropdown({
                     onSelect(option.value);
                     setOpen(false);
                   }}
-                  className={`mb-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                  className={`mb-1 flex w-full items-center justify-between gap-2 rounded-xl px-3 py-3 text-left text-sm transition ${
                     selected === option.value
                       ? "bg-[#00287A] text-white"
                       : "text-[#00287A] hover:bg-[#00287A]/10"
                   }`}
                 >
                   <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                  {n !== null && n > 0 ? (
+                  {n !== null && (showZeroOptionCounts || n > 0) ? (
                     <span
-                      className={`shrink-0 text-[11px] tabular-nums ${
+                      className={`shrink-0 pl-2 text-right text-[11px] tabular-nums ${
                         selected === option.value ? "text-white/70" : "text-zinc-400"
                       }`}
                     >
@@ -1395,6 +1397,38 @@ export default function Home() {
       ? { showOptionCounts: true as const, optionCounts: dropdownOptionCounts.moment }
       : { showOptionCounts: false as const };
 
+  const mobileDateDropdownCountProps = dropdownOptionCounts
+    ? {
+        showOptionCounts: true as const,
+        showZeroOptionCounts: true as const,
+        optionCounts: dropdownOptionCounts.date,
+      }
+    : { showOptionCounts: false as const };
+
+  const mobileLocationDropdownCountProps = dropdownOptionCounts
+    ? {
+        showOptionCounts: true as const,
+        showZeroOptionCounts: true as const,
+        optionCounts: dropdownOptionCounts.location,
+      }
+    : { showOptionCounts: false as const };
+
+  const mobileWithDropdownCountProps = dropdownOptionCounts
+    ? {
+        showOptionCounts: true as const,
+        showZeroOptionCounts: true as const,
+        optionCounts: dropdownOptionCounts.with,
+      }
+    : { showOptionCounts: false as const };
+
+  const mobileMomentDropdownCountProps = dropdownOptionCounts
+    ? {
+        showOptionCounts: true as const,
+        showZeroOptionCounts: true as const,
+        optionCounts: dropdownOptionCounts.moment,
+      }
+    : { showOptionCounts: false as const };
+
   return (
     <>
       <div
@@ -1422,7 +1456,7 @@ export default function Home() {
                   onSelect={setSelectedDateTag}
                   allLabel="all"
                   className="w-[17.5rem] shrink-0"
-                  {...dateDropdownCountProps}
+                  {...mobileDateDropdownCountProps}
                 />
                 <FilterDropdown
                   label="LOCATION"
@@ -1434,7 +1468,7 @@ export default function Home() {
                   onSelect={setSelectedLocationTag}
                   allLabel="all"
                   className="w-[11.5rem] shrink-0"
-                  {...locationDropdownCountProps}
+                  {...mobileLocationDropdownCountProps}
                 />
                 <FilterDropdown
                   label="WITH"
@@ -1446,7 +1480,7 @@ export default function Home() {
                   onSelect={setSelectedWithTag}
                   allLabel="all"
                   className="w-[10.5rem] shrink-0"
-                  {...withDropdownCountProps}
+                  {...mobileWithDropdownCountProps}
                 />
                 <FilterDropdown
                   label="MOMENT"
@@ -1458,7 +1492,7 @@ export default function Home() {
                   onSelect={setSelectedMomentTag}
                   allLabel="all"
                   className="w-[11rem] shrink-0"
-                  {...momentDropdownCountProps}
+                  {...mobileMomentDropdownCountProps}
                 />
                 <FilterDropdown
                   label="SORT"
@@ -1486,7 +1520,7 @@ export default function Home() {
                 onSelect={setSelectedDateTag}
                 allLabel="all"
                 className="w-full"
-                {...dateDropdownCountProps}
+                {...mobileDateDropdownCountProps}
               />
               <FilterDropdown
                 label="LOCATION"
@@ -1498,7 +1532,7 @@ export default function Home() {
                 onSelect={setSelectedLocationTag}
                 allLabel="all"
                 className="w-full"
-                {...locationDropdownCountProps}
+                {...mobileLocationDropdownCountProps}
               />
               <FilterDropdown
                 label="WITH"
@@ -1510,7 +1544,7 @@ export default function Home() {
                 onSelect={setSelectedWithTag}
                 allLabel="all"
                 className="w-full"
-                {...withDropdownCountProps}
+                {...mobileWithDropdownCountProps}
               />
               <FilterDropdown
                 label="MOMENT"
