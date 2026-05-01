@@ -96,6 +96,125 @@ function parseScheduleFromFolderName(folderName: string): {
 
 const DRIVE_FETCH_INIT = { next: { revalidate: 300 } } as const;
 
+type DriveFileRow = {
+  id: string;
+  name: string;
+  description?: string;
+  imageMediaMetadata?: { width?: number; height?: number };
+  folderName: string;
+  folderSortKey: number;
+};
+
+function mapDriveFileRowToImage(file: DriveFileRow): DriveImage {
+  const width = file.imageMediaMetadata?.width ?? 1200;
+  const height = file.imageMediaMetadata?.height ?? 1800;
+  const description = file.description ?? "";
+  const tags = extractHashtags(description);
+  const story = extractStory(description);
+  const tagDateKey = Number((tags[0] ?? "").replace("#", "")) || 0;
+  const schedule = parseScheduleFromFolderName(file.folderName);
+  const effectiveFolderKey =
+    file.folderSortKey > 0
+      ? file.folderSortKey
+      : schedule.dateKey > 0
+        ? schedule.dateKey
+        : tagDateKey;
+
+  return {
+    id: file.id,
+    name: file.name,
+    description,
+    story,
+    tags,
+    dateTag: tags[0],
+    locationTag: tags[1],
+    momentTag: tags[2],
+    withTag: tags[3],
+    folderName: file.folderName,
+    scheduleDateKey: schedule.dateKey,
+    scheduleLabel: schedule.label,
+    scheduleDisplay: schedule.display,
+    scheduleYear: schedule.year,
+    folderSortKey: effectiveFolderKey,
+    thumbnailUrl: `https://lh3.googleusercontent.com/d/${file.id}=w800`,
+    originalUrl: `https://lh3.googleusercontent.com/d/${file.id}`,
+    downloadUrl: `https://drive.google.com/uc?export=download&id=${file.id}`,
+    ratio: (width >= height ? "landscape" : "portrait") as "landscape" | "portrait",
+    width,
+    height,
+  };
+}
+
+/**
+ * 갤러리 전체 순회에 없어도, 파일 ID로 Drive에서 직접 메타를 읽는다.
+ * (공유 링크 404 방지 — API 키로 해당 파일을 읽을 수 있을 때만 성공)
+ */
+export async function fetchDriveImageById(fileId: string): Promise<DriveImage | null> {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY");
+  }
+
+  const rawId = fileId.trim();
+  if (!rawId) return null;
+
+  const driveApiKey = apiKey;
+  const fields =
+    "id,name,mimeType,description,imageMediaMetadata(width,height),parents";
+
+  const fileRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
+      rawId
+    )}?fields=${encodeURIComponent(fields)}&key=${encodeURIComponent(driveApiKey)}`,
+    DRIVE_FETCH_INIT
+  );
+
+  if (fileRes.status === 404 || !fileRes.ok) {
+    return null;
+  }
+
+  const file = (await fileRes.json()) as {
+    id?: string;
+    name?: string;
+    mimeType?: string;
+    description?: string;
+    imageMediaMetadata?: { width?: number; height?: number };
+    parents?: string[];
+  };
+
+  if (!file.id || !file.name || !file.mimeType?.startsWith("image/")) {
+    return null;
+  }
+
+  let folderName = "미분류";
+  const parentId = file.parents?.[0];
+  if (parentId) {
+    const parentRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
+        parentId
+      )}?fields=name&key=${encodeURIComponent(driveApiKey)}`,
+      DRIVE_FETCH_INIT
+    );
+    if (parentRes.ok) {
+      const parentData = (await parentRes.json()) as { name?: string };
+      const n = parentData.name?.trim();
+      if (n) folderName = n;
+    }
+  }
+
+  const fromFileName = parseDateKeyFromFolderLabel(file.name);
+  const folderSortKey = Math.max(parseDateKeyFromFolderLabel(folderName), fromFileName);
+
+  return mapDriveFileRowToImage({
+    id: file.id,
+    name: file.name,
+    description: file.description,
+    imageMediaMetadata: file.imageMediaMetadata,
+    folderName,
+    folderSortKey,
+  });
+}
+
 export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY;
   const folderId = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_ID;
@@ -221,47 +340,7 @@ export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
   }
 
   return Array.from(uniqueFiles.values())
-    .map((file) => {
-      const width = file.imageMediaMetadata?.width ?? 1200;
-      const height = file.imageMediaMetadata?.height ?? 1800;
-      const description = file.description ?? "";
-      const tags = extractHashtags(description);
-      const story = extractStory(description);
-      const tagDateKey = Number((tags[0] ?? "").replace("#", "")) || 0;
-      const schedule = parseScheduleFromFolderName(file.folderName);
-      const effectiveFolderKey =
-        file.folderSortKey > 0
-          ? file.folderSortKey
-          : schedule.dateKey > 0
-            ? schedule.dateKey
-            : tagDateKey;
-
-      return {
-        id: file.id,
-        name: file.name,
-        description,
-        story,
-        tags,
-        dateTag: tags[0],
-        locationTag: tags[1],
-        momentTag: tags[2],
-        withTag: tags[3],
-        folderName: file.folderName,
-        scheduleDateKey: schedule.dateKey,
-        scheduleLabel: schedule.label,
-        scheduleDisplay: schedule.display,
-        scheduleYear: schedule.year,
-        folderSortKey: effectiveFolderKey,
-        thumbnailUrl: `https://lh3.googleusercontent.com/d/${file.id}=w800`,
-        originalUrl: `https://lh3.googleusercontent.com/d/${file.id}`,
-        downloadUrl: `https://drive.google.com/uc?export=download&id=${file.id}`,
-        ratio: (width >= height ? "landscape" : "portrait") as
-          | "landscape"
-          | "portrait",
-        width,
-        height,
-      };
-    })
+    .map((file) => mapDriveFileRowToImage(file))
     .sort((a, b) => {
       if (a.folderSortKey !== b.folderSortKey) {
         return b.folderSortKey - a.folderSortKey;

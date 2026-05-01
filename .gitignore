@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# 빌드 시 git log로 생성 (저장소에 커밋하지 않음)
+/public/changelog.json
+
 # production
 /build
 

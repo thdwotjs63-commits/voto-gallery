@@ -3,11 +3,14 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type MutableRefObject,
+  type MouseEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
@@ -28,8 +31,14 @@ import {
   StretchHorizontal,
   Twitter,
 } from "lucide-react";
+import { GalleryChangelog } from "@/components/gallery-changelog";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 import type { DriveImage } from "@/lib/drive-gallery-data";
+import {
+  buildPhotoDetailPageUrl,
+  buildPhotoShareClipboardText,
+  PHOTO_SHARE_CLIPBOARD_BYLINE,
+} from "@/lib/photo-share";
 
 /** 트윗 작성창에 넣을 갤러리 제목 */
 const GALLERY_SHARE_TITLE = "voto gallery — Captured Moments of Kim Da-in";
@@ -44,7 +53,7 @@ const FILTER_DROPDOWN_TRIGGER =
 const FILTER_DROPDOWN_TRIGGER_ACTIVE = "!bg-[#00287A] !text-white";
 const FILTER_DROPDOWN_TRIGGER_INACTIVE = "!bg-white !text-[#00287A]";
 const FILTER_DROPDOWN_MENU =
-  "absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-72 overflow-auto rounded-2xl border border-[#00287A]/25 bg-white/90 p-2 shadow-[0_18px_38px_rgba(0,40,122,0.18)] backdrop-blur-[10px]";
+  "max-h-[min(18rem,calc(100dvh-24px))] overflow-auto rounded-2xl border border-[#00287A]/25 bg-white/95 p-2 shadow-[0_18px_38px_rgba(0,40,122,0.18)] backdrop-blur-[10px]";
 
 declare global {
   interface Window {
@@ -100,6 +109,48 @@ function getDateYearGroups(dateOptions: DropdownOption[]): DropdownGroup[] {
     }));
 }
 
+function matchesImageSelections(
+  image: DriveImage,
+  selections: {
+    date: string;
+    location: string;
+    moment: string;
+    with: string;
+  },
+  ignore?: {
+    date?: boolean;
+    location?: boolean;
+    moment?: boolean;
+    with?: boolean;
+  }
+) {
+  if (
+    !ignore?.date &&
+    selections.date !== "all" &&
+    image.folderName !== selections.date
+  ) {
+    return false;
+  }
+  if (
+    !ignore?.location &&
+    selections.location !== "all" &&
+    image.locationTag !== selections.location
+  ) {
+    return false;
+  }
+  if (
+    !ignore?.moment &&
+    selections.moment !== "all" &&
+    image.momentTag !== selections.moment
+  ) {
+    return false;
+  }
+  if (!ignore?.with && selections.with !== "all" && image.withTag !== selections.with) {
+    return false;
+  }
+  return true;
+}
+
 function FilterDropdown({
   label,
   selected,
@@ -108,6 +159,8 @@ function FilterDropdown({
   groups,
   allLabel = "all",
   className = "",
+  showOptionCounts = false,
+  optionCounts,
 }: {
   label: string;
   selected: string;
@@ -116,38 +169,190 @@ function FilterDropdown({
   groups?: DropdownGroup[];
   allLabel?: string;
   className?: string;
+  showOptionCounts?: boolean;
+  optionCounts?: Record<string, number>;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuPortalRef = useRef<HTMLDivElement | null>(null);
+  const [menuBox, setMenuBox] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
+
+  const updateMenuPosition = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const margin = 8;
+    const maxHeight = Math.max(
+      160,
+      Math.min(window.innerHeight - rect.bottom - margin * 2, 18 * 16)
+    );
+    setMenuBox({
+      top: rect.bottom + margin,
+      left: rect.left,
+      width: rect.width,
+      maxHeight,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuBox(null);
+      return undefined;
+    }
+    updateMenuPosition();
+    window.addEventListener("scroll", updateMenuPosition, true);
+    window.addEventListener("resize", updateMenuPosition);
+    return () => {
+      window.removeEventListener("scroll", updateMenuPosition, true);
+      window.removeEventListener("resize", updateMenuPosition);
+    };
+  }, [open, updateMenuPosition]);
 
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (!wrapRef.current?.contains(event.target as Node)) {
-        setOpen(false);
+      const target = event.target as Node;
+      if (wrapRef.current?.contains(target) || menuPortalRef.current?.contains(target)) {
+        return;
       }
+      setOpen(false);
     };
-    window.addEventListener("pointerdown", onPointerDown);
-    return () => window.removeEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => window.removeEventListener("pointerdown", onPointerDown, true);
   }, [open]);
 
   const selectedOption = options.find((option) => option.value === selected);
   const display = selected === "all" ? allLabel : selectedOption?.label ?? selected;
   const isAllSelected = selected === "all";
 
+  const countFor = (value: string) =>
+    showOptionCounts && optionCounts ? (optionCounts[value] ?? 0) : null;
+
+  const menuContent =
+    open && menuBox ? (
+      <motion.div
+        ref={menuPortalRef}
+        key={`${label}-menu-portal`}
+        role="listbox"
+        aria-label={`${label} options`}
+        initial={{ opacity: 0, y: 6, scale: 0.99 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.16, ease: "easeInOut" }}
+        className={`${FILTER_DROPDOWN_MENU} fixed z-[200]`}
+        style={{
+          top: menuBox.top,
+          left: menuBox.left,
+          width: menuBox.width,
+          maxHeight: menuBox.maxHeight,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            onSelect("all");
+            setOpen(false);
+          }}
+          className={`mb-1 flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm transition ${
+            selected === "all"
+              ? "bg-[#00287A] text-white"
+              : "text-[#00287A] hover:bg-[#00287A]/10"
+          }`}
+        >
+          <span className="min-w-0 flex-1 truncate">{allLabel}</span>
+        </button>
+
+        {groups && groups.length > 0
+          ? groups.map((group) => (
+              <div key={`${label}-${group.label}`} className="mb-1">
+                <p className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-[#00287A]/70">
+                  {group.label}
+                </p>
+                {group.options.map((option) => {
+                  const n = countFor(option.value);
+                  return (
+                    <button
+                      key={`${label}-${option.value}`}
+                      type="button"
+                      onClick={() => {
+                        onSelect(option.value);
+                        setOpen(false);
+                      }}
+                      className={`mb-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                        selected === option.value
+                          ? "bg-[#00287A] text-white"
+                          : "text-[#00287A] hover:bg-[#00287A]/10"
+                      }`}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                      {n !== null && n > 0 ? (
+                        <span
+                          className={`shrink-0 text-[11px] tabular-nums ${
+                            selected === option.value ? "text-white/70" : "text-zinc-400"
+                          }`}
+                        >
+                          ({n})
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          : options.map((option) => {
+              const n = countFor(option.value);
+              return (
+                <button
+                  key={`${label}-${option.value}`}
+                  type="button"
+                  onClick={() => {
+                    onSelect(option.value);
+                    setOpen(false);
+                  }}
+                  className={`mb-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                    selected === option.value
+                      ? "bg-[#00287A] text-white"
+                      : "text-[#00287A] hover:bg-[#00287A]/10"
+                  }`}
+                >
+                  <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                  {n !== null && n > 0 ? (
+                    <span
+                      className={`shrink-0 text-[11px] tabular-nums ${
+                        selected === option.value ? "text-white/70" : "text-zinc-400"
+                      }`}
+                    >
+                      ({n})
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+      </motion.div>
+    ) : null;
+
   return (
-    <div ref={wrapRef} className={`relative ${className}`}>
+    <div ref={wrapRef} className={`relative z-[60] ${className}`}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className={`${FILTER_DROPDOWN_TRIGGER} ${
+        onTouchStart={(e) => {
+          e.stopPropagation();
+        }}
+        className={`${FILTER_DROPDOWN_TRIGGER} touch-manipulation ${
           isAllSelected
             ? FILTER_DROPDOWN_TRIGGER_INACTIVE
             : FILTER_DROPDOWN_TRIGGER_ACTIVE
         }`}
         aria-expanded={open}
       >
-        <span className="truncate">
+        <span className="min-w-0 flex-1 truncate text-left">
           <span
             className={`mr-1 text-[10px] uppercase ${
               isAllSelected ? "text-[#00287A]/75" : "text-white/75"
@@ -160,86 +365,16 @@ function FilterDropdown({
           </span>
         </span>
         <ChevronDown
-          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+          className={`pointer-events-none h-4 w-4 shrink-0 transition-transform duration-200 ${
             open ? "rotate-180" : ""
           }`}
+          aria-hidden
         />
       </button>
 
-      <AnimatePresence>
-        {open ? (
-          <motion.div
-            key={`${label}-menu`}
-            initial={{ opacity: 0, y: 8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 6, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: "easeInOut" }}
-            className={FILTER_DROPDOWN_MENU}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                onSelect("all");
-                setOpen(false);
-              }}
-              className={`mb-1 w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${
-                selected === "all"
-                  ? "bg-[#00287A] text-white"
-                  : "text-[#00287A] hover:bg-[#00287A]/10"
-              }`}
-            >
-              {allLabel}
-            </button>
-
-            {(groups && groups.length > 0
-              ? groups.map((group) => (
-                  <div key={`${label}-${group.label}`} className="mb-1">
-                    <p className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-[#00287A]/70">
-                      {group.label}
-                    </p>
-                    {group.options.map((option) => (
-                      <button
-                        key={`${label}-${option.value}`}
-                        type="button"
-                        onClick={() => {
-                          onSelect(option.value);
-                          setOpen(false);
-                        }}
-                        className={`mb-1 w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${
-                          selected === option.value
-                            ? "bg-[#00287A] text-white"
-                            : "text-[#00287A] hover:bg-[#00287A]/10"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                ))
-              : [
-                  <div key={`${label}-flat`}>
-                    {options.map((option) => (
-                      <button
-                        key={`${label}-${option.value}`}
-                        type="button"
-                        onClick={() => {
-                          onSelect(option.value);
-                          setOpen(false);
-                        }}
-                        className={`mb-1 w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${
-                          selected === option.value
-                            ? "bg-[#00287A] text-white"
-                            : "text-[#00287A] hover:bg-[#00287A]/10"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>,
-                ])}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      {typeof document !== "undefined" && open && menuBox
+        ? createPortal(menuContent, document.body)
+        : null}
     </div>
   );
 }
@@ -736,46 +871,35 @@ export default function Home() {
     }
   };
 
-  const dropdownTags = useMemo(() => {
-    const matches = (
-      image: DriveImage,
-      {
-        ignoreDate = false,
-        ignoreLocation = false,
-        ignoreMoment = false,
-        ignoreWith = false,
-      }: {
-        ignoreDate?: boolean;
-        ignoreLocation?: boolean;
-        ignoreMoment?: boolean;
-        ignoreWith?: boolean;
-      } = {}
-    ) => {
-      if (!ignoreDate && selectedDateTag !== "all" && image.folderName !== selectedDateTag) {
-        return false;
-      }
-      if (
-        !ignoreLocation &&
-        selectedLocationTag !== "all" &&
-        image.locationTag !== selectedLocationTag
-      ) {
-        return false;
-      }
-      if (!ignoreMoment && selectedMomentTag !== "all" && image.momentTag !== selectedMomentTag) {
-        return false;
-      }
-      if (!ignoreWith && selectedWithTag !== "all" && image.withTag !== selectedWithTag) {
-        return false;
-      }
-      return true;
-    };
+  const filterSelections = useMemo(
+    () => ({
+      date: selectedDateTag,
+      location: selectedLocationTag,
+      moment: selectedMomentTag,
+      with: selectedWithTag,
+    }),
+    [selectedDateTag, selectedLocationTag, selectedMomentTag, selectedWithTag]
+  );
 
-    const dateCandidates = images.filter((image) => matches(image, { ignoreDate: true }));
-    const locationCandidates = images.filter((image) =>
-      matches(image, { ignoreLocation: true })
+  const filtersActive =
+    selectedDateTag !== "all" ||
+    selectedLocationTag !== "all" ||
+    selectedMomentTag !== "all" ||
+    selectedWithTag !== "all";
+
+  const dropdownTags = useMemo(() => {
+    const dateCandidates = images.filter((image) =>
+      matchesImageSelections(image, filterSelections, { date: true })
     );
-    const momentCandidates = images.filter((image) => matches(image, { ignoreMoment: true }));
-    const withCandidates = images.filter((image) => matches(image, { ignoreWith: true }));
+    const locationCandidates = images.filter((image) =>
+      matchesImageSelections(image, filterSelections, { location: true })
+    );
+    const momentCandidates = images.filter((image) =>
+      matchesImageSelections(image, filterSelections, { moment: true })
+    );
+    const withCandidates = images.filter((image) =>
+      matchesImageSelections(image, filterSelections, { with: true })
+    );
 
     return {
       date: Array.from(
@@ -812,13 +936,45 @@ export default function Home() {
         )
       ).sort((a, b) => a.localeCompare(b)),
     };
-  }, [
-    images,
-    selectedDateTag,
-    selectedLocationTag,
-    selectedMomentTag,
-    selectedWithTag,
-  ]);
+  }, [images, filterSelections]);
+
+  const dropdownOptionCounts = useMemo(() => {
+    if (!filtersActive) return null;
+
+    const dateCount: Record<string, number> = {};
+    for (const image of images) {
+      if (!matchesImageSelections(image, filterSelections, { date: true })) continue;
+      if (!image.folderName) continue;
+      dateCount[image.folderName] = (dateCount[image.folderName] ?? 0) + 1;
+    }
+
+    const locationCount: Record<string, number> = {};
+    for (const image of images) {
+      if (!matchesImageSelections(image, filterSelections, { location: true })) continue;
+      const tag = image.locationTag;
+      if (!tag) continue;
+      locationCount[tag] = (locationCount[tag] ?? 0) + 1;
+    }
+
+    const momentCount: Record<string, number> = {};
+    for (const image of images) {
+      if (!matchesImageSelections(image, filterSelections, { moment: true })) continue;
+      const tag = image.momentTag;
+      if (!tag) continue;
+      momentCount[tag] = (momentCount[tag] ?? 0) + 1;
+    }
+
+    const withCount: Record<string, number> = {};
+    for (const image of images) {
+      if (!matchesImageSelections(image, filterSelections, { with: true })) continue;
+      const tag = image.withTag;
+      if (!tag) continue;
+      withCount[tag] = (withCount[tag] ?? 0) + 1;
+    }
+
+    return { date: dateCount, location: locationCount, moment: momentCount, with: withCount };
+  }, [images, filterSelections, filtersActive]);
+
   const dateYearGroups = useMemo(
     () => getDateYearGroups(dropdownTags.date),
     [dropdownTags.date]
@@ -855,26 +1011,8 @@ export default function Home() {
   ]);
 
   const filteredImages = useMemo(
-    () =>
-      images.filter((image) => {
-        if (selectedDateTag !== "all" && image.folderName !== selectedDateTag) {
-          return false;
-        }
-        if (
-          selectedLocationTag !== "all" &&
-          image.locationTag !== selectedLocationTag
-        ) {
-          return false;
-        }
-        if (selectedMomentTag !== "all" && image.momentTag !== selectedMomentTag) {
-          return false;
-        }
-        if (selectedWithTag !== "all" && image.withTag !== selectedWithTag) {
-          return false;
-        }
-        return true;
-      }),
-    [images, selectedDateTag, selectedLocationTag, selectedMomentTag, selectedWithTag]
+    () => images.filter((image) => matchesImageSelections(image, filterSelections)),
+    [images, filterSelections]
   );
 
   const sortedFilteredImages = useMemo(
@@ -902,6 +1040,36 @@ export default function Home() {
       }),
     [filteredImages, sortOrder, likesByPhoto]
   );
+
+  const photoShareLastKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || sortedFilteredImages.length === 0) return;
+    const photoId = new URLSearchParams(window.location.search).get("photo");
+    if (!photoId) {
+      photoShareLastKeyRef.current = null;
+      return;
+    }
+    const idx = sortedFilteredImages.findIndex((img) => img.id === photoId);
+    if (idx < 0) return;
+
+    const scrollKey = `${photoId}|${idx}|${selectedDateTag}|${selectedLocationTag}|${selectedMomentTag}|${selectedWithTag}|${sortOrder}`;
+    if (photoShareLastKeyRef.current === scrollKey) return;
+    photoShareLastKeyRef.current = scrollKey;
+
+    setViewMode("feed");
+    setVisibleCount((c) => Math.max(c, idx + 1));
+    feedScrollTargetIdRef.current = photoId;
+    setFeedScrollPriorityId(photoId);
+    setFeedScrollSession((n) => n + 1);
+  }, [
+    sortedFilteredImages,
+    selectedDateTag,
+    selectedLocationTag,
+    selectedMomentTag,
+    selectedWithTag,
+    sortOrder,
+  ]);
 
   const filteredTotal = sortedFilteredImages.length;
 
@@ -1062,7 +1230,7 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const showShareToast = (message: string) => {
+  const showShareToast = useCallback((message: string) => {
     if (shareToastTimerRef.current) {
       clearTimeout(shareToastTimerRef.current);
     }
@@ -1071,7 +1239,54 @@ export default function Home() {
       setShareToast(null);
       shareToastTimerRef.current = null;
     }, 3800);
-  };
+  }, []);
+
+  const copyPhotoShareLink = useCallback(
+    async (photoId: string) => {
+      const url = buildPhotoDetailPageUrl(photoId);
+      const text = buildPhotoShareClipboardText(photoId);
+
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        try {
+          await navigator.share({
+            title: "Kim Dain | Voto Gallery",
+            text: PHOTO_SHARE_CLIPBOARD_BYLINE,
+            url,
+          });
+          showShareToast("해당 사진의 공유 링크가 준비되었습니다.");
+          return true;
+        } catch (err) {
+          const name = err instanceof Error ? err.name : "";
+          if (name === "AbortError") {
+            return false;
+          }
+        }
+      }
+
+      try {
+        await navigator.clipboard.writeText(text);
+        showShareToast("해당 사진의 공유 링크가 복사되었습니다.");
+        return true;
+      } catch {
+        window.prompt("링크를 복사해 주세요:", url);
+        return false;
+      }
+    },
+    [showShareToast]
+  );
+
+  const handleFeedShareDelegation = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      const el = (event.target as HTMLElement).closest("[data-photo-share]");
+      if (!el) return;
+      const id = el.getAttribute("data-photo-share");
+      if (!id) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void copyPhotoShareLink(id);
+    },
+    [copyPhotoShareLink]
+  );
 
   const copyCurrentPageUrl = async (): Promise<boolean> => {
     try {
@@ -1153,10 +1368,30 @@ export default function Home() {
     };
   }, []);
 
+  const dateDropdownCountProps =
+    filtersActive && dropdownOptionCounts
+      ? { showOptionCounts: true as const, optionCounts: dropdownOptionCounts.date }
+      : { showOptionCounts: false as const };
+
+  const locationDropdownCountProps =
+    filtersActive && dropdownOptionCounts
+      ? { showOptionCounts: true as const, optionCounts: dropdownOptionCounts.location }
+      : { showOptionCounts: false as const };
+
+  const withDropdownCountProps =
+    filtersActive && dropdownOptionCounts
+      ? { showOptionCounts: true as const, optionCounts: dropdownOptionCounts.with }
+      : { showOptionCounts: false as const };
+
+  const momentDropdownCountProps =
+    filtersActive && dropdownOptionCounts
+      ? { showOptionCounts: true as const, optionCounts: dropdownOptionCounts.moment }
+      : { showOptionCounts: false as const };
+
   return (
     <>
       <div
-        className={`fixed left-0 right-0 top-0 z-40 transition-transform duration-300 ${
+        className={`fixed left-0 right-0 top-0 z-[55] transition-transform duration-300 ${
           showStickyHeader ? "translate-y-0" : "-translate-y-full"
         }`}
       >
@@ -1170,8 +1405,8 @@ export default function Home() {
             </span>
           </div>
           <div className="space-y-2 pb-1">
-            <div className="md:hidden overflow-x-auto whitespace-nowrap hide-scrollbar">
-              <div className="inline-flex items-center gap-2 pr-1">
+            <div className="md:hidden touch-pan-x overflow-x-auto whitespace-nowrap hide-scrollbar">
+              <div className="relative z-[1] inline-flex items-center gap-2 pr-1">
                 <FilterDropdown
                   label="DATE"
                   selected={selectedDateTag}
@@ -1180,6 +1415,7 @@ export default function Home() {
                   onSelect={setSelectedDateTag}
                   allLabel="all"
                   className="w-[17.5rem] shrink-0"
+                  {...dateDropdownCountProps}
                 />
                 <FilterDropdown
                   label="LOCATION"
@@ -1191,6 +1427,7 @@ export default function Home() {
                   onSelect={setSelectedLocationTag}
                   allLabel="all"
                   className="w-[11.5rem] shrink-0"
+                  {...locationDropdownCountProps}
                 />
                 <FilterDropdown
                   label="WITH"
@@ -1202,6 +1439,7 @@ export default function Home() {
                   onSelect={setSelectedWithTag}
                   allLabel="all"
                   className="w-[10.5rem] shrink-0"
+                  {...withDropdownCountProps}
                 />
                 <FilterDropdown
                   label="MOMENT"
@@ -1213,6 +1451,7 @@ export default function Home() {
                   onSelect={setSelectedMomentTag}
                   allLabel="all"
                   className="w-[11rem] shrink-0"
+                  {...momentDropdownCountProps}
                 />
                 <FilterDropdown
                   label="SORT"
@@ -1240,6 +1479,7 @@ export default function Home() {
                 onSelect={setSelectedDateTag}
                 allLabel="all"
                 className="w-full"
+                {...dateDropdownCountProps}
               />
               <FilterDropdown
                 label="LOCATION"
@@ -1251,6 +1491,7 @@ export default function Home() {
                 onSelect={setSelectedLocationTag}
                 allLabel="all"
                 className="w-full"
+                {...locationDropdownCountProps}
               />
               <FilterDropdown
                 label="WITH"
@@ -1262,6 +1503,7 @@ export default function Home() {
                 onSelect={setSelectedWithTag}
                 allLabel="all"
                 className="w-full"
+                {...withDropdownCountProps}
               />
               <FilterDropdown
                 label="MOMENT"
@@ -1273,6 +1515,7 @@ export default function Home() {
                 onSelect={setSelectedMomentTag}
                 allLabel="all"
                 className="w-full"
+                {...momentDropdownCountProps}
               />
               <FilterDropdown
                 label="SORT"
@@ -1410,18 +1653,17 @@ export default function Home() {
         ref={galleryRef}
         className="mx-auto min-h-screen w-full max-w-[1280px] bg-[#FFFFFF] px-5 pb-16 pt-8 sm:px-8 md:px-12"
       >
-      <header className="mb-16 flex items-center justify-between">
-        <div className="text-base font-medium lowercase tracking-[0.04em] sm:text-lg">
-          voto gallery
+      <header className="mb-16 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6">
+          <div className="shrink-0 text-base font-medium lowercase tracking-[0.04em] sm:text-lg">
+            voto gallery
+          </div>
+          <GalleryChangelog />
         </div>
-        <div aria-hidden className="h-6 w-16" />
+        <div aria-hidden className="hidden h-6 w-16 shrink-0 sm:block" />
       </header>
 
       <main>
-        <p className="mb-12 text-xs lowercase tracking-[0.18em] text-zinc-500 sm:mb-14">
-          theme : 3
-        </p>
-
         {loading ? (
           <p className="text-sm text-zinc-500">Loading...</p>
         ) : error ? (
@@ -1516,6 +1758,7 @@ export default function Home() {
                 onSelect={setSelectedDateTag}
                 allLabel="all"
                 className="w-full"
+                {...dateDropdownCountProps}
               />
 
               <FilterDropdown
@@ -1528,6 +1771,7 @@ export default function Home() {
                 onSelect={setSelectedLocationTag}
                 allLabel="all"
                 className="w-full"
+                {...locationDropdownCountProps}
               />
 
               <FilterDropdown
@@ -1540,6 +1784,7 @@ export default function Home() {
                 onSelect={setSelectedWithTag}
                 allLabel="all"
                 className="w-full"
+                {...withDropdownCountProps}
               />
 
               <div className="flex gap-2 overflow-x-auto pb-1">
@@ -1635,6 +1880,7 @@ export default function Home() {
                   onSelect={setSelectedDateTag}
                   allLabel="all"
                   className="w-[22rem]"
+                  {...dateDropdownCountProps}
                 />
                 <FilterDropdown
                   label="LOCATION"
@@ -1646,6 +1892,7 @@ export default function Home() {
                   onSelect={setSelectedLocationTag}
                   allLabel="all"
                   className="w-[13rem]"
+                  {...locationDropdownCountProps}
                 />
                 <FilterDropdown
                   label="WITH"
@@ -1657,6 +1904,7 @@ export default function Home() {
                   onSelect={setSelectedWithTag}
                   allLabel="all"
                   className="w-[12rem]"
+                  {...withDropdownCountProps}
                 />
               </div>
 
@@ -1779,6 +2027,7 @@ export default function Home() {
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
                   className="flex flex-col gap-14 sm:gap-16"
+                  onClick={handleFeedShareDelegation}
                 >
                   <GalleryFeedScrollOrchestrator
                     scrollSession={feedScrollSession}
@@ -1818,7 +2067,7 @@ export default function Home() {
                         />
                       </button>
 
-                      <div className="mx-auto mt-3 flex max-w-4xl items-center justify-between px-1">
+                      <div className="mx-auto mt-3 flex max-w-4xl items-center justify-between gap-2 px-1">
                         <button
                           type="button"
                           onClick={() => handleLike(image.id)}
@@ -1827,15 +2076,25 @@ export default function Home() {
                         >
                           ♥ {likesByPhoto[image.id] ?? 0}
                         </button>
-                        <a
-                          href={image.downloadUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 transition hover:bg-zinc-200"
-                          aria-label={`Download ${image.name}`}
-                        >
-                          ↓ Download
-                        </a>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <a
+                            href={image.downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 transition hover:bg-zinc-200"
+                            aria-label={`Download ${image.name}`}
+                          >
+                            ↓ Download
+                          </a>
+                          <button
+                            type="button"
+                            data-photo-share={image.id}
+                            className="inline-flex min-h-9 min-w-9 touch-manipulation items-center justify-center rounded-full bg-zinc-100 text-zinc-700 transition hover:bg-zinc-200"
+                            aria-label="이 사진 공유 링크 복사"
+                          >
+                            <Share2 className="h-3.5 w-3.5" aria-hidden />
+                          </button>
+                        </div>
                       </div>
 
                       {image.tags.length > 0 ? (
