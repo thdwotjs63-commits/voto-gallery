@@ -2008,7 +2008,7 @@ export default function Home() {
           style={{ transform: `translate3d(0, ${heroTextTranslate}px, 0)` }}
         >
           <p className="mt-1 text-[15px] font-bold tracking-[0.18em] text-zinc-100 sm:text-[19px]">
-            No.3 Captain, Kim Dain
+            No.3 Kim Dain <span aria-hidden>🇰🇷</span>
           </p>
           <p className="mt-1 text-[11px] tracking-[0.2em] text-zinc-200 sm:text-xs">
             Hyundai Hillstate Volleyball Team
