@@ -413,6 +413,7 @@ const SCROLL_RESTORE_PHOTO_KEY = "voto_restore_photo_id";
 const SCROLL_RESTORE_Y_KEY = "voto_restore_scroll_y";
 const SCROLL_RESTORE_VIEW_KEY = "voto_restore_view_mode";
 const SCROLL_RESTORE_GRID_VISIBLE_KEY = "voto_restore_grid_visible";
+const SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY = "voto_restore_lightbox_photo_id";
 
 function scrollToPhoto(photoDriveId: string) {
   const el = document.getElementById(`photo-${photoDriveId}`);
@@ -607,10 +608,17 @@ export default function Home() {
   const didRestoreScrollFromSessionRef = useRef(false);
   const skipNextUrlHydrationRef = useRef(false);
   const lastDateLocationSelectionRef = useRef<{ date: string; location: string } | null>(null);
+  const lightboxIndexRef = useRef(lightboxIndex);
+  const lightboxOpenPhotoIdRef = useRef<string | null>(null);
+  const sortedFilteredImagesRef = useRef<DriveImage[]>([]);
 
   useEffect(() => {
     viewModeRef.current = viewMode;
   }, [viewMode]);
+
+  useEffect(() => {
+    lightboxIndexRef.current = lightboxIndex;
+  }, [lightboxIndex]);
 
   useEffect(() => {
     visibleCountRef.current = visibleCount;
@@ -707,6 +715,11 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    try {
+      window.sessionStorage.removeItem(SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY);
+    } catch {
+      // ignore
+    }
     setLightboxIndex(-1);
     setPhotoDetailModalImage(null);
   }, [selectedDateTag, selectedLocationTag, selectedMomentTag, selectedWithTag]);
@@ -1128,6 +1141,88 @@ export default function Home() {
   const filteredTotal = sortedFilteredImages.length;
 
   useEffect(() => {
+    sortedFilteredImagesRef.current = sortedFilteredImages;
+  }, [sortedFilteredImages]);
+
+  useEffect(() => {
+    lightboxOpenPhotoIdRef.current =
+      lightboxIndex >= 0 ? sortedFilteredImages[lightboxIndex]?.id ?? null : null;
+  }, [lightboxIndex, sortedFilteredImages]);
+
+  const clearLightboxRestoreKey = useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.sessionStorage.removeItem(SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY);
+    } catch {
+      // ignore quota / private mode
+    }
+  }, []);
+
+  const closeGalleryLightbox = useCallback(() => {
+    clearLightboxRestoreKey();
+    setLightboxIndex(-1);
+  }, [clearLightboxRestoreKey]);
+
+  const consumeLightboxRestoreFromSession = useCallback(() => {
+    if (typeof window === "undefined") return false;
+    if (lightboxIndexRef.current >= 0) return false;
+    const params = new URLSearchParams(urlQueryString.replace(/^\?/, ""));
+    if (params.get(QUERY_PHOTO)) return false;
+    const id = window.sessionStorage.getItem(SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY)?.trim();
+    if (!id) return false;
+    window.sessionStorage.removeItem(SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY);
+    const idx = sortedFilteredImagesRef.current.findIndex((img) => img.id === id);
+    if (idx < 0) return false;
+    setLightboxIndex(idx);
+    return true;
+  }, [urlQueryString]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(SCROLL_RESTORE_VIEW_KEY, viewMode);
+    } catch {
+      // ignore quota / private mode
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    const persistLightboxWhenLeaving = () => {
+      if (typeof document === "undefined") return;
+      if (document.visibilityState !== "hidden") return;
+      if (lightboxIndexRef.current < 0) return;
+      const id = lightboxOpenPhotoIdRef.current;
+      if (!id) return;
+      try {
+        window.sessionStorage.setItem(SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY, id);
+      } catch {
+        // ignore
+      }
+    };
+    document.addEventListener("visibilitychange", persistLightboxWhenLeaving);
+    window.addEventListener("pagehide", persistLightboxWhenLeaving);
+    return () => {
+      document.removeEventListener("visibilitychange", persistLightboxWhenLeaving);
+      window.removeEventListener("pagehide", persistLightboxWhenLeaving);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void consumeLightboxRestoreFromSession();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [consumeLightboxRestoreFromSession]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (sortedFilteredImages.length === 0) return;
+    void consumeLightboxRestoreFromSession();
+  }, [loading, sortedFilteredImages, consumeLightboxRestoreFromSession]);
+
+  useEffect(() => {
     if (!didHydrateFiltersFromUrlRef.current) return;
 
     const params = new URLSearchParams(urlQueryString.replace(/^\?/, ""));
@@ -1503,6 +1598,11 @@ export default function Home() {
     const openKey = `open:${photoId}`;
     if (photoParamHandledRef.current === openKey) return;
     photoParamHandledRef.current = openKey;
+    try {
+      window.sessionStorage.removeItem(SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY);
+    } catch {
+      // ignore
+    }
     setLightboxIndex(-1);
     setPhotoDetailModalImage(found);
   }, [images, loading, pathname, router, showShareToast, urlQueryString]);
@@ -2610,7 +2710,7 @@ export default function Home() {
 
       <Lightbox
         open={lightboxIndex >= 0 && !photoDetailModalImage}
-        close={() => setLightboxIndex(-1)}
+        close={closeGalleryLightbox}
         index={lightboxIndex}
         on={{
           view: ({ index }) => setLightboxIndex(index),
@@ -2683,7 +2783,7 @@ export default function Home() {
                                         setVisibleCount(
                                           Math.min(GRID_INITIAL_LOAD, filteredTotal || GRID_INITIAL_LOAD)
                                         );
-                                        setLightboxIndex(-1);
+                                        closeGalleryLightbox();
                                       }}
                                       className="max-w-full truncate rounded-full bg-black/60 px-2.5 py-1 text-left text-[11px] text-white transition hover:bg-black/75"
                                     >
