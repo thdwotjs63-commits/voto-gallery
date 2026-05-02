@@ -107,6 +107,8 @@ type DriveFileRow = {
   name: string;
   description?: string;
   imageMediaMetadata?: { width?: number; height?: number };
+  /** Short-lived Google-hosted thumbnail; avoids lh3 resize when present. */
+  thumbnailLink?: string;
   folderName: string;
   folderSortKey: number;
 };
@@ -142,7 +144,9 @@ function mapDriveFileRowToImage(file: DriveFileRow): DriveImage {
     scheduleDisplay: schedule.display,
     scheduleYear: schedule.year,
     folderSortKey: effectiveFolderKey,
-    thumbnailUrl: `https://lh3.googleusercontent.com/d/${file.id}=w800`,
+    thumbnailUrl:
+      (file.thumbnailLink && file.thumbnailLink.trim()) ||
+      `https://lh3.googleusercontent.com/d/${file.id}=w800`,
     originalUrl: `https://lh3.googleusercontent.com/d/${file.id}`,
     downloadUrl: `https://drive.google.com/uc?export=download&id=${file.id}`,
     ratio: (width >= height ? "landscape" : "portrait") as "landscape" | "portrait",
@@ -232,6 +236,7 @@ export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
       name: string;
       description?: string;
       imageMediaMetadata?: { width?: number; height?: number };
+      thumbnailLink?: string;
       folderSortKey: number;
       folderName: string;
     }
@@ -258,7 +263,7 @@ export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
         imageMediaMetadata?: { width?: number; height?: number };
       }>(
         `'${currentFolderId}' in parents and mimeType contains 'image/' and trashed = false`,
-        "id,name,description,imageMediaMetadata(width,height)"
+        "id,name,description,imageMediaMetadata(width,height),thumbnailLink"
       ),
     ]);
 

@@ -33,6 +33,10 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { GalleryChangelog } from "@/components/gallery-changelog";
+import {
+  PhotoGridThumbnail,
+  PHOTO_GRID_THUMB_SIZES_COMPACT,
+} from "@/components/photo-grid";
 import { PhotoDetailModal } from "@/components/photo-detail-modal";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 import type { DriveImage } from "@/lib/drive-gallery-data";
@@ -394,11 +398,10 @@ const GRID_MIN_VISIBLE_COUNT = 20;
 const THUMB_BLUR_DATA_URL =
   "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjZTBlMGUwIi8+PC9zdmc+";
 
-const THUMB_SIZES =
-  "(max-width: 640px) 92vw, (max-width: 768px) 48vw, (max-width: 1024px) 31vw, (max-width: 1280px) 24vw, 20vw";
-
-const THUMB_SIZES_COMPACT =
-  "(max-width: 640px) 28vw, (max-width: 1024px) 16vw, 11vw";
+/** 피드 전용: Vercel 최적화 없이(lh3, unoptimized) 그리드 썸네일보다 큰 미리보기. */
+function feedListImageUrl(image: DriveImage): string {
+  return `https://lh3.googleusercontent.com/d/${image.id}=w1400`;
+}
 
 const FEED_SCROLL_POLL_MS = 50;
 const FEED_SCROLL_MAX_MS = 2000;
@@ -522,33 +525,6 @@ function GalleryFeedScrollOrchestrator({
   return null;
 }
 
-function GalleryThumbnail({
-  image,
-  sizes = THUMB_SIZES,
-}: {
-  image: DriveImage;
-  sizes?: string;
-}) {
-  const [sharp, setSharp] = useState(false);
-  return (
-    <div className="relative size-full">
-      <Image
-        src={image.thumbnailUrl}
-        alt={image.name}
-        fill
-        sizes={sizes}
-        quality={60}
-        placeholder="blur"
-        blurDataURL={THUMB_BLUR_DATA_URL}
-        className={`object-contain transition-[opacity,filter] duration-700 ease-out ${
-          sharp ? "opacity-100 [filter:blur(0px)]" : "opacity-90 [filter:blur(14px)]"
-        }`}
-        onLoadingComplete={() => setSharp(true)}
-      />
-    </div>
-  );
-}
-
 export default function Home() {
   const router = useRouter();
   const pathname = usePathname();
@@ -587,7 +563,7 @@ export default function Home() {
   const [visibleCount, setVisibleCount] = useState(GALLERY_PAGE_SIZE);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const gridListRef = useRef<HTMLElement | null>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "feed">("feed");
+  const [viewMode, setViewMode] = useState<"grid" | "feed">("grid");
   const viewModeRef = useRef(viewMode);
   const visibleCountRef = useRef(visibleCount);
   const [guestbookModalOpen, setGuestbookModalOpen] = useState(false);
@@ -775,8 +751,8 @@ export default function Home() {
   const rawUrlSort = (parsedUrlParams.get(QUERY_SORT) ?? "latest").trim();
   const urlSort: "latest" | "oldest" | "popular" =
     rawUrlSort === "oldest" || rawUrlSort === "popular" ? rawUrlSort : "latest";
-  const rawUrlView = (parsedUrlParams.get(QUERY_VIEW) ?? "feed").trim().toLowerCase();
-  const urlViewMode: "grid" | "feed" = rawUrlView === "grid" ? "grid" : "feed";
+  const rawUrlView = (parsedUrlParams.get(QUERY_VIEW) ?? "").trim().toLowerCase();
+  const urlViewMode: "grid" | "feed" = rawUrlView === "feed" ? "feed" : "grid";
 
   useEffect(() => {
     if (skipNextUrlHydrationRef.current) {
@@ -1239,7 +1215,7 @@ export default function Home() {
     setOrDelete(QUERY_MOMENT, selectedMomentTag, "all");
     setOrDelete(QUERY_WITH, selectedWithTag, "all");
     setOrDelete(QUERY_SORT, sortOrder, "latest");
-    setOrDelete(QUERY_VIEW, viewMode, "feed");
+    setOrDelete(QUERY_VIEW, viewMode, "grid");
     params.delete("location");
 
     const nextQuery = params.toString();
@@ -1992,6 +1968,7 @@ export default function Home() {
               alt={heroImage.name}
               fill
               priority
+              unoptimized
               className="object-cover object-[center_28%] sm:object-center"
               sizes="100vw"
               quality={85}
@@ -2121,6 +2098,7 @@ export default function Home() {
                           alt={image.name}
                           fill
                           aria-hidden
+                          unoptimized
                           className={`object-cover object-top blur-xl transition-transform duration-[5000ms] ${
                             activeBestIndex === index
                               ? "scale-[1.06]"
@@ -2135,6 +2113,7 @@ export default function Home() {
                             src={image.originalUrl}
                             alt={image.name}
                             fill
+                            unoptimized
                             className="object-contain object-top"
                             sizes="(max-width: 640px) 100vw, (max-width: 1200px) 90vw, 980px"
                             quality={88}
@@ -2423,9 +2402,9 @@ export default function Home() {
                             : "aspect-[4/3]"
                         }`}
                       >
-                        <GalleryThumbnail
+                        <PhotoGridThumbnail
                           image={image}
-                          sizes={THUMB_SIZES_COMPACT}
+                          sizes={PHOTO_GRID_THUMB_SIZES_COMPACT}
                         />
                         <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/55 px-1 py-0.5 text-[9px] font-medium text-white tabular-nums">
                           ♥{likesByPhoto[image.id] ?? 0}
@@ -2456,6 +2435,9 @@ export default function Home() {
                     scrollTargetRef={feedScrollTargetIdRef}
                     onScrollPriorityClear={() => setFeedScrollPriorityId(null)}
                   />
+                  <p className="mx-auto mb-6 max-w-4xl rounded-xl border border-[#00287A]/15 bg-[#00287A]/[0.04] px-3 py-2 text-center text-[11px] leading-snug text-[#00287A]/80">
+                    피드 모드: 더 큰 해상도(1400px)로 미리보기합니다. 모바일 데이터 사용량이 늘 수 있어요.
+                  </p>
                   {visibleGalleryImages.map((image) => (
                     <article
                       key={image.id}
@@ -2477,12 +2459,13 @@ export default function Home() {
                         }}
                       >
                         <Image
-                          src={image.originalUrl}
+                          src={feedListImageUrl(image)}
                           alt={image.name}
                           fill
+                          unoptimized
                           className="object-contain"
                           sizes="(max-width: 1024px) 92vw, 896px"
-                          quality={88}
+                          quality={82}
                           priority={image.id === feedScrollPriorityId}
                           placeholder="blur"
                           blurDataURL={THUMB_BLUR_DATA_URL}
@@ -2739,8 +2722,8 @@ export default function Home() {
                   alt={slide.alt || "gallery image"}
                   fill
                   className="object-contain"
-                  sizes="100vw"
-                  quality={95}
+                  sizes="(max-width: 768px) 100vw, (max-width: 1280px) min(92vw, 960px), 960px"
+                  quality={92}
                   priority
                 />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex max-h-[min(48vh,22rem)] flex-col justify-end sm:max-h-[min(42vh,20rem)]">

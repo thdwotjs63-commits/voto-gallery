@@ -87,7 +87,7 @@ export function PhotoDetailModal({ image, onClose }: PhotoDetailModalProps) {
           fill
           priority
           className="object-contain"
-          sizes="100vw"
+          sizes="(max-width: 768px) 100vw, min(96vw, 1100px)"
           quality={90}
           placeholder="blur"
           blurDataURL={THUMB_BLUR_DATA_URL}

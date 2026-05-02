@@ -533,6 +533,7 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
                 alt="Quiz Image"
                 title=""
                 fill
+                unoptimized
                 className="object-contain"
                 sizes="(max-width: 768px) 100vw, 48rem"
                 priority={questionIndex === 0}
