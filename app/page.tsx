@@ -2655,11 +2655,10 @@ export default function Home() {
                     </div>
                   ) : null}
                   <div className="pointer-events-auto shrink-0 bg-gradient-to-t from-black/90 via-black/65 to-transparent px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-5">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between md:gap-3">
-                      <div className="min-w-0 flex-1 text-left">
-                        {currentImage ? (
-                          <>
-                            {(() => {
+                    <div className="flex w-full flex-col gap-2 md:flex-row md:items-end md:justify-between md:gap-3">
+                      <div className="min-w-0 w-full flex-1 text-left md:w-auto">
+                        {currentImage
+                          ? (() => {
                               const filterTags = [
                                 currentImage.scheduleDisplay || currentImage.folderName,
                                 currentImage.locationTag,
@@ -2693,23 +2692,15 @@ export default function Home() {
                                   ))}
                                 </div>
                               );
-                            })()}
-                            {currentImage.tags.length > 0 ? (
-                              <p className="mt-1.5 flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] leading-snug text-white/45">
-                                {currentImage.tags.map((tag) => (
-                                  <span key={tag} className="break-all">
-                                    {tag}
-                                  </span>
-                                ))}
-                              </p>
-                            ) : null}
-                          </>
-                        ) : null}
+                            })()
+                          : null}
                       </div>
-                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 md:justify-end">
+                      <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 md:w-auto md:justify-end">
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
                             if (currentImage) void handleLike(currentImage.id);
                           }}
                           disabled={Boolean(currentImage && likingByPhoto[currentImage.id])}
@@ -2732,14 +2723,19 @@ export default function Home() {
                           <Share2 className="mr-1 inline h-3.5 w-3.5" aria-hidden />
                           Share
                         </button>
-                        <a
-                          href={(slide as { downloadUrl?: string }).downloadUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const url = (slide as { downloadUrl?: string }).downloadUrl;
+                            if (!url) return;
+                            window.open(url, "_blank", "noopener,noreferrer");
+                          }}
                           className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
                         >
                           ↓ Download
-                        </a>
+                        </button>
                       </div>
                     </div>
                   </div>
