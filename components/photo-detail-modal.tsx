@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
+import { trackGaEvent } from "@/lib/analytics";
 import type { DriveImage } from "@/lib/drive-gallery-data";
 
 const THUMB_BLUR_DATA_URL =
@@ -122,6 +123,12 @@ export function PhotoDetailModal({ image, onClose }: PhotoDetailModalProps) {
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex min-h-10 items-center justify-center rounded-full bg-white/10 px-4 text-xs font-medium text-white transition hover:bg-white/20"
+              onClick={() =>
+                trackGaEvent("photo_download", {
+                  location: "photo_detail_modal",
+                  photo_id: image.id,
+                })
+              }
             >
               원본 다운로드
             </a>

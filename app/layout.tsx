@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
+import { GoogleAnalytics } from "@/components/google-analytics";
 import { buildRootMetadata } from "@/lib/seo-metadata";
 import { fetchDriveGalleryImages } from "@/lib/drive-gallery-data";
 
@@ -35,7 +36,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
-      <body className="min-h-full bg-white text-black">{children}</body>
+      <body className="min-h-full bg-white text-black">
+        <GoogleAnalytics />
+        {children}
+      </body>
     </html>
   );
 }

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DriveImage } from "@/lib/drive-gallery-data";
+import { trackGaEvent } from "@/lib/analytics";
 import { fetchQuizTopRankings, insertQuizRanking, type QuizRankingEntry } from "@/lib/quiz-rankings";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 
@@ -371,6 +372,7 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
   const current = questions?.[questionIndex];
 
   const startGame = () => {
+    trackGaEvent("quiz_start", { location: "quiz_intro" });
     if (autoNextTimerRef.current) {
       window.clearTimeout(autoNextTimerRef.current);
       autoNextTimerRef.current = null;

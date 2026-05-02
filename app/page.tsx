@@ -40,6 +40,7 @@ import {
 import { PhotoDetailModal } from "@/components/photo-detail-modal";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 import type { DriveImage } from "@/lib/drive-gallery-data";
+import { trackGaEvent } from "@/lib/analytics";
 import {
   buildPhotoDetailPageUrl,
   buildPhotoShareClipboardText,
@@ -2488,6 +2489,12 @@ export default function Home() {
                             rel="noopener noreferrer"
                             className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 transition hover:bg-zinc-200"
                             aria-label={`Download ${image.name}`}
+                            onClick={() =>
+                              trackGaEvent("photo_download", {
+                                location: "feed",
+                                photo_id: image.id,
+                              })
+                            }
                           >
                             ↓ Download
                           </a>
@@ -2813,6 +2820,10 @@ export default function Home() {
                             event.stopPropagation();
                             const url = (slide as { downloadUrl?: string }).downloadUrl;
                             if (!url) return;
+                            trackGaEvent("photo_download", {
+                              location: "lightbox",
+                              photo_id: currentImage?.id ?? "",
+                            });
                             window.open(url, "_blank", "noopener,noreferrer");
                           }}
                           className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
