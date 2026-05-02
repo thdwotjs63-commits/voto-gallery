@@ -22,7 +22,7 @@ const HOME_PLACE = "수원실내체육관";
 const TOTAL_QUESTIONS = 10;
 
 const QUIZ_SHARE_BODY =
-  "🏐 [Voto Gallery] 김다인 선수 사진 퀴즈 도전! 당신의 찐팬 지수는 몇 점? #현대건설배구단 #김다인";
+  "[Voto Gallery] 김다인 선수 사진 퀴즈 도전! 당신의 찐팬 지수는 몇 점? #현대건설배구단 #김다인";
 
 function getQuizPageUrl(): string {
   if (typeof window === "undefined") return "";

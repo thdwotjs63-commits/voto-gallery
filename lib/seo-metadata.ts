@@ -27,7 +27,7 @@ export const DEFAULT_OG_IMAGE_URL =
 
 export const GALLERY_TITLE = "Voto Gallery | [Dain]";
 export const GALLERY_DESCRIPTION =
-  "현대건설 배구단 김다인을 기록하는 디지털 사진첩입니다.";
+  "Team korea & Hyundai 주전세터 김다인의 디지털 사진첩";
 
 export function buildRootMetadata(input?: {
   imageUrl?: string;
