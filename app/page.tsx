@@ -2632,7 +2632,6 @@ export default function Home() {
         render={{
           slide: ({ slide }) => {
             const currentImage = sortedFilteredImages[lightboxIndex];
-            const hasStory = Boolean((slide as { story?: string }).story);
             return (
               <div className="relative h-full w-full">
                 <Image
@@ -2644,91 +2643,107 @@ export default function Home() {
                   quality={95}
                   priority
                 />
-                {(() => {
-                  if (!currentImage) return null;
-                  const tags = [
-                    currentImage.scheduleDisplay || currentImage.folderName,
-                    currentImage.locationTag,
-                    currentImage.withTag,
-                  ].filter(Boolean);
-                  if (tags.length === 0) return null;
-                  return (
-                    <div
-                      className={`absolute left-4 z-10 flex flex-wrap gap-1.5 ${
-                        hasStory ? "bottom-20" : "bottom-4"
-                      }`}
-                    >
-                      {tags.map((tag) => (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex max-h-[min(48vh,22rem)] flex-col justify-end sm:max-h-[min(42vh,20rem)]">
+                  {(slide as { story?: string }).story ? (
+                    <div className="pointer-events-auto min-h-0 shrink overflow-y-auto border-t border-white/10 bg-gradient-to-t from-black/80 via-black/45 to-transparent px-4 pb-2 pt-4 text-left text-zinc-100 sm:px-6">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-300">
+                        Author&apos;s Note
+                      </p>
+                      <p className="mt-2 line-clamp-6 max-w-3xl text-sm leading-relaxed text-zinc-100/95 sm:line-clamp-none sm:text-[15px]">
+                        {(slide as { story?: string }).story}
+                      </p>
+                    </div>
+                  ) : null}
+                  <div className="pointer-events-auto shrink-0 bg-gradient-to-t from-black/90 via-black/65 to-transparent px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-5">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between md:gap-3">
+                      <div className="min-w-0 flex-1 text-left">
+                        {currentImage ? (
+                          <>
+                            {(() => {
+                              const filterTags = [
+                                currentImage.scheduleDisplay || currentImage.folderName,
+                                currentImage.locationTag,
+                                currentImage.withTag,
+                              ].filter(Boolean);
+                              if (filterTags.length === 0) return null;
+                              return (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {filterTags.map((tag) => (
+                                    <button
+                                      key={tag}
+                                      type="button"
+                                      onClick={() => {
+                                        if (tag === (currentImage.scheduleDisplay || currentImage.folderName)) {
+                                          setSelectedDateTag(currentImage.folderName);
+                                        } else if (tag === currentImage.locationTag) {
+                                          setSelectedLocationTag(tag as string);
+                                        } else if (tag === currentImage.withTag) {
+                                          setSelectedWithTag(tag as string);
+                                        }
+                                        setViewMode("grid");
+                                        setVisibleCount(
+                                          Math.min(GRID_INITIAL_LOAD, filteredTotal || GRID_INITIAL_LOAD)
+                                        );
+                                        setLightboxIndex(-1);
+                                      }}
+                                      className="max-w-full truncate rounded-full bg-black/60 px-2.5 py-1 text-left text-[11px] text-white transition hover:bg-black/75"
+                                    >
+                                      {tag}
+                                    </button>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                            {currentImage.tags.length > 0 ? (
+                              <p className="mt-1.5 flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] leading-snug text-white/45">
+                                {currentImage.tags.map((tag) => (
+                                  <span key={tag} className="break-all">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </p>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 md:justify-end">
                         <button
-                          key={tag}
                           type="button"
                           onClick={() => {
-                            if (tag === (currentImage.scheduleDisplay || currentImage.folderName)) {
-                              setSelectedDateTag(currentImage.folderName);
-                            } else if (tag === currentImage.locationTag) {
-                              setSelectedLocationTag(tag as string);
-                            } else if (tag === currentImage.withTag) {
-                              setSelectedWithTag(tag as string);
-                            }
-                            setViewMode("grid");
-                            setVisibleCount(
-                              Math.min(GRID_INITIAL_LOAD, filteredTotal || GRID_INITIAL_LOAD)
-                            );
-                            setLightboxIndex(-1);
+                            if (currentImage) void handleLike(currentImage.id);
                           }}
-                          className="rounded-full bg-black/60 px-2.5 py-1 text-[11px] text-white transition hover:bg-black/75"
+                          disabled={Boolean(currentImage && likingByPhoto[currentImage.id])}
+                          className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75 disabled:opacity-60"
+                          aria-label="좋아요"
                         >
-                          {tag}
+                          <Heart className="mr-1 inline h-3.5 w-3.5" aria-hidden />
+                          {currentImage ? (likesByPhoto[currentImage.id] ?? 0) : 0}
                         </button>
-                      ))}
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (currentImage) void copyPhotoShareLink(currentImage.id);
+                          }}
+                          className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
+                          aria-label="이 사진 공유 링크 복사"
+                        >
+                          <Share2 className="mr-1 inline h-3.5 w-3.5" aria-hidden />
+                          Share
+                        </button>
+                        <a
+                          href={(slide as { downloadUrl?: string }).downloadUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
+                        >
+                          ↓ Download
+                        </a>
+                      </div>
                     </div>
-                  );
-                })()}
-                <div className="absolute bottom-4 right-4 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (currentImage) void handleLike(currentImage.id);
-                    }}
-                    disabled={Boolean(currentImage && likingByPhoto[currentImage.id])}
-                    className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75 disabled:opacity-60"
-                    aria-label="좋아요"
-                  >
-                    <Heart className="mr-1 inline h-3.5 w-3.5" aria-hidden />
-                    {currentImage ? (likesByPhoto[currentImage.id] ?? 0) : 0}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      if (currentImage) void copyPhotoShareLink(currentImage.id);
-                    }}
-                    className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
-                    aria-label="이 사진 공유 링크 복사"
-                  >
-                    <Share2 className="mr-1 inline h-3.5 w-3.5" aria-hidden />
-                    Share
-                  </button>
-                  <a
-                    href={(slide as { downloadUrl?: string }).downloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
-                  >
-                    ↓ Download
-                  </a>
-                </div>
-                {(slide as { story?: string }).story ? (
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-5 pb-6 pt-12 text-left text-zinc-100 sm:px-8">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-300">
-                      Author&apos;s Note
-                    </p>
-                    <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-100/95 sm:text-[15px]">
-                      {(slide as { story?: string }).story}
-                    </p>
                   </div>
-                ) : null}
+                </div>
               </div>
             );
           },
