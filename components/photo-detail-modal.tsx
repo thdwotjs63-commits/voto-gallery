@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { DriveImage } from "@/lib/drive-gallery-data";
 
 const THUMB_BLUR_DATA_URL =
@@ -13,6 +13,33 @@ type PhotoDetailModalProps = {
 };
 
 export function PhotoDetailModal({ image, onClose }: PhotoDetailModalProps) {
+  const [shareHint, setShareHint] = useState<string | null>(null);
+
+  const handleShare = useCallback(async () => {
+    setShareHint(null);
+    const shareData = {
+      title: image.name,
+      text: image.scheduleDisplay ?? image.name,
+      url: typeof window !== "undefined" ? window.location.href : "",
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+    }
+    try {
+      await navigator.clipboard.writeText(shareData.url);
+      setShareHint("링크를 복사했어요.");
+      window.setTimeout(() => setShareHint(null), 2000);
+    } catch {
+      setShareHint("복사에 실패했어요.");
+      window.setTimeout(() => setShareHint(null), 2000);
+    }
+  }, [image.name, image.scheduleDisplay]);
+
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -67,21 +94,51 @@ export function PhotoDetailModal({ image, onClose }: PhotoDetailModalProps) {
         />
       </div>
 
-      <footer className="shrink-0 space-y-1 border-t border-white/10 px-4 py-3">
-        <h1 id="photo-detail-title" className="line-clamp-2 text-sm font-medium text-white/95">
-          {image.name}
-        </h1>
-        {image.scheduleDisplay ? (
-          <p className="text-xs text-white/55">{image.scheduleDisplay}</p>
+      <footer className="shrink-0 border-t border-white/10 px-4 py-3">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-4">
+          <div className="min-w-0 flex-1 space-y-1 text-left">
+            <h1
+              id="photo-detail-title"
+              className="line-clamp-2 break-words text-sm font-medium text-white/95"
+            >
+              {image.name}
+            </h1>
+            {image.scheduleDisplay ? (
+              <p className="line-clamp-2 break-words text-xs text-white/55">{image.scheduleDisplay}</p>
+            ) : null}
+            {image.tags.length > 0 ? (
+              <p className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[11px] leading-snug text-white/45">
+                {image.tags.map((tag) => (
+                  <span key={tag} className="break-all">
+                    {tag}
+                  </span>
+                ))}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 md:pt-0.5">
+            <a
+              href={image.downloadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-10 items-center justify-center rounded-full bg-white/10 px-4 text-xs font-medium text-white transition hover:bg-white/20"
+            >
+              원본 다운로드
+            </a>
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#FFD200]/90 px-4 text-xs font-semibold text-[#00287A] transition hover:bg-[#FFD200]"
+            >
+              공유
+            </button>
+          </div>
+        </div>
+        {shareHint ? (
+          <p className="mt-2 text-center text-[11px] text-white/60 md:text-right" role="status">
+            {shareHint}
+          </p>
         ) : null}
-        <a
-          href={image.downloadUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 inline-flex min-h-10 items-center rounded-full bg-white/10 px-4 text-xs font-medium text-white transition hover:bg-white/20"
-        >
-          원본 다운로드
-        </a>
       </footer>
     </div>
   );
