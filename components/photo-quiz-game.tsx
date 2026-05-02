@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DriveImage } from "@/lib/drive-gallery-data";
+import { fetchQuizTopRankings, insertQuizRanking, type QuizRankingEntry } from "@/lib/quiz-rankings";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 
 type QuizKind = "place" | "away-date" | "home-date";
 
@@ -16,15 +18,16 @@ type QuizQuestion = {
   choices: string[];
 };
 
-type RankingEntry = {
-  nickname: string;
-  timeMs: number;
-  createdAt: number;
-};
-
 const HOME_PLACE = "수원실내체육관";
 const TOTAL_QUESTIONS = 10;
-const STORAGE_KEY = "voto_photo_quiz_ranking_v1";
+
+const QUIZ_SHARE_BODY =
+  "🏐 [Voto Gallery] 김다인 선수 사진 퀴즈 도전! 당신의 찐팬 지수는 몇 점? #현대건설배구단 #김다인";
+
+function getQuizPageUrl(): string {
+  if (typeof window === "undefined") return "";
+  return new URL("/quiz", window.location.origin).href;
+}
 
 function shuffle<T>(items: T[]): T[] {
   const arr = [...items];
@@ -143,31 +146,44 @@ function buildQuestions(photos: DriveImage[]): QuizQuestion[] | null {
   return ordered;
 }
 
-function loadRanking(): RankingEntry[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as RankingEntry[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter(
-        (item) =>
-          item &&
-          typeof item.nickname === "string" &&
-          typeof item.timeMs === "number" &&
-          typeof item.createdAt === "number"
-      )
-      .sort((a, b) => (a.timeMs !== b.timeMs ? a.timeMs - b.timeMs : a.createdAt - b.createdAt))
-      .slice(0, 5);
-  } catch {
-    return [];
-  }
-}
-
-function saveRanking(entries: RankingEntry[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+function ScoreBoard({
+  ranking,
+  loading,
+  emptyHint,
+}: {
+  ranking: QuizRankingEntry[];
+  loading: boolean;
+  emptyHint?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-[#1f2937] bg-black p-4 shadow-[0_0_20px_rgba(255,210,0,0.2)]">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="font-mono text-sm font-bold uppercase tracking-widest text-[#FFD200]">Score Board</h3>
+        <span className="font-mono text-[11px] text-cyan-300/80">TOP 5</span>
+      </div>
+      <ol className="space-y-2 font-mono text-sm">
+        {loading ? (
+          <li className="rounded bg-zinc-900 px-3 py-2 text-center text-cyan-300/75">불러오는 중…</li>
+        ) : ranking.length === 0 ? (
+          <li className="rounded bg-zinc-900 px-3 py-2 text-center text-cyan-300/75">
+            {emptyHint ?? "아직 기록이 없습니다."}
+          </li>
+        ) : (
+          ranking.map((entry, idx) => (
+            <li
+              key={entry.id}
+              className="flex items-center justify-between rounded bg-zinc-900 px-3 py-2"
+            >
+              <span className="text-cyan-300">
+                #{idx + 1} {entry.nickname}
+              </span>
+              <span className="text-[#FFD200]">{formatTime(entry.timeMs)}</span>
+            </li>
+          ))
+        )}
+      </ol>
+    </div>
+  );
 }
 
 export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
@@ -182,15 +198,47 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
   const [finalTimeMs, setFinalTimeMs] = useState<number | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
   const [nickname, setNickname] = useState("");
-  const [ranking, setRanking] = useState<RankingEntry[]>([]);
+  const [ranking, setRanking] = useState<QuizRankingEntry[]>([]);
+  const [rankingLoading, setRankingLoading] = useState(isSupabaseConfigured);
   const [saved, setSaved] = useState(false);
+  const [saveSubmitting, setSaveSubmitting] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [showHallOfFame, setShowHallOfFame] = useState(false);
+  const [shareToast, setShareToast] = useState<string | null>(null);
 
   const autoNextTimerRef = useRef<number | null>(null);
+  const shareToastTimerRef = useRef<number | null>(null);
   const previousQuestionSignatureRef = useRef<string | null>(null);
   const hallOfFameRef = useRef<HTMLDivElement | null>(null);
+  const rankingReloadTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
 
   const signatureOf = (set: QuizQuestion[]) => set.map((q) => q.id).join("|");
+
+  const reloadRankings = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!isSupabaseConfigured) {
+      setRanking([]);
+      setRankingLoading(false);
+      return;
+    }
+    if (!opts?.silent) {
+      setRankingLoading(true);
+    }
+    const rows = await fetchQuizTopRankings(5);
+    if (!mountedRef.current) return;
+    setRanking(rows);
+    setRankingLoading(false);
+  }, []);
+
+  const scheduleRankingReload = useCallback(() => {
+    if (rankingReloadTimerRef.current) {
+      window.clearTimeout(rankingReloadTimerRef.current);
+    }
+    rankingReloadTimerRef.current = window.setTimeout(() => {
+      rankingReloadTimerRef.current = null;
+      void reloadRankings({ silent: true });
+    }, 220);
+  }, [reloadRankings]);
 
   const generateQuestionSet = () => {
     const previousSignature = previousQuestionSignatureRef.current;
@@ -207,8 +255,76 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
   };
 
   useEffect(() => {
-    setRanking(loadRanking());
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (rankingReloadTimerRef.current) {
+        window.clearTimeout(rankingReloadTimerRef.current);
+      }
+      if (shareToastTimerRef.current) {
+        window.clearTimeout(shareToastTimerRef.current);
+      }
+    };
   }, []);
+
+  const handleShareQuiz = useCallback(async () => {
+    setShareToast(null);
+    if (shareToastTimerRef.current) {
+      window.clearTimeout(shareToastTimerRef.current);
+      shareToastTimerRef.current = null;
+    }
+
+    const url = getQuizPageUrl();
+    const clipboardText = url ? `${QUIZ_SHARE_BODY}\n${url}` : QUIZ_SHARE_BODY;
+
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: "Voto Gallery 사진 퀴즈",
+          text: QUIZ_SHARE_BODY,
+          url,
+        });
+        return;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(clipboardText);
+      setShareToast("공유 문구와 링크를 복사했어요.");
+    } catch {
+      setShareToast("복사에 실패했어요. 주소창의 /quiz 링크를 직접 보내 주세요.");
+    }
+
+    shareToastTimerRef.current = window.setTimeout(() => {
+      setShareToast(null);
+      shareToastTimerRef.current = null;
+    }, 2800);
+  }, []);
+
+  useEffect(() => {
+    void reloadRankings();
+  }, [reloadRankings]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel("quiz-rankings-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "quiz_rankings" },
+        () => {
+          scheduleRankingReload();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [scheduleRankingReload]);
 
   useEffect(() => {
     const next = buildQuestions(photos);
@@ -269,6 +385,8 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
     setFeedback(null);
     setElapsedMs(0);
     setSaved(false);
+    setSaveError(null);
+    setSaveSubmitting(false);
     setShowHallOfFame(false);
     setFinalTimeMs(null);
     setCorrectCount(0);
@@ -300,22 +418,34 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
     }, 520);
   };
 
-  const submitRanking = () => {
-    if (finalTimeMs === null || saved || correctCount !== TOTAL_QUESTIONS) return;
+  const submitRanking = async () => {
+    if (finalTimeMs === null || saved || saveSubmitting || correctCount !== TOTAL_QUESTIONS) return;
     const trimmed = nickname.trim();
     if (!trimmed) return;
-    const next = [...ranking, { nickname: trimmed.slice(0, 14), timeMs: finalTimeMs, createdAt: Date.now() }]
-      .sort((a, b) => (a.timeMs !== b.timeMs ? a.timeMs - b.timeMs : a.createdAt - b.createdAt))
-      .slice(0, 5);
-    setRanking(next);
-    saveRanking(next);
-    setSaved(true);
+
+    setSaveError(null);
+    setSaveSubmitting(true);
+    try {
+      const result = await insertQuizRanking(trimmed, finalTimeMs);
+      if (!result.ok) {
+        setSaveError(result.message);
+        return;
+      }
+      setSaved(true);
+      await reloadRankings({ silent: true });
+    } finally {
+      setSaveSubmitting(false);
+    }
   };
 
   const canSaveHallOfFame = correctCount === TOTAL_QUESTIONS;
   const useDateOnlyForCurrentQuestion = current && questionIndex >= 7 && current.kind === "home-date";
   const displayChoice = (choice: string) =>
     useDateOnlyForCurrentQuestion ? extractYearDateOnly(choice) : choice;
+
+  const rankingEmptyHint = !isSupabaseConfigured
+    ? "Supabase(NEXT_PUBLIC_SUPABASE_URL 등) 설정 후 전역 랭킹이 표시됩니다."
+    : undefined;
 
   const openHallOfFame = () => {
     setShowHallOfFame(true);
@@ -361,13 +491,27 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
             <li>5~6번: 원정 날짜 맞추기</li>
             <li>7~10번: 수원 홈 날짜 맞추기</li>
           </ul>
-          <button
-            type="button"
-            onClick={startGame}
-            className="mt-6 rounded-full border-2 border-[#00287A] bg-[#FFD200] px-8 py-3 text-sm font-bold text-[#00287A] shadow-[0_8px_18px_rgba(0,40,122,0.15)] transition hover:-translate-y-0.5"
-          >
-            타임어택 시작
-          </button>
+          <div className="mt-6 flex flex-row flex-wrap items-center justify-center gap-3 sm:gap-4">
+            <button
+              type="button"
+              onClick={startGame}
+              className="min-h-11 touch-manipulation rounded-full border-2 border-[#00287A] bg-[#FFD200] px-6 py-3 text-sm font-bold text-[#00287A] shadow-[0_8px_18px_rgba(0,40,122,0.15)] transition hover:-translate-y-0.5 sm:px-8"
+            >
+              타임어택 시작
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleShareQuiz()}
+              className="min-h-11 touch-manipulation rounded-full border-2 border-[#00287A] bg-white px-5 py-3 text-sm font-semibold text-[#00287A] shadow-sm transition hover:bg-[#00287A]/[0.04] hover:shadow-md sm:px-6"
+            >
+              퀴즈 공유하기 🔗
+            </button>
+          </div>
+          {shareToast ? (
+            <p className="mt-3 text-center text-xs font-medium text-[#00287A]/85" role="status">
+              {shareToast}
+            </p>
+          ) : null}
         </section>
       )}
 
@@ -386,7 +530,8 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
             <div className="relative aspect-[4/3] w-full bg-zinc-100">
               <Image
                 src={current.photo.thumbnailUrl}
-                alt={current.photo.name || "퀴즈 사진"}
+                alt="Quiz Image"
+                title=""
                 fill
                 className="object-contain"
                 sizes="(max-width: 768px) 100vw, 48rem"
@@ -394,7 +539,6 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
               />
             </div>
           </div>
-          <p className="line-clamp-2 text-center text-xs text-[#00287A]/60">{current.photo.name}</p>
 
           <div className="rounded-2xl border border-[#00287A]/15 bg-white p-4">
             <h2 className="text-base font-bold text-[#00287A]">{current.prompt}</h2>
@@ -443,27 +587,7 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
 
       {showHallOfFame && phase !== "finished" && (
         <section className="mt-8" ref={hallOfFameRef}>
-          <div className="rounded-2xl border border-[#1f2937] bg-black p-4 shadow-[0_0_20px_rgba(255,210,0,0.2)]">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-mono text-sm font-bold uppercase tracking-widest text-[#FFD200]">Score Board</h3>
-              <span className="font-mono text-[11px] text-cyan-300/80">TOP 5</span>
-            </div>
-            <ol className="space-y-2 font-mono text-sm">
-              {ranking.length === 0 ? (
-                <li className="rounded bg-zinc-900 px-3 py-2 text-center text-cyan-300/75">아직 기록이 없습니다.</li>
-              ) : (
-                ranking.map((entry, idx) => (
-                  <li
-                    key={`${entry.nickname}-${entry.createdAt}`}
-                    className="flex items-center justify-between rounded bg-zinc-900 px-3 py-2"
-                  >
-                    <span className="text-cyan-300">#{idx + 1} {entry.nickname}</span>
-                    <span className="text-[#FFD200]">{formatTime(entry.timeMs)}</span>
-                  </li>
-                ))
-              )}
-            </ol>
-          </div>
+          <ScoreBoard ranking={ranking} loading={rankingLoading} emptyHint={rankingEmptyHint} />
         </section>
       )}
 
@@ -482,25 +606,35 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
                 onChange={(event) => setNickname(event.target.value)}
                 maxLength={14}
                 placeholder={
-                  canSaveHallOfFame ? "닉네임 (최대 14자)" : "10문제를 모두 맞추면 저장할 수 있어요"
+                  canSaveHallOfFame && isSupabaseConfigured
+                    ? "닉네임 (최대 14자)"
+                    : canSaveHallOfFame
+                      ? "Supabase 설정 후 등록 가능"
+                      : "10문제를 모두 맞추면 저장할 수 있어요"
                 }
-                disabled={!canSaveHallOfFame}
+                disabled={!canSaveHallOfFame || !isSupabaseConfigured}
                 className="h-10 flex-1 rounded-xl border border-[#00287A]/30 px-3 text-sm text-[#00287A] outline-none ring-[#00287A] placeholder:text-[#00287A]/40 focus:ring-2"
               />
               <button
                 type="button"
-                onClick={submitRanking}
-                disabled={saved || !canSaveHallOfFame}
+                onClick={() => void submitRanking()}
+                disabled={saved || saveSubmitting || !canSaveHallOfFame || !isSupabaseConfigured}
                 className="h-10 rounded-xl bg-[#00287A] px-4 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {saved ? "저장됨" : "명예의 전당 등록"}
+                {saved ? "저장됨" : saveSubmitting ? "저장 중…" : "명예의 전당 등록"}
               </button>
             </div>
+            {saveError ? <p className="mt-2 text-xs font-semibold text-rose-600">{saveError}</p> : null}
             {!canSaveHallOfFame && (
               <p className="mt-2 text-xs font-semibold text-[#00287A]/80">
                 명예의 전당은 10문제 전부 정답일 때만 등록됩니다.
               </p>
             )}
+            {canSaveHallOfFame && !isSupabaseConfigured ? (
+              <p className="mt-2 text-xs font-semibold text-[#00287A]/80">
+                서버 랭킹을 쓰려면 Supabase 환경 변수와 DB 마이그레이션을 적용해 주세요.
+              </p>
+            ) : null}
 
             <button
               type="button"
@@ -511,26 +645,8 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
             </button>
           </div>
 
-          <div className="rounded-2xl border border-[#1f2937] bg-black p-4 shadow-[0_0_20px_rgba(255,210,0,0.2)]" ref={hallOfFameRef}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-mono text-sm font-bold uppercase tracking-widest text-[#FFD200]">Score Board</h3>
-              <span className="font-mono text-[11px] text-cyan-300/80">TOP 5</span>
-            </div>
-            <ol className="space-y-2 font-mono text-sm">
-              {ranking.length === 0 ? (
-                <li className="rounded bg-zinc-900 px-3 py-2 text-center text-cyan-300/75">아직 기록이 없습니다.</li>
-              ) : (
-                ranking.map((entry, idx) => (
-                  <li
-                    key={`${entry.nickname}-${entry.createdAt}`}
-                    className="flex items-center justify-between rounded bg-zinc-900 px-3 py-2"
-                  >
-                    <span className="text-cyan-300">#{idx + 1} {entry.nickname}</span>
-                    <span className="text-[#FFD200]">{formatTime(entry.timeMs)}</span>
-                  </li>
-                ))
-              )}
-            </ol>
+          <div ref={hallOfFameRef}>
+            <ScoreBoard ranking={ranking} loading={rankingLoading} emptyHint={rankingEmptyHint} />
           </div>
         </section>
       )}
