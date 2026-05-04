@@ -39,12 +39,21 @@ function shuffle<T>(items: T[]): T[] {
   return arr;
 }
 
+/** Drive 설명의 첫·두 번째 해시태그(날짜/장소)가 모두 있어야 퀴즈 출제 가능 */
+function hasDateAndLocationHashtags(image: DriveImage): boolean {
+  const date = image.dateTag?.trim() ?? "";
+  const loc = image.locationTag?.trim() ?? "";
+  return date.startsWith("#") && date.length > 1 && loc.startsWith("#") && loc.length > 1;
+}
+
 function normalizePlace(image: DriveImage): string {
   return image.locationTag?.replace(/^#/, "").trim() || "장소 미표기";
 }
 
 function normalizeDate(image: DriveImage): string {
-  return (image.scheduleDisplay || image.folderName || "").trim() || "일정 미표기";
+  const fromFolder = (image.scheduleDisplay || image.folderName || "").trim();
+  if (fromFolder) return fromFolder;
+  return image.dateTag?.replace(/^#/, "").trim() || "일정 미표기";
 }
 
 function extractYearDateOnly(text: string): string {
@@ -73,12 +82,27 @@ function makeThreeChoices(answer: string, pool: string[]): string[] | null {
   return shuffle([answer, wrong[0], wrong[1]]);
 }
 
-function buildQuestions(photos: DriveImage[]): QuizQuestion[] | null {
-  const uniquePlaces = [...new Set(photos.map(normalizePlace).filter(Boolean))];
+function buildQuestions(allPhotos: DriveImage[]): QuizQuestion[] | null {
+  const photos = allPhotos.filter(hasDateAndLocationHashtags);
+  if (photos.length === 0) return null;
+
+  const uniquePlaces = [
+    ...new Set(
+      photos.map(normalizePlace).filter((p) => p && p !== "장소 미표기")
+    ),
+  ];
   const awayPhotos = photos.filter((photo) => normalizePlace(photo) !== HOME_PLACE);
   const homePhotos = photos.filter((photo) => normalizePlace(photo) === HOME_PLACE);
-  const awayDates = [...new Set(awayPhotos.map(normalizeDate).filter(Boolean))];
-  const homeDates = [...new Set(homePhotos.map(normalizeDate).filter(Boolean))];
+  const awayDates = [
+    ...new Set(
+      awayPhotos.map(normalizeDate).filter((d) => d && d !== "일정 미표기")
+    ),
+  ];
+  const homeDates = [
+    ...new Set(
+      homePhotos.map(normalizeDate).filter((d) => d && d !== "일정 미표기")
+    ),
+  ];
 
   if (uniquePlaces.length < 3 || awayDates.length < 3 || homeDates.length < 3) {
     return null;
@@ -357,7 +381,10 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
         </p>
         <h1 className="text-2xl font-bold text-[#00287A]">퀴즈 문제를 만들 수 없어요</h1>
         <p className="text-sm leading-relaxed text-[#00287A]/85">
-          장소/날짜 데이터가 충분하지 않아 10문제(3지선다) 구성을 완료하지 못했습니다.
+          퀴즈는 Google Drive 사진 설명에 <strong className="font-semibold">날짜·장소 해시태그가 모두 있는</strong> 사진만
+          출제합니다. 해당 사진이 충분하지 않거나(또는 원정/홈·날짜 조합이 부족해) 10문제를 만들 수 없을 때 이
+          화면이 나옵니다. 설명에 <code className="rounded bg-[#00287A]/10 px-1">#날짜</code>{" "}
+          <code className="rounded bg-[#00287A]/10 px-1">#장소</code> 순으로 넣어 주세요.
         </p>
         <Link
           href="/"
