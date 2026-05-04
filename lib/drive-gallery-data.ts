@@ -3,6 +3,11 @@ export function driveLh3FullDisplayUrl(fileId: string): string {
   return `https://lh3.googleusercontent.com/d/${fileId}=s2000`;
 }
 
+/** Quiz 등 중간 해상도: lh3 `=s1000`, Vercel IO 없이 브라우저가 Google CDN으로 직접 요청. */
+export function driveLh3S1000Url(fileId: string): string {
+  return `https://lh3.googleusercontent.com/d/${fileId.trim()}=s1000`;
+}
+
 export type DriveImage = {
   id: string;
   name: string;

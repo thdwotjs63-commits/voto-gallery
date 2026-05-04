@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DriveImage } from "@/lib/drive-gallery-data";
+import { driveLh3S1000Url, type DriveImage } from "@/lib/drive-gallery-data";
 import { trackGaEvent } from "@/lib/analytics";
 import { fetchQuizTopRankings, insertQuizRanking, type QuizRankingEntry } from "@/lib/quiz-rankings";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
@@ -531,7 +531,7 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
           <div className="overflow-hidden rounded-2xl border-2 border-[#00287A]/20 bg-[#00287A]/[0.03] shadow-inner">
             <div className="relative aspect-[4/3] w-full bg-zinc-100">
               <Image
-                src={current.photo.thumbnailUrl}
+                src={driveLh3S1000Url(current.photo.id)}
                 alt="Quiz Image"
                 title=""
                 fill
