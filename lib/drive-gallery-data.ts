@@ -134,7 +134,7 @@ function mapDriveFileRowToImage(file: DriveFileRow): DriveImage {
         : tagDateKey;
 
   return {
-    id: file.id,
+    id: (file.id ?? "").trim(),
     name: file.name,
     description,
     story,

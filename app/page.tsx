@@ -41,6 +41,7 @@ import {
 import { PhotoDetailModal } from "@/components/photo-detail-modal";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 import { driveLh3FullDisplayUrl, type DriveImage } from "@/lib/drive-gallery-data";
+import { fetchPhotoLikeCounts, normalizePhotoLikeId } from "@/lib/photo-likes";
 import { trackGaEvent } from "@/lib/analytics";
 import {
   buildPhotoDetailPageUrl,
@@ -69,11 +70,6 @@ declare global {
     votoAdminBypassStatus?: () => boolean;
   }
 }
-
-type PhotoLikeRow = {
-  id: number;
-  photo_id: string;
-};
 
 type GuestbookEntry = {
   id: number;
@@ -770,43 +766,39 @@ export default function Home() {
     didHydrateFiltersFromUrlRef.current = true;
   }, [urlDate, urlMoment, urlPlace, urlSort, urlViewMode, urlWith]);
 
+  const galleryPhotoIdsKey = useMemo(
+    () =>
+      [...new Set(images.map((image) => normalizePhotoLikeId(image.id)).filter(Boolean))]
+        .sort()
+        .join("|"),
+    [images]
+  );
+
   useEffect(() => {
     if (!isSupabaseConfigured) return;
-
-    const photoIds = images.map((image) => image.id);
+    const photoIds = galleryPhotoIdsKey ? galleryPhotoIdsKey.split("|") : [];
     if (photoIds.length === 0) return;
 
     let mounted = true;
 
     const loadLikes = async () => {
-      const { data, error: likesError } = await supabase
-        .from("photo_likes")
-        .select("id,photo_id")
-        .in("photo_id", photoIds);
-
-      if (likesError) {
-        console.error("Failed to load likes:", likesError.message);
-        return;
-      }
-
-      const baseMap = Object.fromEntries(photoIds.map((id) => [id, 0]));
-      const rows = (data ?? []) as PhotoLikeRow[];
-      const mergedMap = rows.reduce<Record<string, number>>((acc, row) => {
-        acc[row.photo_id] = (acc[row.photo_id] ?? 0) + 1;
-        return acc;
-      }, baseMap);
-
-      if (mounted) {
-        setLikesByPhoto(mergedMap);
-      }
+      const counts = await fetchPhotoLikeCounts(supabase, photoIds);
+      if (!mounted) return;
+      setLikesByPhoto(() => {
+        const next: Record<string, number> = {};
+        for (const id of photoIds) {
+          next[id] = counts[id] ?? 0;
+        }
+        return next;
+      });
     };
 
-    loadLikes();
+    void loadLikes();
 
     return () => {
       mounted = false;
     };
-  }, [images]);
+  }, [galleryPhotoIdsKey, isSupabaseConfigured]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -915,30 +907,31 @@ export default function Home() {
   };
 
   const handleLike = async (photoId: string) => {
-    if (!isSupabaseConfigured || likingByPhoto[photoId]) return;
+    const driveFileId = normalizePhotoLikeId(photoId);
+    if (!driveFileId || !isSupabaseConfigured || likingByPhoto[driveFileId]) return;
 
     const now = Date.now();
-    const lastClick = lastLikeClickAtRef.current[photoId] ?? 0;
+    const lastClick = lastLikeClickAtRef.current[driveFileId] ?? 0;
     if (now - lastClick < 700) return;
-    lastLikeClickAtRef.current[photoId] = now;
+    lastLikeClickAtRef.current[driveFileId] = now;
 
-    const previousCount = likesRef.current[photoId] ?? 0;
-    setLikingByPhoto((prev) => ({ ...prev, [photoId]: true }));
-    setLikesByPhoto((prev) => ({ ...prev, [photoId]: previousCount + 1 }));
+    const previousCount = likesRef.current[driveFileId] ?? 0;
+    setLikingByPhoto((prev) => ({ ...prev, [driveFileId]: true }));
+    setLikesByPhoto((prev) => ({ ...prev, [driveFileId]: previousCount + 1 }));
 
     try {
       const { error: insertError } = await supabase
         .from("photo_likes")
-        .insert({ photo_id: photoId });
+        .insert({ photo_id: driveFileId });
 
       if (insertError) {
         throw insertError;
       }
     } catch (likeError) {
       console.error("Failed to update like:", likeError);
-      setLikesByPhoto((prev) => ({ ...prev, [photoId]: previousCount }));
+      setLikesByPhoto((prev) => ({ ...prev, [driveFileId]: previousCount }));
     } finally {
-      setLikingByPhoto((prev) => ({ ...prev, [photoId]: false }));
+      setLikingByPhoto((prev) => ({ ...prev, [driveFileId]: false }));
     }
   };
 
@@ -1094,7 +1087,13 @@ export default function Home() {
     () =>
       [...filteredImages].sort((a, b) => {
         if (sortOrder === "popular") {
-          return (likesByPhoto[b.id] ?? 0) - (likesByPhoto[a.id] ?? 0);
+          const likeDiff =
+            (likesByPhoto[b.id] ?? 0) - (likesByPhoto[a.id] ?? 0);
+          if (likeDiff !== 0) return likeDiff;
+          if (b.folderSortKey !== a.folderSortKey) {
+            return b.folderSortKey - a.folderSortKey;
+          }
+          return a.id.localeCompare(b.id);
         }
         if (sortOrder === "latest") {
           if (a.folderSortKey !== b.folderSortKey) {
@@ -1502,13 +1501,14 @@ export default function Home() {
     };
   }, [guestbookModalOpen]);
 
-  const bestPicks = useMemo(
-    () =>
-      [...images]
-        .sort((a, b) => (likesByPhoto[b.id] ?? 0) - (likesByPhoto[a.id] ?? 0))
-        .slice(0, 3),
-    [images, likesByPhoto]
-  );
+  const bestPicks = useMemo(() => {
+    const byLikes = (a: DriveImage, b: DriveImage) => {
+      const likeDiff = (likesByPhoto[b.id] ?? 0) - (likesByPhoto[a.id] ?? 0);
+      if (likeDiff !== 0) return likeDiff;
+      return a.id.localeCompare(b.id);
+    };
+    return [...images].sort(byLikes).slice(0, 3);
+  }, [images, likesByPhoto]);
 
   const heroImage = useMemo(
     () => images.find((image) => image.tags.includes("#hero")) ?? images[0],

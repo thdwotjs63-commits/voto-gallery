@@ -45,7 +45,7 @@ function mapRow(file: DriveFileRow): VotoImage {
   const width = file.imageMediaMetadata?.width ?? 1600;
   const height = file.imageMediaMetadata?.height ?? 1200;
   return {
-    id: file.id,
+    id: (file.id ?? "").trim(),
     name: file.name,
     description: file.description ?? "",
     thumbSrc: buildThumbSrc(file),
