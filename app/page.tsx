@@ -1795,12 +1795,6 @@ export default function Home() {
             <span className="text-sm font-medium lowercase tracking-[0.04em] text-zinc-900">
               voto gallery
             </span>
-            <Link
-              href="/voto"
-              className="inline-flex min-h-8 items-center rounded-full border border-zinc-600 bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-zinc-700"
-            >
-              Voto Photo 바로가기 📸
-            </Link>
             <span className="text-[10px] text-zinc-500 sm:text-xs">
               © 2025 VOTO. All rights reserved.
             </span>
@@ -1992,19 +1986,20 @@ export default function Home() {
           style={{ transform: `translate3d(0, ${heroTextTranslate}px, 0)` }}
         >
           <p className="mt-1 text-[15px] font-bold tracking-[0.18em] text-zinc-100 sm:text-[19px]">
-            No.3 Kim Dain <span aria-hidden>🇰🇷</span>
+            No.3 Kim Dain{" "}
+            <Link
+              href="/voto"
+              aria-label="대한민국"
+              className="inline text-inherit no-underline cursor-default hover:text-inherit focus-visible:outline-none"
+            >
+              <span aria-hidden>🇰🇷</span>
+            </Link>
           </p>
           <p className="mt-1 text-[11px] tracking-[0.2em] text-zinc-200 sm:text-xs">
             Hyundai Hillstate Volleyball Team
           </p>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
-            <Link
-              href="/voto"
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/25 bg-zinc-800 px-3 py-2 text-[12px] font-bold text-white shadow-[0_8px_16px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:bg-zinc-700 active:scale-95"
-            >
-              Voto Photo 바로가기 📸
-            </Link>
             <a
               href="https://www.instagram.com/voto_v3?igsh=NDZrcGhndXQybzNm&utm_source=qr"
               target="_blank"
@@ -2065,12 +2060,6 @@ export default function Home() {
           <div className="shrink-0 text-base font-medium lowercase tracking-[0.04em] sm:text-lg">
             voto gallery
           </div>
-          <Link
-            href="/voto"
-            className="inline-flex min-h-9 shrink-0 items-center rounded-full border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-zinc-700"
-          >
-            Voto Photo 바로가기 📸
-          </Link>
           <GalleryChangelog />
         </div>
         <div aria-hidden className="hidden h-6 w-16 shrink-0 sm:block" />
