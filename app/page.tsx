@@ -12,6 +12,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
+import Link from "next/link";
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
@@ -39,7 +40,7 @@ import {
 } from "@/components/photo-grid";
 import { PhotoDetailModal } from "@/components/photo-detail-modal";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
-import type { DriveImage } from "@/lib/drive-gallery-data";
+import { driveLh3FullDisplayUrl, type DriveImage } from "@/lib/drive-gallery-data";
 import { trackGaEvent } from "@/lib/analytics";
 import {
   buildPhotoDetailPageUrl,
@@ -1790,10 +1791,16 @@ export default function Home() {
         }`}
       >
         <div className="mx-auto mt-2 w-[calc(100%-16px)] max-w-[1280px] rounded-xl border border-white/35 bg-white/65 px-3 py-2 backdrop-blur-md sm:mt-3 sm:w-[calc(100%-24px)] sm:px-4">
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium lowercase tracking-[0.04em] text-zinc-900">
               voto gallery
             </span>
+            <Link
+              href="/voto"
+              className="inline-flex min-h-8 items-center rounded-full border border-zinc-600 bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-zinc-700"
+            >
+              Voto Photo 바로가기 📸
+            </Link>
             <span className="text-[10px] text-zinc-500 sm:text-xs">
               © 2025 VOTO. All rights reserved.
             </span>
@@ -1965,14 +1972,13 @@ export default function Home() {
             style={{ transform: `translate3d(0, ${heroBackgroundTranslate}px, 0)` }}
           >
             <Image
-              src={heroImage.originalUrl}
+              src={driveLh3FullDisplayUrl(heroImage.id)}
               alt={heroImage.name}
               fill
               priority
               unoptimized
               className="object-cover object-[center_28%] sm:object-center"
               sizes="100vw"
-              quality={85}
             />
           </div>
         ) : null}
@@ -1993,6 +1999,12 @@ export default function Home() {
           </p>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
+            <Link
+              href="/voto"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/25 bg-zinc-800 px-3 py-2 text-[12px] font-bold text-white shadow-[0_8px_16px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:bg-zinc-700 active:scale-95"
+            >
+              Voto Photo 바로가기 📸
+            </Link>
             <a
               href="https://www.instagram.com/voto_v3?igsh=NDZrcGhndXQybzNm&utm_source=qr"
               target="_blank"
@@ -2053,6 +2065,12 @@ export default function Home() {
           <div className="shrink-0 text-base font-medium lowercase tracking-[0.04em] sm:text-lg">
             voto gallery
           </div>
+          <Link
+            href="/voto"
+            className="inline-flex min-h-9 shrink-0 items-center rounded-full border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-zinc-700"
+          >
+            Voto Photo 바로가기 📸
+          </Link>
           <GalleryChangelog />
         </div>
         <div aria-hidden className="hidden h-6 w-16 shrink-0 sm:block" />
@@ -2095,7 +2113,7 @@ export default function Home() {
                         className="relative block h-full w-full"
                       >
                         <Image
-                          src={image.originalUrl}
+                          src={driveLh3FullDisplayUrl(image.id)}
                           alt={image.name}
                           fill
                           aria-hidden
@@ -2106,18 +2124,16 @@ export default function Home() {
                               : "scale-100"
                           }`}
                           sizes="(max-width: 640px) 100vw, (max-width: 1200px) 90vw, 980px"
-                          quality={50}
                         />
                         <div className="absolute inset-0 bg-black/45" />
                         <div className="absolute inset-0">
                           <Image
-                            src={image.originalUrl}
+                            src={driveLh3FullDisplayUrl(image.id)}
                             alt={image.name}
                             fill
                             unoptimized
                             className="object-contain object-top"
                             sizes="(max-width: 640px) 100vw, (max-width: 1200px) 90vw, 980px"
-                            quality={88}
                           />
                         </div>
                         <div className="absolute left-3 top-3 rounded-full bg-black/65 px-2.5 py-1 text-[11px] text-white">
@@ -2708,7 +2724,7 @@ export default function Home() {
         plugins={[Zoom]}
         zoom={{ maxZoomPixelRatio: 3, zoomInMultiplier: 2 }}
         slides={sortedFilteredImages.map((image) => ({
-          src: image.originalUrl,
+          src: driveLh3FullDisplayUrl(image.id),
           alt: image.name,
           width: image.width,
           height: image.height,
@@ -2728,9 +2744,9 @@ export default function Home() {
                   src={slide.src}
                   alt={slide.alt || "gallery image"}
                   fill
+                  unoptimized
                   className="object-contain"
                   sizes="(max-width: 768px) 100vw, (max-width: 1280px) min(92vw, 960px), 960px"
-                  quality={92}
                   priority
                 />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex max-h-[min(48vh,22rem)] flex-col justify-end sm:max-h-[min(42vh,20rem)]">

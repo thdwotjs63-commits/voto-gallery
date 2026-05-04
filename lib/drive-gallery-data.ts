@@ -1,3 +1,8 @@
+/** Lightbox / hero / high-res: lh3 직접, long edge ≈2000px (Next 이미지 최적화 미사용 시 브라우저 직행). */
+export function driveLh3FullDisplayUrl(fileId: string): string {
+  return `https://lh3.googleusercontent.com/d/${fileId}=s2000`;
+}
+
 export type DriveImage = {
   id: string;
   name: string;

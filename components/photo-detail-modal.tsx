@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import { trackGaEvent } from "@/lib/analytics";
-import type { DriveImage } from "@/lib/drive-gallery-data";
+import { driveLh3FullDisplayUrl, type DriveImage } from "@/lib/drive-gallery-data";
 
 const THUMB_BLUR_DATA_URL =
   "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjZTBlMGUwIi8+PC9zdmc+";
@@ -83,13 +83,13 @@ export function PhotoDetailModal({ image, onClose }: PhotoDetailModalProps) {
 
       <div className="relative min-h-0 flex-1 bg-black">
         <Image
-          src={image.originalUrl}
+          src={driveLh3FullDisplayUrl(image.id)}
           alt={image.name}
           fill
           priority
+          unoptimized
           className="object-contain"
           sizes="(max-width: 768px) 100vw, min(96vw, 1100px)"
-          quality={90}
           placeholder="blur"
           blurDataURL={THUMB_BLUR_DATA_URL}
         />
