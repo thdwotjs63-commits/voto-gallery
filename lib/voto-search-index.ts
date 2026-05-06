@@ -6,6 +6,12 @@ export type AggregatedSearchTag = {
   count: number;
 };
 
+function normalizeForSearch(input: string): string {
+  // macOS(HFS+/APFS) 파일명에서 한글이 NFD(분해형)로 들어오는 경우가 있어,
+  // UI 입력(대개 NFC)과의 includes 비교가 실패할 수 있다. 비교 전 NFC로 정규화한다.
+  return input.normalize("NFC").toLowerCase();
+}
+
 function extractHashtags(text: string): string[] {
   const matches = text.match(/#[\p{L}\p{N}_-]+/gu) ?? [];
   return Array.from(new Set(matches));
@@ -15,7 +21,7 @@ function tokenizeFilename(filename: string): string[] {
   const stem = filename.replace(/\.[^.]+$/iu, "").trim();
   if (!stem) return [];
   return stem
-    .split(/[_\s\-.]+/u)
+    .split(/[_\s\-,.]+/u)
     .map((s) => s.trim())
     .filter((s) => s.length >= 2);
 }
@@ -32,7 +38,7 @@ export function buildAggregatedTags(images: VotoImage[]): AggregatedSearchTag[] 
     const bump = (raw: string) => {
       const display = raw.trim();
       if (display.length < 1) return;
-      const norm = display.toLowerCase();
+      const norm = normalizeForSearch(display);
       if (seenNorm.has(norm)) return;
       seenNorm.add(norm);
       countByNorm.set(norm, (countByNorm.get(norm) ?? 0) + 1);
@@ -58,11 +64,11 @@ export function buildAggregatedTags(images: VotoImage[]): AggregatedSearchTag[] 
 }
 
 export function filterImagesByQuery(images: VotoImage[], query: string): VotoImage[] {
-  const q = query.trim().toLowerCase();
+  const q = normalizeForSearch(query.trim());
   if (!q) return images;
   return images.filter((img) => {
-    if (img.name.toLowerCase().includes(q)) return true;
-    if (img.description.toLowerCase().includes(q)) return true;
+    if (normalizeForSearch(img.name).includes(q)) return true;
+    if (normalizeForSearch(img.description).includes(q)) return true;
     return false;
   });
 }
@@ -70,10 +76,10 @@ export function filterImagesByQuery(images: VotoImage[], query: string): VotoIma
 const MAX_SUGGESTIONS = 24;
 
 export function matchingTagsForQuery(tags: AggregatedSearchTag[], query: string): AggregatedSearchTag[] {
-  const q = query.trim().toLowerCase();
+  const q = normalizeForSearch(query.trim());
   if (!q) return [];
   const matched = tags.filter(
-    (t) => t.normalized.includes(q) || t.display.toLowerCase().includes(q)
+    (t) => t.normalized.includes(q) || normalizeForSearch(t.display).includes(q)
   );
   return matched.slice(0, MAX_SUGGESTIONS);
 }

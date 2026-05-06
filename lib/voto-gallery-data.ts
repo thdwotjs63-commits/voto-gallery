@@ -22,7 +22,7 @@ export type VotoImage = {
   fileNameDateToken: string | null;
   /** Drive file createdTime in ms (fallback when capture metadata is missing). */
   createdAtMs: number | null;
-  /** Primary sort key: capturedAtMs -> fileNameDateMs -> createdAtMs -> 0 */
+  /** Primary sort key: fileNameDateMs -> capturedAtMs -> createdAtMs -> 0 */
   sortTimeMs: number;
   /** Lightbox info title (category-specific: hyundai hides team). */
   infoTitle: string;
@@ -76,7 +76,9 @@ function parseDateFromFilename(name: string): { ms: number | null; token: string
   if (!text) return { ms: null, token: null };
 
   // Priority 1: leading YYMMDD (요청 사항)
-  const leadingYyMmDd = text.match(/^(\d{6})\b/);
+  // NOTE: `_`는 JS 정규식에서 "word char"라 `\b`가 성립하지 않는다.
+  // 예) `260413_foo.jpg`는 `260413` 뒤가 `_`라서 `\b`가 아니므로 매칭이 실패할 수 있음.
+  const leadingYyMmDd = text.match(/^(\d{6})(?!\d)/);
   if (leadingYyMmDd) {
     const ms = parseYyMmDdToken(leadingYyMmDd[1]);
     if (ms !== null) return { ms, token: leadingYyMmDd[1] };
@@ -183,7 +185,9 @@ function mapRow(file: DriveFileRow, categoryId: VotoCategoryId): VotoImage {
   const fileNameDateMs = parsed.ms;
   const fileNameDateToken = parsed.token ?? parts.dateToken;
   const createdAtMs = toEpochMs(file.createdTime);
-  const sortTimeMs = capturedAtMs ?? fileNameDateMs ?? createdAtMs ?? 0;
+  // Voto Photo는 파일명에 넣은 날짜 토큰(YYMMDD/YYYMMDD 등)을 정렬 기준으로 기대하는 경우가 많아,
+  // 캡처 메타데이터(촬영시각)보다 파일명 날짜를 우선한다.
+  const sortTimeMs = fileNameDateMs ?? capturedAtMs ?? createdAtMs ?? 0;
   const infoTitle = buildInfoTitle(
     categoryId,
     fileNameDateToken,
