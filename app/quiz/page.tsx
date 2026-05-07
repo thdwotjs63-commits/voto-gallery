@@ -1,6 +1,23 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { PhotoQuizGame } from "@/components/photo-quiz-game";
 import { fetchDriveGalleryImages } from "@/lib/drive-gallery-data";
+import { DEFAULT_OG_IMAGE_URL, SITE_URL } from "@/lib/seo-metadata";
+
+export const metadata: Metadata = {
+  title: "김다인 사진 퀴즈 | DAENI.KR",
+  description: "김다인 경기 사진으로 푸는 타임어택 퀴즈. 장소·경기일을 맞혀보세요.",
+  alternates: {
+    canonical: `${SITE_URL}/quiz`,
+  },
+  openGraph: {
+    title: "김다인 사진 퀴즈 | DAENI.KR",
+    description: "김다인 경기 사진으로 푸는 타임어택 퀴즈. 장소·경기일을 맞혀보세요.",
+    url: `${SITE_URL}/quiz`,
+    type: "website",
+    images: [{ url: DEFAULT_OG_IMAGE_URL }],
+  },
+};
 
 export default async function QuizPage() {
   try {

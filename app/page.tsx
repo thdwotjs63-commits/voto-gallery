@@ -47,6 +47,8 @@ import {
   buildPhotoDetailPageUrl,
   buildPhotoShareClipboardText,
 } from "@/lib/photo-share";
+import { SITE_URL } from "@/lib/seo-metadata";
+import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 
 /** 트윗 작성창에 넣을 갤러리 제목 */
 const GALLERY_SHARE_TITLE = "voto gallery — Captured Moments of Kim Da-in";
@@ -415,6 +417,27 @@ const SCROLL_RESTORE_Y_KEY = "voto_restore_scroll_y";
 const SCROLL_RESTORE_VIEW_KEY = "voto_restore_view_mode";
 const SCROLL_RESTORE_GRID_VISIBLE_KEY = "voto_restore_grid_visible";
 const SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY = "voto_restore_lightbox_photo_id";
+
+const PERSON_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "Person",
+  name: "김다인",
+  alternateName: "Kim Dain",
+  url: SITE_URL,
+  sameAs: ["https://www.instagram.com/voto_v3?igsh=NDZrcGhndXQybzNm&utm_source=qr"],
+  image: `${SITE_URL}/og-default.jpg`,
+  description:
+    "현대건설 힐스테이트 No.3 세터 김다인 선수의 고화질 경기 사진, 팬 갤러리 및 소통 공간입니다.",
+};
+
+const IMAGE_GALLERY_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "ImageGallery",
+  name: "DAENI.KR",
+  url: SITE_URL,
+  description:
+    "현대건설 힐스테이트 No.3 세터 김다인 선수의 고화질 경기 사진, 팬 갤러리 및 소통 공간입니다.",
+};
 
 function scrollToPhoto(photoDriveId: string) {
   const el = document.getElementById(`photo-${photoDriveId}`);
@@ -1785,6 +1808,14 @@ export default function Home() {
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(PERSON_JSON_LD) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(IMAGE_GALLERY_JSON_LD) }}
+      />
       <div
         className={`fixed left-0 right-0 top-0 z-[55] transition-transform duration-300 ${
           showStickyHeader ? "translate-y-0" : "-translate-y-full"
@@ -1967,7 +1998,7 @@ export default function Home() {
           >
             <Image
               src={driveLh3FullDisplayUrl(heroImage.id)}
-              alt={heroImage.name}
+              alt={buildMatchPhotoAltFromFilename(heroImage.name)}
               fill
               priority
               unoptimized
@@ -2103,7 +2134,7 @@ export default function Home() {
                       >
                         <Image
                           src={driveLh3FullDisplayUrl(image.id)}
-                          alt={image.name}
+                          alt={buildMatchPhotoAltFromFilename(image.name)}
                           fill
                           aria-hidden
                           unoptimized
@@ -2118,7 +2149,7 @@ export default function Home() {
                         <div className="absolute inset-0">
                           <Image
                             src={driveLh3FullDisplayUrl(image.id)}
-                            alt={image.name}
+                            alt={buildMatchPhotoAltFromFilename(image.name)}
                             fill
                             unoptimized
                             className="object-contain object-top"
@@ -2466,7 +2497,7 @@ export default function Home() {
                       >
                         <Image
                           src={feedListImageUrl(image)}
-                          alt={image.name}
+                          alt={buildMatchPhotoAltFromFilename(image.name)}
                           fill
                           unoptimized
                           className="object-contain"
@@ -2731,7 +2762,11 @@ export default function Home() {
               <div className="relative h-full w-full">
                 <Image
                   src={slide.src}
-                  alt={slide.alt || "gallery image"}
+                  alt={
+                    buildMatchPhotoAltFromFilename(
+                      currentImage?.name || slide.alt || "김다인 경기 사진"
+                    )
+                  }
                   fill
                   unoptimized
                   className="object-contain"

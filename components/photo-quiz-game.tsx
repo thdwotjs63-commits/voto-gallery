@@ -7,6 +7,7 @@ import { driveLh3S1000Url, type DriveImage } from "@/lib/drive-gallery-data";
 import { trackGaEvent } from "@/lib/analytics";
 import { fetchQuizTopRankings, insertQuizRanking, type QuizRankingEntry } from "@/lib/quiz-rankings";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
+import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 
 type QuizKind = "place" | "away-date" | "home-date";
 
@@ -559,7 +560,7 @@ export function PhotoQuizGame({ photos }: { photos: DriveImage[] }) {
             <div className="relative aspect-[4/3] w-full bg-zinc-100">
               <Image
                 src={driveLh3S1000Url(current.photo.id)}
-                alt="Quiz Image"
+                alt={buildMatchPhotoAltFromFilename(current.photo.name)}
                 title=""
                 fill
                 unoptimized

@@ -24,6 +24,7 @@ import {
   buildPhotoDetailPageUrl,
   buildPhotoShareClipboardText,
 } from "@/lib/photo-share";
+import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 
 const BLUR_PLACEHOLDER =
   "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjMjcyNzI3Ii8+PC9zdmc+";
@@ -390,7 +391,7 @@ export function VotoCategoryHome() {
                   >
                     <Image
                       src={img.thumbSrc}
-                      alt={img.name}
+                      alt={buildMatchPhotoAltFromFilename(img.name)}
                       fill
                       unoptimized
                       sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
@@ -439,7 +440,7 @@ export function VotoCategoryHome() {
                 <div className="relative h-full w-full">
                   <Image
                     src={slide.src}
-                    alt={slide.alt || "voto image"}
+                    alt={buildMatchPhotoAltFromFilename(slide.alt || "김다인 경기 사진")}
                     fill
                     unoptimized
                     className="object-contain"

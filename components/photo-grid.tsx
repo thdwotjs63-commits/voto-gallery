@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import type { DriveImage } from "@/lib/drive-gallery-data";
+import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 
 const PHOTO_GRID_BLUR_DATA_URL =
   "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjZTBlMGUwIi8+PC9zdmc+";
@@ -29,7 +30,7 @@ export function PhotoGridThumbnail({
     <div className="relative size-full">
       <Image
         src={image.thumbnailUrl}
-        alt={image.name}
+        alt={buildMatchPhotoAltFromFilename(image.name)}
         fill
         sizes={sizes}
         quality={60}

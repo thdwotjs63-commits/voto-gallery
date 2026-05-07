@@ -25,9 +25,9 @@ export const DEFAULT_OG_IMAGE_URL =
   process.env.NEXT_PUBLIC_DEFAULT_OG_IMAGE_URL?.trim() ||
   `${SITE_URL}/og-default.jpg`;
 
-export const GALLERY_TITLE = "Voto Gallery | [Dain]";
+export const GALLERY_TITLE = "배구선수 김다인 팬 갤러리 | DAENI.KR";
 export const GALLERY_DESCRIPTION =
-  "Team korea & Hyundai 주전세터 김다인의 디지털 사진첩";
+  "현대건설 힐스테이트 No.3 세터 김다인 선수의 고화질 경기 사진, 팬 갤러리 및 소통 공간입니다.";
 
 export function buildRootMetadata(input?: {
   imageUrl?: string;
@@ -44,12 +44,18 @@ export function buildRootMetadata(input?: {
     metadataBase: new URL(SITE_URL),
     title: GALLERY_TITLE,
     description: GALLERY_DESCRIPTION,
+    verification: {
+      google: "4cRmGIDbNOvMJbXcToD__ZE0T2n_kWXrAuXVRxSsvNM",
+      other: {
+        "naver-site-verification": "2570a97c025ec686058d27415107e157213e205a",
+      },
+    },
     alternates: { canonical: "/" },
     openGraph: {
       title: GALLERY_TITLE,
       description: GALLERY_DESCRIPTION,
       url: "/",
-      siteName: "Voto Gallery",
+      siteName: "DAENI.KR",
       type: "website",
       locale: "ko_KR",
       images: [
