@@ -384,10 +384,7 @@ export function VotoCategoryHome() {
                   <button
                     type="button"
                     onClick={() => setPreview(img)}
-                    className="relative block w-full overflow-hidden rounded-lg border border-white/10 bg-zinc-900 outline-none ring-amber-400/0 transition hover:border-amber-400/40 focus-visible:ring-2"
-                    style={{
-                      aspectRatio: `${img.width} / ${img.height}`,
-                    }}
+                    className="relative block w-full overflow-hidden rounded-lg border border-white/10 bg-zinc-900 outline-none ring-amber-400/0 transition hover:border-amber-400/40 focus-visible:ring-2 aspect-[2/3]"
                   >
                     <Image
                       src={img.thumbSrc}

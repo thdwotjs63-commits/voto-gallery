@@ -2433,11 +2433,7 @@ export default function Home() {
                           );
                           if (idx >= 0) setLightboxIndex(idx);
                         }}
-                        className={`relative block w-full overflow-hidden rounded-sm bg-zinc-100 ${
-                          image.ratio === "portrait"
-                            ? "aspect-[3/4]"
-                            : "aspect-[4/3]"
-                        }`}
+                        className="relative block w-full overflow-hidden rounded-sm bg-zinc-100 aspect-[2/3]"
                       >
                         <PhotoGridThumbnail
                           image={image}

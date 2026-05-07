@@ -37,7 +37,7 @@ export function PhotoGridThumbnail({
         unoptimized
         placeholder="blur"
         blurDataURL={PHOTO_GRID_BLUR_DATA_URL}
-        className={`object-contain transition-[opacity,filter] duration-700 ease-out ${
+        className={`object-cover transition-[opacity,filter] duration-700 ease-out ${
           sharp ? "opacity-100 [filter:blur(0px)]" : "opacity-90 [filter:blur(14px)]"
         }`}
         onLoadingComplete={() => setSharp(true)}
