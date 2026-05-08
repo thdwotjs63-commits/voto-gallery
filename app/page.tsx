@@ -78,6 +78,8 @@ type GuestbookEntry = {
   nickname: string;
   content: string;
   created_at: string;
+  parent_id: number | null;
+  is_admin: boolean;
 };
 
 type DropdownOption = {
@@ -572,6 +574,14 @@ export default function Home() {
   const [guestContent, setGuestContent] = useState("");
   const [guestSubmitting, setGuestSubmitting] = useState(false);
   const [guestbookError, setGuestbookError] = useState<string | null>(null);
+  const [guestAdminPassword, setGuestAdminPassword] = useState("");
+  const [activeReplyParentId, setActiveReplyParentId] = useState<number | null>(null);
+  const [replyDraftByParent, setReplyDraftByParent] = useState<
+    Record<number, { nickname: string; content: string; adminPassword: string }>
+  >({});
+  const [replySubmittingByParent, setReplySubmittingByParent] = useState<
+    Record<number, boolean>
+  >({});
   const likesRef = useRef<Record<string, number>>({});
   const lastLikeClickAtRef = useRef<Record<string, number>>({});
   const galleryRef = useRef<HTMLDivElement | null>(null);
@@ -831,7 +841,7 @@ export default function Home() {
     const loadGuestbook = async () => {
       const { data, error: guestbookError } = await supabase
         .from("guestbook")
-        .select("id,nickname,content,created_at")
+        .select("id,nickname,content,created_at,parent_id,is_admin")
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -866,6 +876,31 @@ export default function Home() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  const threadedGuestbookEntries = useMemo(() => {
+    const parents = guestbookEntries.filter((entry) => entry.parent_id == null);
+    const repliesByParent = new Map<number, GuestbookEntry[]>();
+
+    for (const entry of guestbookEntries) {
+      if (entry.parent_id == null) continue;
+      const list = repliesByParent.get(entry.parent_id) ?? [];
+      list.push(entry);
+      repliesByParent.set(entry.parent_id, list);
+    }
+
+    parents.sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    return parents.map((parent) => ({
+      parent,
+      replies: (repliesByParent.get(parent.id) ?? []).sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      ),
+    }));
+  }, [guestbookEntries]);
 
   const handleGuestbookSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -905,27 +940,119 @@ export default function Home() {
 
     setGuestSubmitting(true);
     try {
-      const { data, error: insertError } = await supabase
-        .from("guestbook")
-        .insert({ nickname, content })
-        .select("id,nickname,content,created_at")
-        .single();
-
-      if (insertError) {
-        throw insertError;
+      const response = await fetch("/api/guestbook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nickname,
+          content,
+          parentId: null,
+          adminPassword: guestAdminPassword,
+        }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        entry?: GuestbookEntry;
+      };
+      if (!response.ok || !payload.entry) {
+        throw new Error(payload.error || "Failed to submit guestbook");
       }
 
-      const inserted = data as GuestbookEntry;
+      const inserted = payload.entry;
       setGuestbookEntries((prev) =>
         prev.some((item) => item.id === inserted.id) ? prev : [inserted, ...prev]
       );
       lastGuestSubmitRef.current = { content, at: Date.now() };
       setGuestNickname("");
       setGuestContent("");
+      setGuestAdminPassword("");
     } catch (submitError) {
       console.error("Failed to submit guestbook:", submitError);
+      setGuestbookError("메시지 등록에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setGuestSubmitting(false);
+    }
+  };
+
+  const handleReplySubmit = async (
+    parentId: number,
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+    if (!isSupabaseConfigured) {
+      setGuestbookError("게스트북을 사용하려면 Supabase 환경 변수를 설정해 주세요.");
+      return;
+    }
+
+    const draft = replyDraftByParent[parentId] ?? {
+      nickname: "",
+      content: "",
+      adminPassword: "",
+    };
+    const nickname = draft.nickname.trim();
+    const content = draft.content.trim();
+    if (!nickname || !content || replySubmittingByParent[parentId]) return;
+
+    setGuestbookError(null);
+
+    const lowered = content.toLowerCase();
+    const hasBannedWord = BANNED_WORDS.some((word) => lowered.includes(word));
+    const hasUrl = /(https?:\/\/|www\.)/i.test(content);
+    const hasRepeatedSpam = /(.)\1{6,}/.test(content);
+    const isTooManySameChars =
+      content.replace(/\s/g, "").length > 0 &&
+      new Set(content.replace(/\s/g, "")).size <= 2 &&
+      content.length > 24;
+    const lastSubmit = lastGuestSubmitRef.current;
+    const isDuplicateFastSubmit =
+      lastSubmit &&
+      lastSubmit.content === content &&
+      Date.now() - lastSubmit.at < 30_000;
+
+    if (hasBannedWord) {
+      setGuestbookError("욕설/비속어가 포함된 메시지는 등록할 수 없습니다.");
+      return;
+    }
+    if (hasUrl || hasRepeatedSpam || isTooManySameChars || isDuplicateFastSubmit) {
+      setGuestbookError("스팸으로 의심되는 메시지는 등록할 수 없습니다.");
+      return;
+    }
+
+    setReplySubmittingByParent((prev) => ({ ...prev, [parentId]: true }));
+    try {
+      const response = await fetch("/api/guestbook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nickname,
+          content,
+          parentId,
+          adminPassword: draft.adminPassword,
+        }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        entry?: GuestbookEntry;
+      };
+      if (!response.ok || !payload.entry) {
+        throw new Error(payload.error || "Failed to submit reply");
+      }
+
+      const inserted = payload.entry;
+      setGuestbookEntries((prev) =>
+        prev.some((item) => item.id === inserted.id) ? prev : [inserted, ...prev]
+      );
+      lastGuestSubmitRef.current = { content, at: Date.now() };
+      setReplyDraftByParent((prev) => ({
+        ...prev,
+        [parentId]: { nickname: "", content: "", adminPassword: "" },
+      }));
+      setActiveReplyParentId(null);
+    } catch (submitError) {
+      console.error("Failed to submit reply:", submitError);
+      setGuestbookError("답글 등록에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setReplySubmittingByParent((prev) => ({ ...prev, [parentId]: false }));
     }
   };
 
@@ -2672,6 +2799,13 @@ export default function Home() {
                   <div className="-mt-1 text-right text-[11px] text-zinc-500">
                     {guestContent.length}/{CONTENT_MAX_LENGTH}
                   </div>
+                  <input
+                    type="password"
+                    value={guestAdminPassword}
+                    onChange={(event) => setGuestAdminPassword(event.target.value)}
+                    placeholder="관리자 암호 (선택)"
+                    className="min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
+                  />
                   {guestbookError ? (
                     <p className="text-xs text-rose-400">{guestbookError}</p>
                   ) : null}
@@ -2686,21 +2820,30 @@ export default function Home() {
 
                 <div className="mt-6 space-y-3">
                   <AnimatePresence initial={false}>
-                    {guestbookEntries.map((entry) => (
+                    {threadedGuestbookEntries.map(({ parent, replies }) => (
                       <motion.article
-                        key={entry.id}
+                        key={parent.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -6 }}
                         transition={{ duration: 0.25 }}
-                        className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3"
+                        className={`rounded-xl border px-4 py-3 ${
+                          parent.is_admin
+                            ? "border-sky-400/40 bg-sky-500/10"
+                            : "border-zinc-800 bg-zinc-900/80"
+                        }`}
                       >
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-medium text-zinc-100">
-                            {entry.nickname}
+                            {parent.nickname}
+                            {parent.is_admin ? (
+                              <span className="ml-2 inline-flex items-center rounded-full bg-sky-500/20 px-2 py-0.5 text-[10px] font-semibold text-sky-300">
+                                [voto]
+                              </span>
+                            ) : null}
                           </p>
                           <p className="text-[11px] text-zinc-500">
-                            {new Date(entry.created_at).toLocaleString("ko-KR", {
+                            {new Date(parent.created_at).toLocaleString("ko-KR", {
                               month: "2-digit",
                               day: "2-digit",
                               hour: "2-digit",
@@ -2709,12 +2852,133 @@ export default function Home() {
                           </p>
                         </div>
                         <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
-                          {entry.content}
+                          {parent.content}
                         </p>
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveReplyParentId((prev) =>
+                                prev === parent.id ? null : parent.id
+                              )
+                            }
+                            className="rounded-full border border-zinc-700 px-3 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+                          >
+                            답글
+                          </button>
+                        </div>
+
+                        {activeReplyParentId === parent.id ? (
+                          <form
+                            onSubmit={(event) => void handleReplySubmit(parent.id, event)}
+                            className="mt-3 space-y-2 rounded-lg border border-zinc-800/90 bg-zinc-950/70 p-3"
+                          >
+                            <input
+                              type="text"
+                              value={replyDraftByParent[parent.id]?.nickname ?? ""}
+                              onChange={(event) =>
+                                setReplyDraftByParent((prev) => ({
+                                  ...prev,
+                                  [parent.id]: {
+                                    nickname: event.target.value,
+                                    content: prev[parent.id]?.content ?? "",
+                                    adminPassword:
+                                      prev[parent.id]?.adminPassword ?? "",
+                                  },
+                                }))
+                              }
+                              placeholder="Reply nickname"
+                              maxLength={NICKNAME_MAX_LENGTH}
+                              className="min-h-10 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
+                            />
+                            <textarea
+                              value={replyDraftByParent[parent.id]?.content ?? ""}
+                              onChange={(event) =>
+                                setReplyDraftByParent((prev) => ({
+                                  ...prev,
+                                  [parent.id]: {
+                                    nickname: prev[parent.id]?.nickname ?? "",
+                                    content: event.target.value,
+                                    adminPassword:
+                                      prev[parent.id]?.adminPassword ?? "",
+                                  },
+                                }))
+                              }
+                              placeholder="답글을 입력하세요..."
+                              maxLength={CONTENT_MAX_LENGTH}
+                              rows={3}
+                              className="min-h-20 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
+                            />
+                            <input
+                              type="password"
+                              value={replyDraftByParent[parent.id]?.adminPassword ?? ""}
+                              onChange={(event) =>
+                                setReplyDraftByParent((prev) => ({
+                                  ...prev,
+                                  [parent.id]: {
+                                    nickname: prev[parent.id]?.nickname ?? "",
+                                    content: prev[parent.id]?.content ?? "",
+                                    adminPassword: event.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder="관리자 암호 (선택)"
+                              className="min-h-10 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
+                            />
+                            <div className="flex justify-end">
+                              <button
+                                type="submit"
+                                disabled={Boolean(replySubmittingByParent[parent.id])}
+                                className="min-h-9 rounded-full bg-white/90 px-4 text-xs font-medium text-zinc-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {replySubmittingByParent[parent.id]
+                                  ? "등록 중..."
+                                  : "답글 등록"}
+                              </button>
+                            </div>
+                          </form>
+                        ) : null}
+
+                        {replies.length > 0 ? (
+                          <div className="mt-3 space-y-2">
+                            {replies.map((reply) => (
+                              <div
+                                key={reply.id}
+                                className={`ml-4 rounded-lg border px-3 py-2 ${
+                                  reply.is_admin
+                                    ? "border-sky-400/35 bg-sky-500/10"
+                                    : "border-zinc-800/80 bg-zinc-950/55"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-xs font-medium text-zinc-200">
+                                    {reply.nickname}
+                                    {reply.is_admin ? (
+                                      <span className="ml-1.5 inline-flex items-center rounded-full bg-sky-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-sky-300">
+                                        [voto]
+                                      </span>
+                                    ) : null}
+                                  </p>
+                                  <p className="text-[10px] text-zinc-500">
+                                    {new Date(reply.created_at).toLocaleString("ko-KR", {
+                                      month: "2-digit",
+                                      day: "2-digit",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </p>
+                                </div>
+                                <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-zinc-300">
+                                  {reply.content}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </motion.article>
                     ))}
                   </AnimatePresence>
-                  {guestbookEntries.length === 0 ? (
+                  {threadedGuestbookEntries.length === 0 ? (
                     <p className="text-sm text-zinc-500">
                       Be the first to leave a message.
                     </p>
