@@ -934,7 +934,7 @@ export default function Home() {
     }
 
     if (!isSupabaseConfigured) {
-      setGuestbookError("게스트북을 사용하려면 Supabase 환경 변수를 설정해 주세요.");
+      setGuestbookError("방명록을 사용하려면 Supabase 환경 변수를 설정해 주세요.");
       return;
     }
 
@@ -980,7 +980,7 @@ export default function Home() {
   ) => {
     event.preventDefault();
     if (!isSupabaseConfigured) {
-      setGuestbookError("게스트북을 사용하려면 Supabase 환경 변수를 설정해 주세요.");
+      setGuestbookError("방명록을 사용하려면 Supabase 환경 변수를 설정해 주세요.");
       return;
     }
 
@@ -2093,7 +2093,7 @@ export default function Home() {
                 className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-[#b18f00] bg-[#FFD200] px-3 py-2 text-[12px] font-bold text-black shadow-[0_6px_12px_rgba(0,0,0,0.16)] transition duration-150 active:scale-95"
               >
                 <Heart className="h-4 w-4" aria-hidden />
-                Cheers
+                방명록
               </button>
               <button
                 type="button"
@@ -2182,7 +2182,7 @@ export default function Home() {
               className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/35 bg-white/10 px-3 py-2 text-[12px] font-semibold text-white shadow-[0_8px_16px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:bg-white/20 active:scale-95"
             >
               <Heart className="h-4 w-4" aria-hidden />
-              응원메시지 남기기
+              방명록 남기기
             </button>
           </div>
 
@@ -2758,7 +2758,7 @@ export default function Home() {
                   id="guestbook-modal-title"
                   className="text-lg font-medium tracking-wide"
                 >
-                  Message for Dain
+                  방명록
                 </h3>
                 <button
                   type="button"
@@ -2773,7 +2773,7 @@ export default function Home() {
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
                 <p className="text-sm text-zinc-400">
-                  다인이에게 이쁜 응원의 말을 남겨주세요.
+                  방명록을 남겨 주세요. 다인이를 위한 응원 메시지도 환영!
                 </p>
 
                 <form onSubmit={handleGuestbookSubmit} className="mt-5 space-y-3">
@@ -2791,7 +2791,7 @@ export default function Home() {
                   <textarea
                     value={guestContent}
                     onChange={(event) => setGuestContent(event.target.value)}
-                    placeholder="Write your message..."
+                    placeholder="남기고 싶은 말"
                     maxLength={CONTENT_MAX_LENGTH}
                     rows={4}
                     className="min-h-28 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-500"
@@ -2814,7 +2814,7 @@ export default function Home() {
                     disabled={guestSubmitting}
                     className="min-h-11 rounded-full bg-white/90 px-5 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {guestSubmitting ? "Sending..." : "Send Message"}
+                    {guestSubmitting ? "남기는 중..." : "남기기"}
                   </button>
                 </form>
 
