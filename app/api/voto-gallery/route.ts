@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { DEFAULT_VOTO_CATEGORY, isVotoCategoryId } from "@/lib/voto-categories";
+import {
+  DEFAULT_VOTO_CATEGORY,
+  normalizeVotoCategoryId,
+} from "@/lib/voto-categories";
 import { fetchVotoCategoryImages } from "@/lib/voto-gallery-data";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const raw = (searchParams.get("category") ?? DEFAULT_VOTO_CATEGORY).trim().toLowerCase();
-  const category = isVotoCategoryId(raw) ? raw : DEFAULT_VOTO_CATEGORY;
+  const category = normalizeVotoCategoryId(raw) ?? DEFAULT_VOTO_CATEGORY;
 
   try {
     const images = await fetchVotoCategoryImages(category);

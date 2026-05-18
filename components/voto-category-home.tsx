@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Lightbox from "yet-another-react-lightbox";
@@ -10,6 +11,8 @@ import "yet-another-react-lightbox/styles.css";
 import {
   DEFAULT_VOTO_CATEGORY,
   VOTO_CATEGORIES,
+  getVotoCategoryUrl,
+  parseVotoCategoryFromPathSegment,
   type VotoCategoryId,
 } from "@/lib/voto-categories";
 import type { VotoImage } from "@/lib/voto-gallery-data";
@@ -29,8 +32,19 @@ import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 const BLUR_PLACEHOLDER =
   "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjMjcyNzI3Ii8+PC9zdmc+";
 
-export function VotoCategoryHome() {
-  const [category, setCategory] = useState<VotoCategoryId>(DEFAULT_VOTO_CATEGORY);
+function categoryFromPathname(pathname: string): VotoCategoryId {
+  const segment = pathname.replace(/^\/voto\/?/, "").split("/")[0] ?? "";
+  return parseVotoCategoryFromPathSegment(segment) ?? DEFAULT_VOTO_CATEGORY;
+}
+
+export function VotoCategoryHome({
+  initialCategory = DEFAULT_VOTO_CATEGORY,
+}: {
+  initialCategory?: VotoCategoryId;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [category, setCategory] = useState<VotoCategoryId>(initialCategory);
   const [images, setImages] = useState<VotoImage[]>([]);
   const [sortOrder, setSortOrder] = useState<"latest" | "oldest">("latest");
   const [loading, setLoading] = useState(true);
@@ -148,6 +162,22 @@ export function VotoCategoryHome() {
   }, [category, loadCategory]);
 
   useEffect(() => {
+    const fromUrl = categoryFromPathname(pathname);
+    setCategory((prev) => (prev === fromUrl ? prev : fromUrl));
+  }, [pathname]);
+
+  const selectCategory = useCallback(
+    (next: VotoCategoryId) => {
+      setCategory(next);
+      const target = getVotoCategoryUrl(next);
+      if (pathname !== target) {
+        router.replace(target, { scroll: false });
+      }
+    },
+    [pathname, router]
+  );
+
+  useEffect(() => {
     setSearchQuery("");
     setHighlightIndex(-1);
     setDropdownOpen(false);
@@ -230,7 +260,7 @@ export function VotoCategoryHome() {
               Voto Photo
             </h1>
             <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-200/90">
-              4 categories
+              3 categories
             </span>
           </div>
           <nav className="flex flex-wrap gap-2" aria-label="카테고리">
@@ -238,7 +268,7 @@ export function VotoCategoryHome() {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setCategory(tab.id)}
+                onClick={() => selectCategory(tab.id)}
                 className={`min-h-9 touch-manipulation rounded-full border px-3.5 py-1.5 text-xs font-semibold transition sm:text-sm ${
                   category === tab.id
                     ? "border-amber-400/80 bg-amber-400/15 text-amber-100"
@@ -254,7 +284,7 @@ export function VotoCategoryHome() {
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         <p className="mb-6 max-w-2xl text-sm leading-relaxed text-zinc-400">
-          현대건설 · 팀코리아 · 브이리그 · 실업배구 — 각 드라이브 폴더와 그 안의 하위 폴더까지 사진을 모읍니다. 썸네일은 Google Drive에서 직접 제공되며
+          현대건설 · 팀코리아 · 여자배구(브이리그·실업배구) — 각 드라이브 폴더와 그 안의 하위 폴더까지 사진을 모읍니다. 썸네일은 Google Drive에서 직접 제공되며
           Vercel 이미지 최적화는 사용하지 않습니다.
         </p>
         <p className="mb-5 text-xs text-amber-200/85">

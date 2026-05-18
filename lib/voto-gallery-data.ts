@@ -140,6 +140,9 @@ function buildSmartTags(
   pushTag(dateToken);
   if (categoryId === "hyundai") {
     pushTag("현대건설");
+  } else if (categoryId === "women_volleyball") {
+    pushTag("여자배구");
+    pushTag(team);
   } else {
     pushTag(team);
   }
@@ -217,11 +220,15 @@ function mapRow(file: DriveFileRow, categoryId: VotoCategoryId): VotoImage {
   };
 }
 
-function resolveFolderId(categoryId: VotoCategoryId): string | null {
+function resolveFolderIds(categoryId: VotoCategoryId): string[] {
   const row = VOTO_CATEGORIES.find((c) => c.id === categoryId);
-  if (!row) return null;
-  const id = process.env[row.envKey]?.trim();
-  return id && id.length > 0 ? id : null;
+  if (!row) return [];
+  const ids: string[] = [];
+  for (const envKey of row.envKeys) {
+    const id = process.env[envKey]?.trim();
+    if (id) ids.push(id);
+  }
+  return ids;
 }
 
 async function driveListAll<T>(apiKey: string, query: string, fields: string): Promise<T[]> {
@@ -303,16 +310,24 @@ export async function fetchVotoCategoryImages(categoryId: VotoCategoryId): Promi
   if (!apiKey) {
     throw new Error("NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY is not set.");
   }
-  const folderId = resolveFolderId(categoryId);
-  if (!folderId) {
+  const folderIds = resolveFolderIds(categoryId);
+  if (folderIds.length === 0) {
     const row = VOTO_CATEGORIES.find((c) => c.id === categoryId);
+    const envHint = row?.envKeys.join(", ") ?? "VOTO_DRIVE_FOLDER_*";
     throw new Error(
-      `Folder ID for "${row?.label ?? categoryId}" is not configured. Set ${row?.envKey} in the server environment.`
+      `Folder ID for "${row?.label ?? categoryId}" is not configured. Set ${envHint} in the server environment.`
     );
   }
 
-  const rows = await listAllImagesUnderFolder(folderId, apiKey);
-  return rows
+  const uniqueFiles = new Map<string, DriveFileRow>();
+  for (const folderId of folderIds) {
+    const rows = await listAllImagesUnderFolder(folderId, apiKey);
+    for (const file of rows) {
+      uniqueFiles.set(file.id, file);
+    }
+  }
+
+  return Array.from(uniqueFiles.values())
     .map((f) => mapRow(f, categoryId))
     .sort((a, b) => {
       if (b.sortTimeMs !== a.sortTimeMs) return b.sortTimeMs - a.sortTimeMs;
