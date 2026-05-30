@@ -25,6 +25,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
   Calendar,
+  ClipboardList,
   Heart,
   Instagram,
   LayoutGrid,
@@ -2235,6 +2236,7 @@ export default function Home() {
           </div>
           <GalleryChangelog />
           <a href="/schedule" className="text-xs text-zinc-400 transition hover:text-zinc-700 underline-offset-2 hover:underline">배구 일정</a>
+          <a href="/records" className="text-xs text-zinc-400 transition hover:text-zinc-700 underline-offset-2 hover:underline">경기 기록</a>
         </div>
         <div aria-hidden className="hidden h-6 w-16 shrink-0 sm:block" />
       </header>
@@ -3225,6 +3227,13 @@ export default function Home() {
       </div>
 
       <div className="fixed bottom-5 left-5 z-40 flex flex-col items-start gap-4">
+        <Link
+          href="/records"
+          aria-label="경기 기록"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#00287A]/20 bg-white/90 text-[#00287A] shadow-[0_6px_16px_rgba(0,40,122,0.18)] backdrop-blur-md transition hover:bg-white active:scale-95"
+        >
+          <ClipboardList className="h-5 w-5" aria-hidden />
+        </Link>
         <div ref={quizWrapRef} className="relative flex flex-col items-start">
           <AnimatePresence>
             {quizBubbleOpen ? (
