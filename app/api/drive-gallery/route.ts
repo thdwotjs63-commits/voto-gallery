@@ -5,7 +5,10 @@ export const revalidate = 300;
 
 export async function GET() {
   try {
-    const images = await fetchDriveGalleryImages();
+    const selfieFolderId = process.env.NEXT_PUBLIC_SELFIE_FOLDER_ID?.trim();
+    const images = await fetchDriveGalleryImages(undefined, {
+      excludeFolderIds: selfieFolderId ? [selfieFolderId] : [],
+    });
     return NextResponse.json(images);
   } catch (error) {
     const message =

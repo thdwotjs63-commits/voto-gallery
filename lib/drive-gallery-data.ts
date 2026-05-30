@@ -32,10 +32,12 @@ export type DriveImage = {
   height: number;
 };
 
-const REQUIRED_ENV_KEYS = [
-  "NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY",
-  "NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_ID",
-] as const;
+type FetchDriveGalleryImagesOptions = {
+  excludeFolderIds?: string[];
+};
+
+const GOOGLE_DRIVE_API_KEY_ENV_KEY = "NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY";
+const GOOGLE_DRIVE_FOLDER_ID_ENV_KEY = "NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_ID";
 
 function extractHashtags(text: string): string[] {
   const matches = text.match(/#[\p{L}\p{N}_-]+/gu) ?? [];
@@ -165,12 +167,26 @@ function mapDriveFileRowToImage(file: DriveFileRow): DriveImage {
   };
 }
 
-export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY;
-  const folderId = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_ID;
+export async function fetchDriveGalleryImages(
+  folderId?: string,
+  options?: FetchDriveGalleryImagesOptions
+): Promise<DriveImage[]> {
+  const apiKey = process.env[GOOGLE_DRIVE_API_KEY_ENV_KEY];
+  const driveFolderId =
+    folderId === undefined
+      ? process.env[GOOGLE_DRIVE_FOLDER_ID_ENV_KEY]
+      : folderId.trim();
+  const excludedFolderIds = new Set(
+    (options?.excludeFolderIds ?? []).map((id) => id.trim()).filter(Boolean)
+  );
 
-  if (!apiKey || !folderId) {
-    const missing = REQUIRED_ENV_KEYS.filter((k) => !process.env[k]);
+  if (!apiKey || !driveFolderId) {
+    const missing = [
+      ...(!apiKey ? [GOOGLE_DRIVE_API_KEY_ENV_KEY] : []),
+      ...(!driveFolderId
+        ? [folderId === undefined ? GOOGLE_DRIVE_FOLDER_ID_ENV_KEY : "folderId"]
+        : []),
+    ];
     throw new Error(
       `Missing environment variables: ${
         missing.length > 0 ? missing.join(", ") : "unknown"
@@ -179,7 +195,6 @@ export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
   }
 
   const driveApiKey = apiKey;
-  const driveFolderId = folderId;
 
   async function fetchFiles<T>(query: string, fields: string): Promise<T[]> {
     let pageToken: string | undefined;
@@ -256,6 +271,7 @@ export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
     const current = queue.shift();
     if (!current) break;
     const { id: currentFolderId, name: currentFolderName } = current;
+    if (excludedFolderIds.has(currentFolderId)) continue;
     if (visitedFolderIds.has(currentFolderId)) continue;
     visitedFolderIds.add(currentFolderId);
 
@@ -278,6 +294,7 @@ export async function fetchDriveGalleryImages(): Promise<DriveImage[]> {
     ]);
 
     for (const folder of subfolders) {
+      if (excludedFolderIds.has(folder.id)) continue;
       queue.push({ id: folder.id, name: folder.name ?? "" });
     }
 
