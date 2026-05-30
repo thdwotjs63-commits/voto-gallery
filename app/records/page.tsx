@@ -98,6 +98,15 @@ export default function RecordsPage() {
   const [teamFilter, setTeamFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -198,6 +207,20 @@ export default function RecordsPage() {
     [isAllTeams, totals]
   );
 
+  const rateTicks = isMobile ? [0, 30, 60] : [0, 15, 30, 45, 60];
+  const countTicks = useMemo(() => {
+    if (!isMobile) return countAxis.ticks;
+    if (isAllTeams) return countAxis.ticks.filter((_, i) => i % 2 === 0 || i === countAxis.ticks.length - 1);
+    const max = Math.max(...countAxis.ticks);
+    if (max <= 20) return countAxis.ticks.filter((v) => v % 5 === 0 || v === max);
+    return countAxis.ticks.filter((_, i) => i % 2 === 0 || i === countAxis.ticks.length - 1);
+  }, [countAxis.ticks, isMobile, isAllTeams]);
+
+  const formatCountTick = (v: number) => {
+    if (isAllTeams && isMobile && v >= 1000) return `${Math.round(v / 1000)}k`;
+    return Number(v).toLocaleString("ko-KR");
+  };
+
   return (
     <div className="min-h-screen bg-white text-zinc-900 [color-scheme:light]">
       <header className="mx-auto flex max-w-[1100px] items-start justify-between gap-4 px-4 py-5 sm:items-center sm:px-8 sm:py-6">
@@ -249,39 +272,82 @@ export default function RecordsPage() {
                   ))}
                 </div>
 
-                <div className="mb-8 rounded-xl border border-zinc-200 bg-white p-4">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">경기별 추이</p>
-                  <div style={{ width: "100%", height: 240 }}>
-                    <ResponsiveContainer>
-                      <LineChart data={chartData} margin={{ top: 5, right: 16, left: 4, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#52525b" }} />
+                <div className="-mx-1 mb-8 rounded-xl border border-zinc-200 bg-white p-3 sm:mx-0 sm:p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">경기별 추이</p>
+                    <div className="flex flex-wrap gap-3 text-[10px] text-zinc-600 sm:text-[11px]">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="h-0.5 w-4 rounded bg-[#00287A] sm:h-1" aria-hidden />
+                        세트성공률
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="h-0.5 w-4 rounded bg-[#0E7490] sm:h-1" aria-hidden />
+                        {isAllTeams ? "세트성공수" : "세트평균"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-[min(72vw,22rem)] min-h-[17.5rem] sm:h-64 sm:min-h-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={chartData}
+                        margin={
+                          isMobile
+                            ? { top: 12, right: 4, left: -8, bottom: chartData.length > 6 ? 28 : 8 }
+                            : { top: 5, right: 16, left: 4, bottom: 5 }
+                        }
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: isMobile ? 10 : 11, fill: "#52525b" }}
+                          interval={isMobile && chartData.length > 5 ? "preserveStartEnd" : 0}
+                          angle={isMobile && chartData.length > 5 ? -35 : 0}
+                          textAnchor={isMobile && chartData.length > 5 ? "end" : "middle"}
+                          height={isMobile && chartData.length > 5 ? 48 : 30}
+                        />
                         <YAxis
                           yAxisId="rate"
+                          width={isMobile ? 36 : 44}
                           domain={[0, 60]}
-                          ticks={[0, 15, 30, 45, 60]}
-                          tick={{ fontSize: 11, fill: "#00287A" }}
+                          ticks={rateTicks}
+                          tick={{ fontSize: isMobile ? 10 : 11, fill: "#00287A" }}
                           tickFormatter={(v) => `${v}%`}
                         />
                         <YAxis
                           yAxisId="count"
                           orientation="right"
+                          width={isMobile ? 32 : 48}
                           domain={countAxis.domain}
-                          ticks={countAxis.ticks}
-                          tick={{ fontSize: 11, fill: "#0E7490" }}
-                          tickFormatter={(v) =>
-                            isAllTeams ? v.toLocaleString("ko-KR") : Number(v).toLocaleString("ko-KR")
-                          }
+                          ticks={countTicks}
+                          tick={{ fontSize: isMobile ? 10 : 11, fill: "#0E7490" }}
+                          tickFormatter={formatCountTick}
                         />
                         <Tooltip
+                          contentStyle={{ fontSize: isMobile ? 12 : 13, borderRadius: 8 }}
                           formatter={(value, name) => {
                             if (name === "세트성공률") return [`${value ?? "-"}%`, name];
                             if (name === "세트평균") return [value ?? "-", "세트당 평균"];
-                            return [value ?? "-", name];
+                            return [typeof value === "number" ? value.toLocaleString("ko-KR") : value ?? "-", name];
                           }}
                         />
-                        <Line yAxisId="rate" type="monotone" dataKey="세트성공률" stroke="#00287A" strokeWidth={2} dot={{ r: 3 }} />
-                        <Line yAxisId="count" type="monotone" dataKey={chartSecondaryKey} stroke="#0E7490" strokeWidth={2} dot={{ r: 3 }} />
+                        <Line
+                          yAxisId="rate"
+                          type="monotone"
+                          dataKey="세트성공률"
+                          stroke="#00287A"
+                          strokeWidth={isMobile ? 2.5 : 2}
+                          dot={{ r: isMobile ? 4 : 3, strokeWidth: 1.5 }}
+                          activeDot={{ r: isMobile ? 6 : 5 }}
+                        />
+                        <Line
+                          yAxisId="count"
+                          type="monotone"
+                          dataKey={chartSecondaryKey}
+                          stroke="#0E7490"
+                          strokeWidth={isMobile ? 2.5 : 2}
+                          dot={{ r: isMobile ? 4 : 3, strokeWidth: 1.5 }}
+                          activeDot={{ r: isMobile ? 6 : 5 }}
+                        />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
