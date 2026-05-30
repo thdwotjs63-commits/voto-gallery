@@ -24,6 +24,7 @@ import "swiper/css/pagination";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
+  Calendar,
   Heart,
   Instagram,
   LayoutGrid,
@@ -2095,6 +2096,13 @@ export default function Home() {
                 <Heart className="h-4 w-4" aria-hidden />
                 방명록
               </button>
+              <Link
+                href="/schedule"
+                className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-[#b18f00] bg-[#FFD200] px-3 py-2 text-[12px] font-bold text-black shadow-[0_6px_12px_rgba(0,0,0,0.16)] transition duration-150 active:scale-95"
+              >
+                <Calendar className="h-4 w-4" aria-hidden />
+                배구 스케줄
+              </Link>
               <button
                 type="button"
                 onClick={handleViewModeToggle}
@@ -2184,6 +2192,13 @@ export default function Home() {
               <Heart className="h-4 w-4" aria-hidden />
               방명록 남기기
             </button>
+            <Link
+              href="/schedule"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/35 bg-white/10 px-3 py-2 text-[12px] font-semibold text-white shadow-[0_8px_16px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:bg-white/20 active:scale-95"
+            >
+              <Calendar className="h-4 w-4" aria-hidden />
+              배구 스케줄
+            </Link>
           </div>
 
           <p className="mt-6 text-[11px] tracking-[0.2em] text-zinc-300 sm:text-xs">
@@ -2219,6 +2234,7 @@ export default function Home() {
             voto gallery
           </div>
           <GalleryChangelog />
+          <a href="/schedule" className="text-xs text-zinc-400 transition hover:text-zinc-700 underline-offset-2 hover:underline">배구 일정</a>
         </div>
         <div aria-hidden className="hidden h-6 w-16 shrink-0 sm:block" />
       </header>
