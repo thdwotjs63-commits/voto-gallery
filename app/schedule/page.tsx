@@ -87,6 +87,10 @@ export default function SchedulePage() {
   }, []);
 
   useEffect(() => {
+    setSelectedDate(null);
+  }, [teamQuery, activeCategory]);
+
+  useEffect(() => {
     let mounted = true;
     fetch("/api/schedule")
       .then((res) => res.json())
@@ -147,6 +151,10 @@ export default function SchedulePage() {
         ? daySchedules
         : daySchedules.filter((d) => d.date.startsWith(monthPrefix)),
     [daySchedules, teamQuery, monthPrefix]
+  );
+  const hasCalendarMatchesInMonth = useMemo(
+    () => calendarCells.some(({ date, inMonth }) => inMonth && dayMap.has(ymd(date))),
+    [calendarCells, dayMap]
   );
   const allDaySchedules = useMemo(() => groupByDate(matches), [matches]);
 
@@ -228,6 +236,36 @@ export default function SchedulePage() {
           </div>
         ) : null}
 
+        {!loading && !error ? (
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1 sm:max-w-xs">
+              <Search className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="search"
+                value={teamQuery}
+                onChange={(e) => setTeamQuery(e.target.value)}
+                placeholder="팀명 검색 (예: 현대)"
+                className="w-full rounded-lg border border-zinc-200 bg-white py-2.5 pr-8 pl-9 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-[#00287A] focus:outline-none"
+              />
+              {teamQuery ? (
+                <button
+                  type="button"
+                  aria-label="검색어 지우기"
+                  onClick={() => setTeamQuery("")}
+                  className="absolute top-1/2 right-2 -translate-y-1/2 text-zinc-500 hover:text-zinc-800"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+            {teamQuery.trim() ? (
+              <span className="shrink-0 text-[11px] text-zinc-500">
+                {view === "calendar" ? "전체 기간 · 달을 이동해 확인하세요" : "전체 기간 검색"}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
         {loading ? (
           <p className="text-sm text-zinc-500">Loading...</p>
         ) : error ? (
@@ -265,6 +303,14 @@ export default function SchedulePage() {
               })}
             </div>
 
+            {!hasCalendarMatchesInMonth ? (
+              <p className="mt-3 text-sm text-zinc-500">
+                {teamQuery.trim()
+                  ? `"${teamQuery.trim()}" 검색 결과가 이번 달에는 없습니다. 다른 달을 확인해 보세요.`
+                  : "이번 달 일정이 없습니다."}
+              </p>
+            ) : null}
+
             {selectedDay ? (
               <div className="mt-4 rounded-xl bg-zinc-50 p-4">
                 <div className="mb-3 flex items-center justify-between">
@@ -294,34 +340,8 @@ export default function SchedulePage() {
             ) : null}
           </>
         ) : (
-          <>
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="relative min-w-0 flex-1 sm:max-w-xs">
-                <Search className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
-                <input
-                  type="search"
-                  value={teamQuery}
-                  onChange={(e) => setTeamQuery(e.target.value)}
-                  placeholder="팀명 검색 (예: 현대)"
-                  className="w-full rounded-lg border border-zinc-200 bg-white py-2.5 pr-8 pl-9 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-[#00287A] focus:outline-none"
-                />
-                {teamQuery ? (
-                  <button
-                    type="button"
-                    aria-label="검색어 지우기"
-                    onClick={() => setTeamQuery("")}
-                    className="absolute top-1/2 right-2 -translate-y-1/2 text-zinc-500 hover:text-zinc-800"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                ) : null}
-              </div>
-              {teamQuery.trim() ? (
-                <span className="shrink-0 text-[11px] text-zinc-500">전체 기간 검색</span>
-              ) : null}
-            </div>
-            <div className="space-y-6 sm:space-y-8">
-              {listDays.map((day) => (
+          <div className="space-y-6 sm:space-y-8">
+            {listDays.map((day) => (
                 <section key={day.date}>
                   <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                     <span className="text-base font-medium text-zinc-900">{day.date}</span>
@@ -354,8 +374,7 @@ export default function SchedulePage() {
                   {teamQuery.trim() ? `"${teamQuery.trim()}" 검색 결과가 없습니다.` : "이번 달 일정이 없습니다."}
                 </p>
               ) : null}
-            </div>
-          </>
+          </div>
         )}
       </main>
     </div>
