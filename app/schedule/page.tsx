@@ -33,6 +33,20 @@ function weekdayClass(dateStr: string): string {
   return "text-zinc-500";
 }
 
+function needsIosSafariTip(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  const isIOS =
+    /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (!isIOS) return false;
+  const isOtherBrowser = /CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  const isInAppBrowser =
+    /(KAKAOTALK|Instagram|FBAN|FBAV|Line\/|Twitter|DaumApps|NAVER)/i.test(ua);
+  const isSafari = /Safari/.test(ua) && !isOtherBrowser && !isInAppBrowser;
+  return !isSafari;
+}
+
 function MatchLine({ m, inheritColor = false }: { m: Match; inheritColor?: boolean }) {
   const winnerClass = inheritColor ? "font-semibold" : "font-medium text-zinc-900";
   const mutedClass = inheritColor ? "opacity-65" : "text-zinc-500";
@@ -66,14 +80,10 @@ export default function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [view, setView] = useState<"calendar" | "list">("calendar");
   const [teamQuery, setTeamQuery] = useState("");
+  const [showIosSafariTip, setShowIosSafariTip] = useState(false);
 
   useEffect(() => {
-    const syncMobileView = () => {
-      if (window.innerWidth < 640) setView("list");
-    };
-    syncMobileView();
-    window.addEventListener("resize", syncMobileView);
-    return () => window.removeEventListener("resize", syncMobileView);
+    setShowIosSafariTip(needsIosSafariTip());
   }, []);
 
   useEffect(() => {
@@ -178,7 +188,7 @@ export default function SchedulePage() {
             <span className="min-w-[7.5rem] text-center text-base font-medium text-zinc-900">{monthLabel}</span>
             <button type="button" aria-label="다음 달" onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))} className="rounded-lg border border-zinc-200 p-2 text-zinc-700 hover:bg-zinc-50"><ChevronRight className="h-4 w-4" /></button>
           </div>
-          <div className="hidden gap-1.5 sm:flex">
+          <div className="flex justify-center gap-1.5 sm:justify-end">
             <button type="button" onClick={() => setView("calendar")} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition ${view === "calendar" ? "bg-[#00287A] text-white" : "border border-zinc-200 text-zinc-700 hover:bg-zinc-50"}`}><CalendarIcon className="h-3.5 w-3.5" /> 달력</button>
             <button type="button" onClick={() => setView("list")} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition ${view === "list" ? "bg-[#00287A] text-white" : "border border-zinc-200 text-zinc-700 hover:bg-zinc-50"}`}><ListIcon className="h-3.5 w-3.5" /> 리스트</button>
           </div>
@@ -198,7 +208,15 @@ export default function SchedulePage() {
 
         {!loading && !error && matches.length > 0 ? (
           <div className="mb-5 flex flex-col gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-zinc-700">모든 배구 일정을 캘린더 앱에 한 번에 추가할 수 있어요.</p>
+            <div className="space-y-1.5">
+              <p className="text-xs text-zinc-700">모든 배구 일정을 캘린더 앱에 한 번에 추가할 수 있어요.</p>
+              {showIosSafariTip ? (
+                <p className="text-[11px] leading-relaxed text-zinc-600">
+                  아이폰에서는 <span className="font-medium text-zinc-800">Safari</span>로 이 페이지에 접속하면 캘린더 추가가 더 쉬워요.
+                  카카오톡·인스타 등 앱 안에서 열면 저장이 잘 안 될 수 있어요.
+                </p>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={handleSaveAllToCalendar}
@@ -225,14 +243,14 @@ export default function SchedulePage() {
                 const day = dayMap.get(key);
                 const isSelected = selectedDate === key;
                 return (
-                  <button key={key} type="button" onClick={() => day && setSelectedDate(isSelected ? null : key)} className={`min-h-[100px] rounded-md border bg-white p-1.5 text-left align-top text-xs text-zinc-900 ${isSelected ? "border-[1.5px] border-[#00287A]" : "border-zinc-200"} ${day ? "cursor-pointer hover:bg-zinc-50" : "cursor-default"}`}>
-                    <span className={`block text-[11px] font-medium ${inMonth ? "text-zinc-800" : "text-zinc-400"}`}>{date.getDate()}</span>
+                  <button key={key} type="button" onClick={() => day && setSelectedDate(isSelected ? null : key)} className={`min-h-[4.5rem] rounded-md border bg-white p-1 text-left align-top text-xs text-zinc-900 sm:min-h-[100px] sm:p-1.5 ${isSelected ? "border-[1.5px] border-[#00287A]" : "border-zinc-200"} ${day ? "cursor-pointer hover:bg-zinc-50" : "cursor-default"}`}>
+                    <span className={`block text-[10px] font-medium sm:text-[11px] ${inMonth ? "text-zinc-800" : "text-zinc-400"}`}>{date.getDate()}</span>
                     {day?.groups.map((g, i) => {
                       const s = catStyle(g.category);
                       return (
-                        <div key={i} className="mt-1 rounded px-1 py-1 text-[9px] leading-snug" style={{ background: s.bg, color: s.text }}>
-                          <div className="font-medium leading-tight">{g.tournament}</div>
-                          <div className="mt-0.5 flex flex-col gap-0.5">
+                        <div key={i} className="mt-0.5 rounded px-0.5 py-0.5 text-[8px] leading-snug sm:mt-1 sm:px-1 sm:py-1 sm:text-[9px]" style={{ background: s.bg, color: s.text }}>
+                          <div className="line-clamp-2 font-medium leading-tight sm:line-clamp-none">{g.tournament}</div>
+                          <div className="mt-0.5 hidden flex-col gap-0.5 sm:flex">
                             {g.matches.map((m, j) => (
                               <div key={j} className="leading-tight">
                                 <MatchLine m={m} inheritColor />
