@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus, ExternalLink } from "lucide-react";
 import { groupByDate, buildTournamentICS, buildAllScheduleICS, type Match, type DaySchedule } from "@/lib/schedule-data";
 
 const CATEGORY_STYLE: Record<string, { bg: string; text: string; label: string }> = {
@@ -67,6 +67,33 @@ function MatchLine({ m, inheritColor = false }: { m: Match; inheritColor?: boole
       )}
       {m.round ? <span className={mutedClass}> ({m.round})</span> : null}
     </span>
+  );
+}
+
+function BroadcastLink({ url, compact = false }: { url: string; compact?: boolean }) {
+  if (!url) return null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full bg-[#00287A] text-white transition hover:opacity-90 ${compact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]"}`}
+    >
+      <ExternalLink className={compact ? "h-3 w-3" : "h-3 w-3"} />
+      {compact ? "중계" : "중계 바로가기"}
+    </a>
+  );
+}
+
+function MatchRow({ m, inheritColor = false, compact = false }: { m: Match; inheritColor?: boolean; compact?: boolean }) {
+  return (
+    <div className={`flex items-start gap-2 ${m.url ? "justify-between" : ""}`}>
+      <div className="flex min-w-0 flex-1 items-start gap-1">
+        <Clock className={`mt-0.5 shrink-0 text-zinc-500 ${compact ? "h-3 w-3" : "h-3.5 w-3.5"}`} />
+        <MatchLine m={m} inheritColor={inheritColor} />
+      </div>
+      <BroadcastLink url={m.url} compact={compact} />
+    </div>
   );
 }
 
@@ -292,6 +319,11 @@ export default function SchedulePage() {
                             {g.matches.map((m, j) => (
                               <div key={j} className="leading-tight">
                                 <MatchLine m={m} inheritColor />
+                                {m.url ? (
+                                  <div className="mt-0.5">
+                                    <BroadcastLink url={m.url} compact />
+                                  </div>
+                                ) : null}
                               </div>
                             ))}
                           </div>
@@ -330,7 +362,7 @@ export default function SchedulePage() {
                         <button type="button" onClick={() => handleSaveToCalendar(g, selectedDay.date)} className="mb-2 inline-flex items-center gap-1 rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-700 transition hover:bg-zinc-100"><CalendarPlus className="h-3 w-3" /> 내 캘린더에 저장</button>
                         <div className="text-xs leading-relaxed text-zinc-700">
                           {g.venue ? (<div className="mb-1 flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {g.venue}{g.matches[0]?.court ? ` ${g.matches[0].court}` : ""}</div>) : null}
-                          {g.matches.map((m, j) => (<div key={j} className="flex items-start gap-1"><Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" /><MatchLine m={m} /></div>))}
+                          {g.matches.map((m, j) => (<MatchRow key={j} m={m} />))}
                         </div>
                       </div>
                     );
@@ -361,7 +393,7 @@ export default function SchedulePage() {
                           <button type="button" onClick={() => handleSaveToCalendar(g, day.date)} className="mb-2 inline-flex items-center gap-1 rounded-full border border-zinc-200 px-2.5 py-1.5 text-[11px] text-zinc-700 transition hover:bg-zinc-100"><CalendarPlus className="h-3 w-3" /> 내 캘린더에 저장</button>
                           <div className="text-xs leading-relaxed text-zinc-700">
                             {g.venue ? (<div className="mb-1 flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {g.venue}</div>) : null}
-                            {g.matches.map((m, j) => (<div key={j} className="flex items-start gap-1"><Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" /><MatchLine m={m} /></div>))}
+                            {g.matches.map((m, j) => (<MatchRow key={j} m={m} />))}
                           </div>
                         </div>
                       );

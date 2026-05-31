@@ -49,16 +49,21 @@ function parseSetSuccessCount(v: string): number | null {
   return toNum(t);
 }
 
+function splitNote(note: string): { homeAway: string; note: string } {
+  if (note === "홈" || note === "원정") return { homeAway: note, note: "" };
+  const match = note.match(/^(홈|원정)(?:\s*[·|,]\s*|\s+)(.+)$/);
+  if (match) return { homeAway: match[1], note: match[2].trim() };
+  return { homeAway: "", note };
+}
+
 function parseHomeAway(row: RawRow, note: string): string {
   const dedicated = (row.home_away ?? "").trim();
   if (dedicated === "홈" || dedicated === "원정") return dedicated;
-  if (note === "홈" || note === "원정") return note;
-  return "";
+  return splitNote(note).homeAway;
 }
 
 function parseNote(note: string): string {
-  if (note === "홈" || note === "원정") return "";
-  return note;
+  return splitNote(note).note;
 }
 
 function mapRow(row: RawRow): PlayerRecord {
@@ -102,8 +107,8 @@ export function parseRecordsSheetsEnv(raw: string | undefined): { name: string; 
 export function buildSheetCsvUrl(baseCsvUrl: string, gid: string): string {
   const url = new URL(baseCsvUrl);
   url.searchParams.set("gid", gid);
-  url.searchParams.set("single", "true");
   url.searchParams.set("output", "csv");
+  url.searchParams.delete("single");
   return url.toString();
 }
 
@@ -111,6 +116,8 @@ export async function fetchRecords(csvUrl: string): Promise<PlayerRecord[]> {
   const res = await fetch(csvUrl, { next: { revalidate: 300 } });
   if (!res.ok) throw new Error(`Records CSV fetch failed (${res.status})`);
   const text = await res.text();
+  if (/^\s*</.test(text)) throw new Error("Records CSV fetch failed (invalid response)");
+  if (!text.trim()) return [];
   const parsed = Papa.parse<RawRow>(text, { header: true, skipEmptyLines: true });
   return (parsed.data ?? [])
     .map(mapRow)
@@ -128,14 +135,17 @@ export async function fetchAllRecordsSheets(
   }
 
   const sheets = await Promise.all(
-    sheetsConfig.map(async ({ name, gid }) => ({
-      id: gid,
-      name,
-      records: await fetchRecords(buildSheetCsvUrl(baseCsvUrl, gid)),
-    }))
+    sheetsConfig.map(async ({ name, gid }) => {
+      try {
+        const records = await fetchRecords(buildSheetCsvUrl(baseCsvUrl, gid));
+        return { id: gid, name, records };
+      } catch {
+        return { id: gid, name, records: [] };
+      }
+    })
   );
 
-  return sheets.filter((sheet) => sheet.records.length > 0 || sheetsConfig.length === 1);
+  return sheets;
 }
 
 export function parsePercent(v: string): number | null {
@@ -179,4 +189,63 @@ export function displayRecordValue(v: string | number | null | undefined): strin
   if (v === null || v === undefined) return "-";
   if (typeof v === "string" && !v.trim()) return "-";
   return String(v);
+}
+
+export type RecordMoment = {
+  emoji: string;
+  label: string;
+  tone: "amber" | "rose" | "sky" | "violet";
+};
+
+const PANGPANG_PLAYER_DATES = new Set([
+  "2021-10-20",
+  "2021-12-17",
+  "2022-01-07",
+  "2022-12-08",
+  "2023-11-23",
+  "2024-01-05",
+  "2024-01-31",
+  "2024-10-23",
+  "2025-11-22",
+  "2025-12-06",
+  "2025-12-25",
+  "2026-02-13",
+]);
+
+const RECORD_MOMENT_RULES: {
+  match: (r: PlayerRecord) => boolean;
+  moment: RecordMoment;
+}[] = [
+  {
+    match: (r) => r.note.includes("커피") || r.date === "2026-03-05",
+    moment: { emoji: "☕", label: "커피차 역조공", tone: "amber" },
+  },
+  {
+    match: (r) => r.note.includes("팬사인") || r.date === "2026-03-08",
+    moment: { emoji: "✍️", label: "팬사인회", tone: "rose" },
+  },
+  {
+    match: (r) => r.note.includes("팡팡") || PANGPANG_PLAYER_DATES.has(r.date),
+    moment: { emoji: "👏", label: "팡팡플레이어", tone: "sky" },
+  },
+  {
+    match: (r) => r.note.includes("3R MVP") || r.date === "2025-12-31",
+    moment: { emoji: "🏆", label: "3R MVP", tone: "violet" },
+  },
+];
+
+export function getRecordMoments(r: PlayerRecord): RecordMoment[] {
+  return RECORD_MOMENT_RULES.filter((rule) => rule.match(r)).map((rule) => rule.moment);
+}
+
+export function getRecordMoment(r: PlayerRecord): RecordMoment | null {
+  return getRecordMoments(r)[0] ?? null;
+}
+
+export function getLatestSetSuccessCountTotal(records: PlayerRecord[]): number | null {
+  const latest = records
+    .filter((r) => isPlayedRecord(r) && r.setSuccessCountTotal != null)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .at(-1);
+  return latest?.setSuccessCountTotal ?? null;
 }

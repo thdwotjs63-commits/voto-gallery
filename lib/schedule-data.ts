@@ -13,6 +13,7 @@ export type Match = {
   note: string;
   scoreA: string;
   scoreB: string;
+  url: string;
 };
 
 export type TournamentGroup = {
@@ -49,6 +50,7 @@ export async function fetchSchedule(csvUrl: string): Promise<Match[]> {
       note: (row.note ?? "").trim(),
       scoreA: (row.score_a ?? "").trim(),
       scoreB: (row.score_b ?? "").trim(),
+      url: (row.url ?? "").trim(),
     }))
     .filter((m) => m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date));
 }

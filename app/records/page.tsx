@@ -8,9 +8,12 @@ import {
   averagePercent,
   displayRecordValue,
   formatRate,
+  getLatestSetSuccessCountTotal,
+  getRecordMoments,
   isPlayedRecord,
   parsePercent,
   type PlayerRecord,
+  type RecordMoment,
   type RecordsSheet,
 } from "@/lib/records-data";
 
@@ -89,6 +92,20 @@ function cellValue(r: PlayerRecord, key: (typeof TABLE_COLUMNS)[number]["key"]):
     default:
       return "-";
   }
+}
+
+function momentRowClass(tone: RecordMoment["tone"]): string {
+  if (tone === "rose") return "bg-rose-50/80 text-rose-950";
+  if (tone === "sky") return "bg-sky-50/80 text-sky-950";
+  if (tone === "violet") return "bg-violet-50/80 text-violet-950";
+  return "bg-amber-50/80 text-amber-950";
+}
+
+function momentBadgeClass(tone: RecordMoment["tone"]): string {
+  if (tone === "rose") return "bg-rose-100 text-rose-900 ring-rose-200/80";
+  if (tone === "sky") return "bg-sky-100 text-sky-900 ring-sky-200/80";
+  if (tone === "violet") return "bg-violet-100 text-violet-900 ring-violet-200/80";
+  return "bg-amber-100 text-amber-900 ring-amber-200/80";
 }
 
 export default function RecordsPage() {
@@ -221,12 +238,25 @@ export default function RecordsPage() {
     return Number(v).toLocaleString("ko-KR");
   };
 
+  const currentSetSuccessCount = useMemo(
+    () => getLatestSetSuccessCountTotal(sheetRecords),
+    [sheetRecords]
+  );
+
   return (
     <div className="min-h-screen bg-white text-zinc-900 [color-scheme:light]">
       <header className="mx-auto flex max-w-[1100px] items-start justify-between gap-4 px-4 py-5 sm:items-center sm:px-8 sm:py-6">
         <div className="min-w-0">
           <p className="text-xs tracking-widest text-zinc-500 uppercase">voto gallery</p>
-          <h1 className="mt-0.5 text-lg font-medium tracking-wide text-zinc-900">경기 기록</h1>
+          <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h1 className="text-lg font-medium tracking-wide text-zinc-900">경기 기록</h1>
+            {!loading && currentSetSuccessCount != null ? (
+              <span className="text-sm font-semibold text-[#00287A]">
+                세트 성공수 {currentSetSuccessCount.toLocaleString("ko-KR")}
+                <span className="ml-1 text-[11px] font-normal text-zinc-500">(현재 기준)</span>
+              </span>
+            ) : null}
+          </div>
           <p className="mt-0.5 text-xs text-zinc-500">No.3 김다인 · 경기별 기록 아카이브</p>
         </div>
         <button type="button" onClick={() => router.push("/")} className="shrink-0 rounded-full border border-zinc-200 px-4 py-2 text-xs text-zinc-700 transition hover:bg-zinc-50">← Gallery</button>
@@ -393,10 +423,17 @@ export default function RecordsPage() {
                       <tbody>
                         {[...filteredRecords].reverse().map((r, i) => {
                           const didNotPlay = !isPlayedRecord(r);
+                          const moments = getRecordMoments(r);
                           return (
                             <tr
                               key={`${r.date}-${r.opponent}-${i}`}
-                              className={`border-b border-zinc-100 last:border-b-0 ${didNotPlay ? "bg-zinc-50/80 text-zinc-500" : "text-zinc-800"}`}
+                              className={`border-b border-zinc-100 last:border-b-0 ${
+                                moments.length > 0
+                                  ? momentRowClass(moments[0].tone)
+                                  : didNotPlay
+                                    ? "bg-zinc-50/80 text-zinc-500"
+                                    : "text-zinc-800"
+                              }`}
                             >
                               {TABLE_COLUMNS.map((col) => {
                                 if (col.key === "video") {
@@ -426,7 +463,22 @@ export default function RecordsPage() {
                                     className={`px-2.5 py-2 align-middle first:pl-3 last:pr-3 ${col.className}`}
                                   >
                                     {col.key === "date" ? (
-                                      <span className="font-medium text-zinc-900">{value}</span>
+                                      <div className="space-y-1">
+                                        <span className="font-medium text-zinc-900">{value}</span>
+                                        {moments.length > 0 ? (
+                                          <div className="flex flex-wrap gap-1">
+                                            {moments.map((moment) => (
+                                              <span
+                                                key={moment.label}
+                                                className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${momentBadgeClass(moment.tone)}`}
+                                              >
+                                                <span aria-hidden>{moment.emoji}</span>
+                                                {moment.label}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : null}
+                                      </div>
                                     ) : col.key === "homeAway" && value !== "-" ? (
                                       <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${value === "홈" ? "bg-[#E6F1FB] text-[#0C447C]" : "bg-[#F1EFE8] text-zinc-700"}`}>
                                         {value}
