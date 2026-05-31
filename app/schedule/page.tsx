@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus, ExternalLink } from "lucide-react";
 import { groupByDate, buildTournamentICS, buildAllScheduleICS, type Match, type DaySchedule } from "@/lib/schedule-data";
+import { SiteNav } from "@/components/site-nav";
 
 const CATEGORY_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   "브이리그": { bg: "#E6F1FB", text: "#0C447C", label: "브이리그" },
@@ -207,6 +208,7 @@ export default function SchedulePage() {
 
   return (
     <div className="min-h-screen bg-white text-zinc-900 [color-scheme:light]">
+      <SiteNav />
       <header className="mx-auto flex max-w-[1100px] items-start justify-between gap-4 px-4 py-5 sm:items-center sm:px-8 sm:py-6">
         <div className="min-w-0">
           <p className="text-xs tracking-widest text-zinc-500 uppercase">voto gallery</p>
@@ -216,7 +218,7 @@ export default function SchedulePage() {
         <button type="button" onClick={() => router.push("/")} className="shrink-0 rounded-full border border-zinc-200 px-4 py-2 text-xs text-zinc-700 transition hover:bg-zinc-50">← Gallery</button>
       </header>
 
-      <main className="mx-auto max-w-[1100px] px-4 pb-[max(5rem,env(safe-area-inset-bottom))] sm:px-8">
+      <main className="mx-auto max-w-[1100px] px-4 pb-20 sm:px-8 sm:pb-0">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex items-center justify-center gap-2 sm:justify-start sm:gap-3">
             <button type="button" aria-label="이전 달" onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))} className="rounded-lg border border-zinc-200 p-2 text-zinc-700 hover:bg-zinc-50"><ChevronLeft className="h-4 w-4" /></button>

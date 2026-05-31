@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { GalleryChangelog } from "@/components/gallery-changelog";
+import { SiteNav } from "@/components/site-nav";
 import {
   PhotoGridThumbnail,
   PHOTO_GRID_THUMB_SIZES_COMPACT,
@@ -1653,6 +1654,16 @@ export default function Home() {
     };
   }, [guestbookModalOpen]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("guestbook") === "1") {
+      setGuestbookModalOpen(true);
+      params.delete("guestbook");
+      const q = params.toString();
+      window.history.replaceState(null, "", q ? `${window.location.pathname}?${q}` : window.location.pathname);
+    }
+  }, []);
+
   const bestPicks = useMemo(() => {
     const byLikes = (a: DriveImage, b: DriveImage) => {
       const likeDiff = (likesByPhoto[b.id] ?? 0) - (likesByPhoto[a.id] ?? 0);
@@ -1945,6 +1956,7 @@ export default function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(IMAGE_GALLERY_JSON_LD) }}
       />
+      <SiteNav />
       <div
         className={`fixed left-0 right-0 top-0 z-[55] transition-transform duration-300 ${
           showStickyHeader ? "translate-y-0" : "-translate-y-full"
@@ -2227,7 +2239,7 @@ export default function Home() {
 
       <div
         ref={galleryRef}
-        className="mx-auto min-h-screen w-full max-w-[1280px] bg-[#FFFFFF] px-5 pb-16 pt-8 sm:px-8 md:px-12"
+        className="mx-auto min-h-screen w-full max-w-[1280px] bg-[#FFFFFF] px-5 pb-20 pt-8 sm:px-8 sm:pb-0 md:px-12"
       >
       <header className="mb-16 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6">

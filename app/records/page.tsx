@@ -16,6 +16,7 @@ import {
   type RecordMoment,
   type RecordsSheet,
 } from "@/lib/records-data";
+import { SiteNav } from "@/components/site-nav";
 
 const TABLE_COLUMNS = [
   { key: "date", label: "날짜", className: "whitespace-nowrap text-left" },
@@ -245,6 +246,7 @@ export default function RecordsPage() {
 
   return (
     <div className="min-h-screen bg-white text-zinc-900 [color-scheme:light]">
+      <SiteNav />
       <header className="mx-auto flex max-w-[1100px] items-start justify-between gap-4 px-4 py-5 sm:items-center sm:px-8 sm:py-6">
         <div className="min-w-0">
           <p className="text-xs tracking-widest text-zinc-500 uppercase">voto gallery</p>
@@ -262,7 +264,7 @@ export default function RecordsPage() {
         <button type="button" onClick={() => router.push("/")} className="shrink-0 rounded-full border border-zinc-200 px-4 py-2 text-xs text-zinc-700 transition hover:bg-zinc-50">← Gallery</button>
       </header>
 
-      <main className="mx-auto max-w-[1100px] px-4 pb-[max(5rem,env(safe-area-inset-bottom))] sm:px-8">
+      <main className="mx-auto max-w-[1100px] px-4 pb-20 sm:px-8 sm:pb-0">
         {loading ? (
           <p className="text-sm text-zinc-500">Loading...</p>
         ) : error ? (
