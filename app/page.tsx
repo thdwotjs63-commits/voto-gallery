@@ -24,8 +24,6 @@ import "swiper/css/pagination";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
-  Calendar,
-  ClipboardList,
   Heart,
   Instagram,
   LayoutGrid,
@@ -2109,13 +2107,6 @@ export default function Home() {
                 <Heart className="h-4 w-4" aria-hidden />
                 방명록
               </button>
-              <Link
-                href="/schedule"
-                className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-[#b18f00] bg-[#FFD200] px-3 py-2 text-[12px] font-bold text-black shadow-[0_6px_12px_rgba(0,0,0,0.16)] transition duration-150 active:scale-95"
-              >
-                <Calendar className="h-4 w-4" aria-hidden />
-                배구 스케줄
-              </Link>
               <button
                 type="button"
                 onClick={handleViewModeToggle}
@@ -2205,13 +2196,6 @@ export default function Home() {
               <Heart className="h-4 w-4" aria-hidden />
               방명록 남기기
             </button>
-            <Link
-              href="/schedule"
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/35 bg-white/10 px-3 py-2 text-[12px] font-semibold text-white shadow-[0_8px_16px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:bg-white/20 active:scale-95"
-            >
-              <Calendar className="h-4 w-4" aria-hidden />
-              배구 스케줄
-            </Link>
           </div>
 
           <p className="mt-6 text-[11px] tracking-[0.2em] text-zinc-300 sm:text-xs">
@@ -2247,7 +2231,6 @@ export default function Home() {
             voto gallery
           </div>
           <GalleryChangelog />
-          <a href="/schedule" className="text-xs text-zinc-400 transition hover:text-zinc-700 underline-offset-2 hover:underline">배구 일정</a>
           <a href="/records" className="text-xs text-zinc-400 transition hover:text-zinc-700 underline-offset-2 hover:underline">경기 기록</a>
         </div>
         <div aria-hidden className="hidden h-6 w-16 shrink-0 sm:block" />
@@ -3213,7 +3196,7 @@ export default function Home() {
         }
       `}</style>
 
-      <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-4">
+      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-5 z-40 flex flex-col items-end gap-4 sm:bottom-5">
         <button
           type="button"
           onClick={scrollToTop}
@@ -3238,14 +3221,7 @@ export default function Home() {
         </button>
       </div>
 
-      <div className="fixed bottom-5 left-5 z-40 flex flex-col items-start gap-4">
-        <Link
-          href="/records"
-          aria-label="경기 기록"
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#00287A]/20 bg-white/90 text-[#00287A] shadow-[0_6px_16px_rgba(0,40,122,0.18)] backdrop-blur-md transition hover:bg-white active:scale-95"
-        >
-          <ClipboardList className="h-5 w-5" aria-hidden />
-        </Link>
+      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-5 z-40 flex flex-col items-start gap-4 sm:bottom-5">
         <div ref={quizWrapRef} className="relative flex flex-col items-start">
           <AnimatePresence>
             {quizBubbleOpen ? (
@@ -3366,7 +3342,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed bottom-[8.25rem] left-5 z-[60] max-w-[min(calc(100vw-2.5rem),22rem)] rounded-2xl border border-white/45 bg-zinc-950/82 px-4 py-3.5 text-left text-[13px] font-medium leading-snug text-white shadow-xl backdrop-blur-md sm:bottom-[9rem]"
+            className="fixed bottom-[calc(13.25rem+env(safe-area-inset-bottom))] left-5 z-[60] max-w-[min(calc(100vw-2.5rem),22rem)] rounded-2xl border border-white/45 bg-zinc-950/82 px-4 py-3.5 text-left text-[13px] font-medium leading-snug text-white shadow-xl backdrop-blur-md sm:bottom-[9rem]"
           >
             {shareToast}
           </motion.div>
