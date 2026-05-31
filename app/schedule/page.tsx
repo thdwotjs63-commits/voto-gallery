@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus, ExternalLink } from "lucide-react";
 import { groupByDate, buildTournamentICS, buildAllScheduleICS, type Match, type DaySchedule } from "@/lib/schedule-data";
 import { SiteNav } from "@/components/site-nav";
+import { PageShareButton } from "@/components/page-share-button";
 
 const CATEGORY_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   "브이리그": { bg: "#E6F1FB", text: "#0C447C", label: "브이리그" },
@@ -215,7 +216,10 @@ export default function SchedulePage() {
           <h1 className="mt-0.5 text-lg font-medium tracking-wide text-zinc-900">배구 일정</h1>
           <p className="mt-0.5 text-xs text-zinc-500">브이리그 · 국제경기 · 그 외 배구 일정</p>
         </div>
-        <button type="button" onClick={() => router.push("/")} className="shrink-0 rounded-full border border-zinc-200 px-4 py-2 text-xs text-zinc-700 transition hover:bg-zinc-50">← Gallery</button>
+        <div className="flex shrink-0 items-center gap-2">
+          <PageShareButton shareTitle="voto gallery — 배구 일정" />
+          <button type="button" onClick={() => router.push("/")} className="rounded-full border border-zinc-200 px-4 py-2 text-xs text-zinc-700 transition hover:bg-zinc-50">← Gallery</button>
+        </div>
       </header>
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20 sm:px-8 sm:pb-0">

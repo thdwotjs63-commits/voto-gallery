@@ -17,6 +17,7 @@ import {
   type RecordsSheet,
 } from "@/lib/records-data";
 import { SiteNav } from "@/components/site-nav";
+import { PageShareButton } from "@/components/page-share-button";
 
 const TABLE_COLUMNS = [
   { key: "date", label: "날짜", className: "whitespace-nowrap text-left" },
@@ -261,7 +262,10 @@ export default function RecordsPage() {
           </div>
           <p className="mt-0.5 text-xs text-zinc-500">No.3 김다인 · 경기별 기록 아카이브</p>
         </div>
-        <button type="button" onClick={() => router.push("/")} className="shrink-0 rounded-full border border-zinc-200 px-4 py-2 text-xs text-zinc-700 transition hover:bg-zinc-50">← Gallery</button>
+        <div className="flex shrink-0 items-center gap-2">
+          <PageShareButton shareTitle="voto gallery — 김다인 경기 기록" />
+          <button type="button" onClick={() => router.push("/")} className="rounded-full border border-zinc-200 px-4 py-2 text-xs text-zinc-700 transition hover:bg-zinc-50">← Gallery</button>
+        </div>
       </header>
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20 sm:px-8 sm:pb-0">

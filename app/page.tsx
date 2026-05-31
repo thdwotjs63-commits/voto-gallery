@@ -50,6 +50,7 @@ import {
 } from "@/lib/photo-share";
 import { SITE_URL } from "@/lib/seo-metadata";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
+import { getLatestSetSuccessCountTotal } from "@/lib/records-data";
 
 /** 트윗 작성창에 넣을 갤러리 제목 */
 const GALLERY_SHARE_TITLE = "voto gallery — Captured Moments of Kim Da-in";
@@ -557,6 +558,7 @@ export default function Home() {
   const [likingByPhoto, setLikingByPhoto] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [heroSetSuccessCount, setHeroSetSuccessCount] = useState<number | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [photoDetailModalImage, setPhotoDetailModalImage] = useState<DriveImage | null>(
     null
@@ -669,6 +671,22 @@ export default function Home() {
 
     load();
 
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/records")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!mounted) return;
+        const sheets = Array.isArray(data?.sheets) ? data.sheets : [];
+        const records = sheets[0]?.records ?? [];
+        setHeroSetSuccessCount(getLatestSetSuccessCountTotal(records));
+      })
+      .catch(() => {});
     return () => {
       mounted = false;
     };
@@ -2168,6 +2186,15 @@ export default function Home() {
           <p className="mt-1 text-[11px] tracking-[0.2em] text-zinc-200 sm:text-xs">
             Hyundai Hillstate Volleyball Team
           </p>
+          {heroSetSuccessCount != null ? (
+            <Link
+              href="/records"
+              aria-label="경기 기록 보기"
+              className="mt-2 inline-flex items-center rounded-full bg-white px-3.5 py-1 text-[11px] font-semibold tabular-nums tracking-wide text-zinc-900 shadow-[0_4px_12px_rgba(0,0,0,0.18)] transition hover:bg-zinc-50 active:scale-95 sm:text-xs"
+            >
+              set + {heroSetSuccessCount.toLocaleString("ko-KR")}
+            </Link>
+          ) : null}
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
             <a
