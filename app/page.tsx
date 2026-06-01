@@ -50,7 +50,7 @@ import {
 } from "@/lib/photo-share";
 import { SITE_URL } from "@/lib/seo-metadata";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
-import { getLatestSetSuccessCountTotal } from "@/lib/records-data";
+import { getLatestSetSuccessCountTotal, isSeasonRecord } from "@/lib/records-data";
 
 /** 트윗 작성창에 넣을 갤러리 제목 */
 const GALLERY_SHARE_TITLE = "voto gallery — Captured Moments of Kim Da-in";
@@ -683,7 +683,7 @@ export default function Home() {
       .then((data) => {
         if (!mounted) return;
         const sheets = Array.isArray(data?.sheets) ? data.sheets : [];
-        const records = sheets[0]?.records ?? [];
+        const records = (sheets[0]?.records ?? []).filter(isSeasonRecord);
         setHeroSetSuccessCount(getLatestSetSuccessCountTotal(records));
       })
       .catch(() => {});

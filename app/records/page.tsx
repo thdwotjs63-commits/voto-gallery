@@ -14,6 +14,8 @@ import {
   getRecordMoments,
   isDidNotPlay,
   isPlayedRecord,
+  isPostseasonRecord,
+  isSeasonRecord,
   parsePercent,
   type PlayerRecord,
   type RecordMoment,
@@ -159,6 +161,7 @@ export default function RecordsPage() {
   const [sheets, setSheets] = useState<RecordsSheet[]>([]);
   const [activeSheetId, setActiveSheetId] = useState("");
   const [teamFilter, setTeamFilter] = useState("all");
+  const [recordScope, setRecordScope] = useState<"season" | "postseason">("season");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -200,15 +203,25 @@ export default function RecordsPage() {
 
   useEffect(() => {
     setTeamFilter("all");
-  }, [activeSheetId]);
+  }, [activeSheetId, recordScope]);
 
-  const sheetRecords = useMemo(
+  const rawSheetRecords = useMemo(
     () => sheets.find((sheet) => sheet.id === activeSheetId)?.records ?? [],
     [sheets, activeSheetId]
   );
 
-  /** RECORDS_SHEETS 첫 탭 = 현재 시즌. 헤더 누적 수치는 탭과 무관하게 항상 여기 기준 */
-  const currentSeasonRecords = useMemo(() => sheets[0]?.records ?? [], [sheets]);
+  const sheetRecords = useMemo(() => {
+    if (recordScope === "postseason") {
+      return rawSheetRecords.filter(isPostseasonRecord);
+    }
+    return rawSheetRecords.filter(isSeasonRecord);
+  }, [rawSheetRecords, recordScope]);
+
+  /** RECORDS_SHEETS 첫 탭 = 현재 시즌. 헤더 누적 수치는 탭과 무관하게 항상 정규시즌 기준 */
+  const currentSeasonRecords = useMemo(
+    () => (sheets[0]?.records ?? []).filter(isSeasonRecord),
+    [sheets]
+  );
 
   const teamOptions = useMemo(() => {
     const teams = new Set<string>();
@@ -658,6 +671,17 @@ export default function RecordsPage() {
                       {team}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => setRecordScope((s) => (s === "postseason" ? "season" : "postseason"))}
+                    className={`ml-auto shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
+                      recordScope === "postseason"
+                        ? "bg-[#C2410C] text-white"
+                        : "border border-[#C2410C]/35 bg-[#FFF7ED] text-[#C2410C] hover:bg-[#FFEDD5]"
+                    }`}
+                  >
+                    포스트시즌
+                  </button>
                 </div>
 
                 <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">

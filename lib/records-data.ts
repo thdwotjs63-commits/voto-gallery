@@ -124,7 +124,6 @@ export async function fetchRecords(csvUrl: string): Promise<PlayerRecord[]> {
   return (parsed.data ?? [])
     .map(mapRow)
     .filter((r) => r.date && /^\d{4}-\d{2}-\d{2}$/.test(r.date))
-    .filter(isSeasonRecord)
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -179,9 +178,14 @@ export function formatRate(v: string): string {
 export function isSeasonRecord(r: PlayerRecord): boolean {
   const competition = r.competition.trim();
   if (!competition) return true;
-  // V리그 포스트시즌(플레이오프·챔프전)은 시즌 기록에서 제외
   if (/V리그/.test(competition) && /플레이오프|챔프전/.test(competition)) return false;
   return true;
+}
+
+export function isPostseasonRecord(r: PlayerRecord): boolean {
+  const competition = r.competition.trim();
+  if (!competition) return false;
+  return /V리그/.test(competition) && /플레이오프|챔프전/.test(competition);
 }
 
 export function isDidNotPlay(r: PlayerRecord): boolean {
@@ -189,7 +193,7 @@ export function isDidNotPlay(r: PlayerRecord): boolean {
 }
 
 export function isPlayedRecord(r: PlayerRecord): boolean {
-  return isSeasonRecord(r) && !isDidNotPlay(r);
+  return !isDidNotPlay(r);
 }
 
 export function averagePercent(values: string[]): string {
