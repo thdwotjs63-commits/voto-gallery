@@ -12,6 +12,7 @@ import {
   getLatestSetSuccessCountTotal,
   getLatestTotalPoints,
   getRecordMoments,
+  isDidNotPlay,
   isPlayedRecord,
   parsePercent,
   type PlayerRecord,
@@ -565,7 +566,7 @@ export default function RecordsPage() {
                       </thead>
                       <tbody>
                         {[...filteredRecords].reverse().map((r, i) => {
-                          const didNotPlay = !isPlayedRecord(r);
+                          const didNotPlay = isDidNotPlay(r);
                           const moments = getRecordMoments(r);
                           return (
                             <tr
@@ -623,7 +624,7 @@ export default function RecordsPage() {
                                         ) : null}
                                       </div>
                                     ) : col.key === "homeAway" && value !== "-" ? (
-                                      <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${value === "홈" ? "bg-[#E6F1FB] text-[#0C447C]" : "bg-[#F1EFE8] text-zinc-700"}`}>
+                                      <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${value === "홈" ? "bg-[#E6F1FB] text-[#0C447C]" : value === "원정" ? "bg-[#F1EFE8] text-zinc-700" : "bg-zinc-100 text-zinc-600"}`}>
                                         {value}
                                       </span>
                                     ) : (

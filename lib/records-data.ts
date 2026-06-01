@@ -59,7 +59,7 @@ function splitNote(note: string): { homeAway: string; note: string } {
 
 function parseHomeAway(row: RawRow, note: string): string {
   const dedicated = (row.home_away ?? "").trim();
-  if (dedicated === "홈" || dedicated === "원정") return dedicated;
+  if (dedicated === "홈" || dedicated === "원정" || dedicated === "미출전") return dedicated;
   return splitNote(note).homeAway;
 }
 
@@ -184,8 +184,12 @@ export function isSeasonRecord(r: PlayerRecord): boolean {
   return true;
 }
 
+export function isDidNotPlay(r: PlayerRecord): boolean {
+  return r.note.includes("미출전") || r.homeAway === "미출전";
+}
+
 export function isPlayedRecord(r: PlayerRecord): boolean {
-  return isSeasonRecord(r) && !r.note.includes("미출전");
+  return isSeasonRecord(r) && !isDidNotPlay(r);
 }
 
 export function averagePercent(values: string[]): string {
