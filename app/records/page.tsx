@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { ChevronDown, ExternalLink } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import {
   averagePercent,
   displayRecordValue,
+  formatPercentDisplay,
   formatRate,
   getLatestSetSuccessCountTotal,
+  getLatestTotalPoints,
   getRecordMoments,
   isPlayedRecord,
   parsePercent,
@@ -18,6 +20,7 @@ import {
 } from "@/lib/records-data";
 import { SiteNav } from "@/components/site-nav";
 import { PageShareButton } from "@/components/page-share-button";
+import { SEASON_STATS, CAREER_TOTAL } from "@/lib/season-summary";
 
 const TABLE_COLUMNS = [
   { key: "date", label: "날짜", className: "whitespace-nowrap text-left" },
@@ -118,6 +121,7 @@ export default function RecordsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [seasonDetailsOpen, setSeasonDetailsOpen] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 639px)");
@@ -226,6 +230,19 @@ export default function RecordsPage() {
     [isAllTeams, totals]
   );
 
+  const xAxisInterval = useMemo(() => {
+    if (chartData.length <= 6) return 0;
+    if (isMobile) return "preserveStartEnd" as const;
+    if (chartData.length <= 12) return 0;
+    return Math.ceil(chartData.length / 8) - 1;
+  }, [chartData.length, isMobile]);
+
+  const chartAxisTick = {
+    fontSize: isMobile ? 11 : 12,
+    fill: "#18181b",
+    fontWeight: 500,
+  } as const;
+
   const rateTicks = isMobile ? [0, 30, 60] : [0, 15, 30, 45, 60];
   const countTicks = useMemo(() => {
     if (!isMobile) return countAxis.ticks;
@@ -245,6 +262,11 @@ export default function RecordsPage() {
     [sheetRecords]
   );
 
+  const currentTotalPoints = useMemo(
+    () => getLatestTotalPoints(sheetRecords),
+    [sheetRecords]
+  );
+
   return (
     <div className="min-h-screen bg-white text-zinc-900 [color-scheme:light]">
       <SiteNav />
@@ -253,9 +275,17 @@ export default function RecordsPage() {
           <p className="text-xs tracking-widest text-zinc-500 uppercase">voto gallery</p>
           <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <h1 className="text-lg font-medium tracking-wide text-zinc-900">경기 기록</h1>
-            {!loading && currentSetSuccessCount != null ? (
+            {!loading && (currentSetSuccessCount != null || currentTotalPoints != null) ? (
               <span className="text-sm font-semibold text-[#00287A]">
-                세트 성공수 {currentSetSuccessCount.toLocaleString("ko-KR")}
+                {currentSetSuccessCount != null ? (
+                  <>세트 성공수 {currentSetSuccessCount.toLocaleString("ko-KR")}</>
+                ) : null}
+                {currentSetSuccessCount != null && currentTotalPoints != null ? (
+                  <span className="mx-1.5 font-normal text-zinc-300">·</span>
+                ) : null}
+                {currentTotalPoints != null ? (
+                  <>총 득점 {currentTotalPoints.toLocaleString("ko-KR")}</>
+                ) : null}
                 <span className="ml-1 text-[11px] font-normal text-zinc-500">(현재 기준)</span>
               </span>
             ) : null}
@@ -269,6 +299,100 @@ export default function RecordsPage() {
       </header>
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20 sm:px-8 sm:pb-0">
+        <section className="mb-10">
+          <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50">
+            <div className="p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">통산 누적</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {[
+                  { label: "경기", value: CAREER_TOTAL.games },
+                  { label: "득점", value: CAREER_TOTAL.points },
+                  { label: "세트당 평균", value: CAREER_TOTAL.set.toFixed(2) },
+                  { label: "세트 성공률", value: `${CAREER_TOTAL.setSuccessRate}%` },
+                ].map((s) => (
+                  <div key={s.label} className="text-center">
+                    <div className="text-xl font-semibold text-[#00287A]">{s.value}</div>
+                    <div className="text-[11px] text-zinc-400">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-[11px] text-zinc-400">
+                세트 성공 {CAREER_TOTAL.setSuccess} / 시도 {CAREER_TOTAL.setAttempts} · 디그 성공률 {CAREER_TOTAL.digSuccessRate}%
+              </p>
+              <button
+                type="button"
+                onClick={() => setSeasonDetailsOpen((open) => !open)}
+                aria-expanded={seasonDetailsOpen}
+                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100"
+              >
+                {seasonDetailsOpen ? "접기" : "자세히 보기"}
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform duration-200 ${seasonDetailsOpen ? "rotate-180" : ""}`}
+                  aria-hidden
+                />
+              </button>
+            </div>
+
+            <div
+              className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+                seasonDetailsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+              }`}
+            >
+              <div className="min-h-0 overflow-hidden">
+                <div className="space-y-4 border-t border-zinc-200 p-4">
+                  <div className="rounded-xl border border-zinc-200 bg-white p-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">시즌별 추이</p>
+                    {seasonDetailsOpen ? (
+                      <div style={{ width: "100%", height: 260 }}>
+                        <ResponsiveContainer>
+                          <LineChart data={[...SEASON_STATS].reverse()} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                            <XAxis dataKey="season" tick={{ fontSize: 10 }} tickFormatter={(v) => String(v).slice(2)} />
+                            <YAxis tick={{ fontSize: 11 }} />
+                            <Tooltip />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <Line type="monotone" dataKey="set" name="세트당 평균" stroke="#00287A" strokeWidth={2} dot={{ r: 3 }} />
+                            <Line type="monotone" dataKey="points" name="득점" stroke="#C2410C" strokeWidth={2} dot={{ r: 3 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
+                    <table className="w-full min-w-[560px] text-xs">
+                      <thead>
+                        <tr className="border-b border-zinc-200 bg-zinc-50 text-zinc-500">
+                          <th className="px-3 py-2 text-left font-medium">시즌</th>
+                          <th className="px-3 py-2 text-right font-medium">경기</th>
+                          <th className="px-3 py-2 text-right font-medium">득점</th>
+                          <th className="px-3 py-2 text-right font-medium">공격성공률</th>
+                          <th className="px-3 py-2 text-right font-medium">세트당</th>
+                          <th className="px-3 py-2 text-right font-medium">디그</th>
+                          <th className="px-3 py-2 text-right font-medium">범실</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {SEASON_STATS.map((s) => (
+                          <tr key={s.season} className="border-b border-zinc-100 last:border-0">
+                            <td className="px-3 py-2 text-left font-medium text-zinc-800">{s.season}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{s.games}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{s.points}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{s.attackSuccess ? `${s.attackSuccess}%` : "-"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{s.set.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{s.dig.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{s.errors}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {loading ? (
           <p className="text-sm text-zinc-500">Loading...</p>
         ) : error ? (
@@ -328,40 +452,53 @@ export default function RecordsPage() {
                         data={chartData}
                         margin={
                           isMobile
-                            ? { top: 12, right: 4, left: -8, bottom: chartData.length > 6 ? 28 : 8 }
-                            : { top: 5, right: 16, left: 4, bottom: 5 }
+                            ? { top: 12, right: 4, left: -4, bottom: chartData.length > 6 ? 36 : 16 }
+                            : { top: 8, right: 16, left: 8, bottom: chartData.length > 10 ? 24 : 12 }
                         }
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
                         <XAxis
                           dataKey="date"
-                          tick={{ fontSize: isMobile ? 10 : 11, fill: "#52525b" }}
-                          interval={isMobile && chartData.length > 5 ? "preserveStartEnd" : 0}
-                          angle={isMobile && chartData.length > 5 ? -35 : 0}
-                          textAnchor={isMobile && chartData.length > 5 ? "end" : "middle"}
-                          height={isMobile && chartData.length > 5 ? 48 : 30}
+                          tick={chartAxisTick}
+                          axisLine={{ stroke: "#d4d4d8" }}
+                          tickLine={{ stroke: "#a1a1aa" }}
+                          interval={xAxisInterval}
+                          minTickGap={isMobile ? 14 : 10}
+                          angle={isMobile && chartData.length > 6 ? -40 : chartData.length > 12 ? -35 : 0}
+                          textAnchor={isMobile && chartData.length > 6 ? "end" : chartData.length > 12 ? "end" : "middle"}
+                          height={isMobile && chartData.length > 6 ? 52 : chartData.length > 12 ? 48 : 32}
+                          dy={isMobile && chartData.length > 6 ? 2 : 0}
                         />
                         <YAxis
                           yAxisId="rate"
-                          width={isMobile ? 36 : 44}
+                          width={isMobile ? 40 : 48}
                           domain={[0, 60]}
                           ticks={rateTicks}
-                          tick={{ fontSize: isMobile ? 10 : 11, fill: "#00287A" }}
+                          tick={chartAxisTick}
+                          axisLine={{ stroke: "#d4d4d8" }}
+                          tickLine={{ stroke: "#a1a1aa" }}
                           tickFormatter={(v) => `${v}%`}
                         />
                         <YAxis
                           yAxisId="count"
                           orientation="right"
-                          width={isMobile ? 32 : 48}
+                          width={isMobile ? 40 : 52}
                           domain={countAxis.domain}
                           ticks={countTicks}
-                          tick={{ fontSize: isMobile ? 10 : 11, fill: "#0E7490" }}
+                          tick={chartAxisTick}
+                          axisLine={{ stroke: "#d4d4d8" }}
+                          tickLine={{ stroke: "#a1a1aa" }}
                           tickFormatter={formatCountTick}
                         />
                         <Tooltip
                           contentStyle={{ fontSize: isMobile ? 12 : 13, borderRadius: 8 }}
                           formatter={(value, name) => {
-                            if (name === "세트성공률") return [`${value ?? "-"}%`, name];
+                            if (name === "세트성공률") {
+                              return [
+                                typeof value === "number" ? formatPercentDisplay(value) : "-",
+                                name,
+                              ];
+                            }
                             if (name === "세트평균") return [value ?? "-", "세트당 평균"];
                             return [typeof value === "number" ? value.toLocaleString("ko-KR") : value ?? "-", name];
                           }}

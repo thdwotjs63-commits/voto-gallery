@@ -6,6 +6,7 @@ export type PlayerRecord = {
   competition: string;
   round: string;
   points: number | null;
+  totalPoints: number | null;
   attackSuccess: string;
   serveAce: number | null;
   block: number | null;
@@ -74,6 +75,7 @@ function mapRow(row: RawRow): PlayerRecord {
     competition: (row.competition ?? "").trim(),
     round: (row.round ?? "").trim(),
     points: toNum(row.points),
+    totalPoints: parseCountValue(row.total_points ?? ""),
     attackSuccess: (row.attack_success ?? "").trim(),
     serveAce: toNum(row.serve_ace),
     block: toNum(row.block),
@@ -122,6 +124,7 @@ export async function fetchRecords(csvUrl: string): Promise<PlayerRecord[]> {
   return (parsed.data ?? [])
     .map(mapRow)
     .filter((r) => r.date && /^\d{4}-\d{2}-\d{2}$/.test(r.date))
+    .filter(isSeasonRecord)
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -161,28 +164,35 @@ export function parsePercent(v: string): number | null {
   return n;
 }
 
+export function formatPercentDisplay(n: number): string {
+  return `${Number(n.toFixed(2))}%`;
+}
+
 export function formatRate(v: string): string {
   const t = (v ?? "").trim();
   if (!t) return "-";
-  if (t.includes("%")) return t;
-  const n = Number(t);
-  if (!Number.isFinite(n)) return t;
-  if (n <= 1) {
-    const pct = n * 100;
-    return `${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`;
-  }
-  return `${n}%`;
+  const parsed = parsePercent(t);
+  if (parsed === null) return t.includes("%") ? t : "-";
+  return formatPercentDisplay(parsed);
+}
+
+export function isSeasonRecord(r: PlayerRecord): boolean {
+  const competition = r.competition.trim();
+  if (!competition) return true;
+  // V리그 포스트시즌(플레이오프·챔프전)은 시즌 기록에서 제외
+  if (/V리그/.test(competition) && /플레이오프|챔프전/.test(competition)) return false;
+  return true;
 }
 
 export function isPlayedRecord(r: PlayerRecord): boolean {
-  return !r.note.includes("미출전");
+  return isSeasonRecord(r) && !r.note.includes("미출전");
 }
 
 export function averagePercent(values: string[]): string {
   const nums = values.map(parsePercent).filter((v): v is number => v !== null);
   if (!nums.length) return "-";
   const avg = nums.reduce((acc, n) => acc + n, 0) / nums.length;
-  return `${Number.isInteger(avg) ? avg : avg.toFixed(1)}%`;
+  return formatPercentDisplay(avg);
 }
 
 export function displayRecordValue(v: string | number | null | undefined): string {
@@ -248,4 +258,12 @@ export function getLatestSetSuccessCountTotal(records: PlayerRecord[]): number |
     .sort((a, b) => a.date.localeCompare(b.date))
     .at(-1);
   return latest?.setSuccessCountTotal ?? null;
+}
+
+export function getLatestTotalPoints(records: PlayerRecord[]): number | null {
+  const latest = records
+    .filter((r) => isPlayedRecord(r) && r.totalPoints != null)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .at(-1);
+  return latest?.totalPoints ?? null;
 }
