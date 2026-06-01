@@ -26,7 +26,6 @@ import { SEASON_STATS, CAREER_TOTAL } from "@/lib/season-summary";
 const TABLE_COLUMNS = [
   { key: "date", label: "날짜", className: "whitespace-nowrap text-left" },
   { key: "opponent", label: "상대", className: "min-w-[4.5rem] text-left" },
-  { key: "competition", label: "대회", className: "hidden min-w-[5rem] text-left sm:table-cell" },
   { key: "round", label: "라운드", className: "text-center tabular-nums whitespace-nowrap" },
   { key: "points", label: "득점", className: "text-center tabular-nums" },
   { key: "attackSuccess", label: "공격성공", className: "text-center tabular-nums" },
@@ -73,8 +72,6 @@ function cellValue(r: PlayerRecord, key: (typeof TABLE_COLUMNS)[number]["key"]):
       return r.date;
     case "opponent":
       return displayRecordValue(r.opponent);
-    case "competition":
-      return displayRecordValue(r.competition);
     case "round":
       return displayRecordValue(r.round);
     case "points":
@@ -161,6 +158,9 @@ export default function RecordsPage() {
     () => sheets.find((sheet) => sheet.id === activeSheetId)?.records ?? [],
     [sheets, activeSheetId]
   );
+
+  /** RECORDS_SHEETS 첫 탭 = 현재 시즌. 헤더 누적 수치는 탭과 무관하게 항상 여기 기준 */
+  const currentSeasonRecords = useMemo(() => sheets[0]?.records ?? [], [sheets]);
 
   const teamOptions = useMemo(() => {
     const teams = new Set<string>();
@@ -259,13 +259,13 @@ export default function RecordsPage() {
   };
 
   const currentSetSuccessCount = useMemo(
-    () => getLatestSetSuccessCountTotal(sheetRecords),
-    [sheetRecords]
+    () => getLatestSetSuccessCountTotal(currentSeasonRecords),
+    [currentSeasonRecords]
   );
 
   const currentTotalPoints = useMemo(
-    () => getLatestTotalPoints(sheetRecords),
-    [sheetRecords]
+    () => getLatestTotalPoints(currentSeasonRecords),
+    [currentSeasonRecords]
   );
 
   return (
