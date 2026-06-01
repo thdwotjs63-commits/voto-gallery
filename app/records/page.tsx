@@ -111,6 +111,49 @@ function momentBadgeClass(tone: RecordMoment["tone"]): string {
   return "bg-amber-100 text-amber-900 ring-amber-200/80";
 }
 
+const SET_AVG_AXIS = {
+  domain: [0, 20] as [number, number],
+  ticks: [5, 10, 15, 20],
+};
+
+type ChartSeriesKey = "rate" | "count" | "avg";
+
+const DEFAULT_CHART_VISIBLE: Record<ChartSeriesKey, boolean> = {
+  rate: true,
+  count: false,
+  avg: true,
+};
+
+function ChartLegendToggle({
+  label,
+  color,
+  active,
+  onToggle,
+}: {
+  label: string;
+  color: string;
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={active}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] transition sm:text-[11px] ${
+        active ? "text-zinc-700 hover:bg-zinc-100" : "text-zinc-300 line-through opacity-70 hover:bg-zinc-50"
+      }`}
+    >
+      <span
+        className="h-0.5 w-4 rounded sm:h-1"
+        style={{ backgroundColor: active ? color : "#d4d4d8" }}
+        aria-hidden
+      />
+      {label}
+    </button>
+  );
+}
+
 export default function RecordsPage() {
   const router = useRouter();
   const [sheets, setSheets] = useState<RecordsSheet[]>([]);
@@ -120,6 +163,11 @@ export default function RecordsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [seasonDetailsOpen, setSeasonDetailsOpen] = useState(false);
+  const [chartVisible, setChartVisible] = useState(DEFAULT_CHART_VISIBLE);
+
+  const toggleChartSeries = (key: ChartSeriesKey) => {
+    setChartVisible((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 639px)");
@@ -178,24 +226,27 @@ export default function RecordsPage() {
   const playedRecords = useMemo(() => filteredRecords.filter(isPlayedRecord), [filteredRecords]);
 
   const isAllTeams = teamFilter === "all";
-  const chartSecondaryKey = isAllTeams ? "세트성공수" : "세트평균";
+  const showCountAxis = isAllTeams && chartVisible.count;
+  const showAvgAxis = chartVisible.avg;
+  const showRateAxis = chartVisible.rate;
 
   const chartData = useMemo(
     () =>
       playedRecords.map((r) => ({
         date: r.date.slice(5),
         세트성공률: parsePercent(r.setSuccessRate),
-        [chartSecondaryKey]: isAllTeams ? r.setSuccessCountTotal : r.setAvg,
+        세트당평균: r.setAvg,
+        ...(isAllTeams ? { 세트성공수: r.setSuccessCountTotal } : {}),
       })),
-    [playedRecords, isAllTeams, chartSecondaryKey]
+    [playedRecords, isAllTeams]
   );
 
   const countAxis = useMemo(() => {
-    const values = playedRecords.map((r) => (isAllTeams ? r.setSuccessCountTotal : r.setAvg));
-    return buildCountAxis(
-      values.filter((v): v is number => v !== null),
-      isAllTeams
-    );
+    if (!isAllTeams) return null;
+    const values = playedRecords
+      .map((r) => r.setSuccessCountTotal)
+      .filter((v): v is number => v !== null);
+    return buildCountAxis(values, true);
   }, [playedRecords, isAllTeams]);
 
   const totals = useMemo(() => {
@@ -246,16 +297,19 @@ export default function RecordsPage() {
 
   const rateTicks = isMobile ? [0, 30, 60] : [0, 15, 30, 45, 60];
   const countTicks = useMemo(() => {
+    if (!countAxis) return [];
     if (!isMobile) return countAxis.ticks;
-    if (isAllTeams) return countAxis.ticks.filter((_, i) => i % 2 === 0 || i === countAxis.ticks.length - 1);
-    const max = Math.max(...countAxis.ticks);
-    if (max <= 20) return countAxis.ticks.filter((v) => v % 5 === 0 || v === max);
     return countAxis.ticks.filter((_, i) => i % 2 === 0 || i === countAxis.ticks.length - 1);
-  }, [countAxis.ticks, isMobile, isAllTeams]);
+  }, [countAxis, isMobile]);
 
   const formatCountTick = (v: number) => {
-    if (isAllTeams && isMobile && v >= 1000) return `${Math.round(v / 1000)}k`;
+    if (isMobile && v >= 1000) return `${Math.round(v / 1000)}k`;
     return Number(v).toLocaleString("ko-KR");
+  };
+
+  const formatAvgTick = (v: number) => {
+    const n = Number(v);
+    return Number.isInteger(n) ? String(n) : n.toFixed(1);
   };
 
   const currentSetSuccessCount = useMemo(
@@ -436,15 +490,27 @@ export default function RecordsPage() {
                 <div className="-mx-1 mb-8 rounded-xl border border-zinc-200 bg-white p-3 sm:mx-0 sm:p-4">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">경기별 추이</p>
-                    <div className="flex flex-wrap gap-3 text-[10px] text-zinc-600 sm:text-[11px]">
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="h-0.5 w-4 rounded bg-[#00287A] sm:h-1" aria-hidden />
-                        세트성공률
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="h-0.5 w-4 rounded bg-[#0E7490] sm:h-1" aria-hidden />
-                        {isAllTeams ? "세트성공수" : "세트평균"}
-                      </span>
+                    <div className="flex flex-wrap justify-end gap-1 sm:gap-2">
+                      <ChartLegendToggle
+                        label="세트성공률"
+                        color="#00287A"
+                        active={chartVisible.rate}
+                        onToggle={() => toggleChartSeries("rate")}
+                      />
+                      {isAllTeams ? (
+                        <ChartLegendToggle
+                          label="세트성공수"
+                          color="#0E7490"
+                          active={chartVisible.count}
+                          onToggle={() => toggleChartSeries("count")}
+                        />
+                      ) : null}
+                      <ChartLegendToggle
+                        label="세트당 평균"
+                        color="#9333EA"
+                        active={chartVisible.avg}
+                        onToggle={() => toggleChartSeries("avg")}
+                      />
                     </div>
                   </div>
                   <div className="h-[min(72vw,22rem)] min-h-[17.5rem] sm:h-64 sm:min-h-0">
@@ -453,8 +519,18 @@ export default function RecordsPage() {
                         data={chartData}
                         margin={
                           isMobile
-                            ? { top: 12, right: 4, left: -4, bottom: chartData.length > 6 ? 36 : 16 }
-                            : { top: 8, right: 16, left: 8, bottom: chartData.length > 10 ? 24 : 12 }
+                            ? {
+                                top: 12,
+                                right: showCountAxis ? 8 : 4,
+                                left: -4,
+                                bottom: chartData.length > 6 ? 36 : 16,
+                              }
+                            : {
+                                top: 8,
+                                right: showCountAxis ? 20 : 16,
+                                left: 8,
+                                bottom: chartData.length > 10 ? 24 : 12,
+                              }
                         }
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
@@ -472,6 +548,7 @@ export default function RecordsPage() {
                         />
                         <YAxis
                           yAxisId="rate"
+                          hide={!showRateAxis}
                           width={isMobile ? 40 : 48}
                           domain={[0, 60]}
                           ticks={rateTicks}
@@ -483,13 +560,26 @@ export default function RecordsPage() {
                         <YAxis
                           yAxisId="count"
                           orientation="right"
-                          width={isMobile ? 40 : 52}
-                          domain={countAxis.domain}
+                          hide={!showCountAxis}
+                          width={isMobile ? 40 : 48}
+                          domain={countAxis?.domain ?? [0, 1]}
                           ticks={countTicks}
                           tick={chartAxisTick}
                           axisLine={{ stroke: "#d4d4d8" }}
                           tickLine={{ stroke: "#a1a1aa" }}
                           tickFormatter={formatCountTick}
+                        />
+                        <YAxis
+                          yAxisId="avg"
+                          orientation="right"
+                          hide={!showAvgAxis}
+                          width={isMobile ? 36 : 44}
+                          domain={SET_AVG_AXIS.domain}
+                          ticks={SET_AVG_AXIS.ticks}
+                          tick={{ ...chartAxisTick, fill: "#7E22CE" }}
+                          axisLine={{ stroke: "#d4d4d8" }}
+                          tickLine={{ stroke: "#a1a1aa" }}
+                          tickFormatter={formatAvgTick}
                         />
                         <Tooltip
                           contentStyle={{ fontSize: isMobile ? 12 : 13, borderRadius: 8 }}
@@ -500,28 +590,50 @@ export default function RecordsPage() {
                                 name,
                               ];
                             }
+                            if (name === "세트당평균") {
+                              return [
+                                typeof value === "number" ? value.toFixed(2) : "-",
+                                "세트당 평균",
+                              ];
+                            }
                             if (name === "세트평균") return [value ?? "-", "세트당 평균"];
                             return [typeof value === "number" ? value.toLocaleString("ko-KR") : value ?? "-", name];
                           }}
                         />
-                        <Line
-                          yAxisId="rate"
-                          type="monotone"
-                          dataKey="세트성공률"
-                          stroke="#00287A"
-                          strokeWidth={isMobile ? 2.5 : 2}
-                          dot={{ r: isMobile ? 4 : 3, strokeWidth: 1.5 }}
-                          activeDot={{ r: isMobile ? 6 : 5 }}
-                        />
-                        <Line
-                          yAxisId="count"
-                          type="monotone"
-                          dataKey={chartSecondaryKey}
-                          stroke="#0E7490"
-                          strokeWidth={isMobile ? 2.5 : 2}
-                          dot={{ r: isMobile ? 4 : 3, strokeWidth: 1.5 }}
-                          activeDot={{ r: isMobile ? 6 : 5 }}
-                        />
+                        {chartVisible.rate ? (
+                          <Line
+                            yAxisId="rate"
+                            type="monotone"
+                            dataKey="세트성공률"
+                            stroke="#00287A"
+                            strokeWidth={isMobile ? 2.5 : 2}
+                            dot={{ r: isMobile ? 4 : 3, strokeWidth: 1.5 }}
+                            activeDot={{ r: isMobile ? 6 : 5 }}
+                          />
+                        ) : null}
+                        {isAllTeams && chartVisible.count ? (
+                          <Line
+                            yAxisId="count"
+                            type="monotone"
+                            dataKey="세트성공수"
+                            stroke="#0E7490"
+                            strokeWidth={isMobile ? 2.5 : 2}
+                            dot={{ r: isMobile ? 4 : 3, strokeWidth: 1.5 }}
+                            activeDot={{ r: isMobile ? 6 : 5 }}
+                          />
+                        ) : null}
+                        {chartVisible.avg ? (
+                          <Line
+                            yAxisId="avg"
+                            type="monotone"
+                            dataKey="세트당평균"
+                            name="세트당 평균"
+                            stroke="#9333EA"
+                            strokeWidth={isMobile ? 2.5 : 2}
+                            dot={{ r: isMobile ? 4 : 3, strokeWidth: 1.5, fill: "#9333EA" }}
+                            activeDot={{ r: isMobile ? 6 : 5 }}
+                          />
+                        ) : null}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
