@@ -71,7 +71,7 @@ export function SiteNav() {
                 }`}
               >
                 <Icon className="h-5 w-5" />
-                {"mobileLabel" in item && item.mobileLabel ? item.mobileLabel : item.label}
+                {item.label}
               </button>
             );
           })}
