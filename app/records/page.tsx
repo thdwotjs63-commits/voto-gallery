@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ExternalLink } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
@@ -24,6 +25,10 @@ import {
 import { SiteNav } from "@/components/site-nav";
 import { PageShareButton } from "@/components/page-share-button";
 import { SEASON_STATS, CAREER_TOTAL } from "@/lib/season-summary";
+import {
+  buildGalleryLinkForRecordDate,
+  hasGalleryPhotosForRecordDate,
+} from "@/lib/gallery-date-link";
 
 const TABLE_COLUMNS = [
   { key: "date", label: "날짜", className: "whitespace-nowrap text-left" },
@@ -167,6 +172,7 @@ export default function RecordsPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [seasonDetailsOpen, setSeasonDetailsOpen] = useState(false);
   const [chartVisible, setChartVisible] = useState(DEFAULT_CHART_VISIBLE);
+  const [galleryDateKeys, setGalleryDateKeys] = useState<Set<number>>(() => new Set());
 
   const toggleChartSeries = (key: ChartSeriesKey) => {
     setChartVisible((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -178,6 +184,20 @@ export default function RecordsPage() {
     update();
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/gallery-date-keys")
+      .then((res) => res.json())
+      .then((data: { dateKeys?: number[] }) => {
+        if (!mounted || !Array.isArray(data.dateKeys)) return;
+        setGalleryDateKeys(new Set(data.dateKeys));
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -744,7 +764,17 @@ export default function RecordsPage() {
                                   >
                                     {col.key === "date" ? (
                                       <div className="space-y-1">
-                                        <span className="font-medium text-zinc-900">{value}</span>
+                                        {hasGalleryPhotosForRecordDate(galleryDateKeys, r.date) ? (
+                                          <Link
+                                            href={buildGalleryLinkForRecordDate(r.date)}
+                                            className="font-medium text-[#00287A] underline-offset-2 hover:underline"
+                                            title="갤러리에서 이 날짜 사진 보기"
+                                          >
+                                            {value}
+                                          </Link>
+                                        ) : (
+                                          <span className="font-medium">{value}</span>
+                                        )}
                                         {moments.length > 0 ? (
                                           <div className="flex flex-wrap gap-1">
                                             {moments.map((moment) => (

@@ -28,6 +28,8 @@ import {
   buildPhotoShareClipboardText,
 } from "@/lib/photo-share";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
+import { triggerPhotoDownload } from "@/lib/photo-download";
+import { SiteNav } from "@/components/site-nav";
 
 const BLUR_PLACEHOLDER =
   "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjMjcyNzI3Ii8+PC9zdmc+";
@@ -246,7 +248,8 @@ export function VotoCategoryHome({
 
   return (
     <div className="min-h-screen bg-[#0c0c0e] text-zinc-100">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0c0c0e]/95 backdrop-blur-md">
+      <SiteNav />
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0c0c0e]/95 backdrop-blur-md sm:top-12">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex flex-wrap items-center gap-3">
             <Link
@@ -257,7 +260,7 @@ export function VotoCategoryHome({
             </Link>
             <div className="h-4 w-px bg-white/15" aria-hidden />
             <h1 className="text-lg font-bold tracking-tight text-white sm:text-xl">
-              Voto Photo
+              배구사진
             </h1>
             <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-200/90">
               3 categories
@@ -282,7 +285,7 @@ export function VotoCategoryHome({
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <main className="mx-auto max-w-6xl px-4 py-8 pb-20 sm:px-6 sm:pb-8">
         <p className="mb-6 max-w-2xl text-sm leading-relaxed text-zinc-400">
           현대건설 · 팀코리아 · 여자배구(브이리그·실업배구) — 각 드라이브 폴더와 그 안의 하위 폴더까지 사진을 모읍니다. 썸네일은 Google Drive에서 직접 제공되며
           Vercel 이미지 최적화는 사용하지 않습니다.
@@ -520,7 +523,7 @@ export function VotoCategoryHome({
                                 location: "voto_lightbox",
                                 photo_id: (slide as { id?: string }).id ?? "",
                               });
-                              window.open(url, "_blank", "noopener,noreferrer");
+                              triggerPhotoDownload(url);
                             }}
                             className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
                           >
@@ -537,7 +540,7 @@ export function VotoCategoryHome({
         />
       ) : null}
       {shareToast ? (
-        <p className="pointer-events-none fixed bottom-5 left-1/2 z-[70] -translate-x-1/2 rounded-full bg-black/80 px-3 py-1.5 text-xs text-white">
+        <p className="pointer-events-none fixed bottom-20 left-1/2 z-[70] -translate-x-1/2 rounded-full bg-black/80 px-3 py-1.5 text-xs text-white sm:bottom-5">
           {shareToast}
         </p>
       ) : null}

@@ -48,8 +48,13 @@ import {
   buildPhotoDetailPageUrl,
   buildPhotoShareClipboardText,
 } from "@/lib/photo-share";
-import { SITE_URL } from "@/lib/seo-metadata";
+import { triggerPhotoDownload } from "@/lib/photo-download";
+import {
+  parseGalleryDateKeyParam,
+  resolveGalleryFolderForDateKey,
+} from "@/lib/gallery-date-link";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
+import { SITE_URL } from "@/lib/seo-metadata";
 import { getLatestSetSuccessCountTotal, isSeasonRecord } from "@/lib/records-data";
 
 /** 트윗 작성창에 넣을 갤러리 제목 */
@@ -410,6 +415,7 @@ function feedListImageUrl(image: DriveImage): string {
 const FEED_SCROLL_POLL_MS = 50;
 const FEED_SCROLL_MAX_MS = 2000;
 const QUERY_DATE = "date";
+const QUERY_DATE_KEY = "dateKey";
 const QUERY_PLACE = "place";
 const QUERY_MOMENT = "moment";
 const QUERY_WITH = "with";
@@ -588,6 +594,7 @@ export default function Home() {
   const likesRef = useRef<Record<string, number>>({});
   const lastLikeClickAtRef = useRef<Record<string, number>>({});
   const galleryRef = useRef<HTMLDivElement | null>(null);
+  const galleryBrowseRef = useRef<HTMLDivElement | null>(null);
   const sortAnchorMobileRef = useRef<HTMLDivElement | null>(null);
   const sortAnchorDesktopRef = useRef<HTMLDivElement | null>(null);
   const [heroScrollY, setHeroScrollY] = useState(0);
@@ -609,11 +616,15 @@ export default function Home() {
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [quizBubbleOpen, setQuizBubbleOpen] = useState(false);
   const [shareToast, setShareToast] = useState<string | null>(null);
-  const [urlQueryString, setUrlQueryString] = useState("");
+  const [urlQueryString, setUrlQueryString] = useState(() =>
+    typeof window !== "undefined" ? window.location.search : ""
+  );
   const shareToastTimerRef = useRef<number | null>(null);
   const shareWrapRef = useRef<HTMLDivElement | null>(null);
   const quizWrapRef = useRef<HTMLDivElement | null>(null);
   const photoParamHandledRef = useRef<string | null>(null);
+  const pendingGalleryBrowseScrollRef = useRef(false);
+  const pendingRecordDateKeyRef = useRef<number | null>(null);
   const didHydrateFiltersFromUrlRef = useRef(false);
   const didRestoreScrollFromSessionRef = useRef(false);
   const skipNextUrlHydrationRef = useRef(false);
@@ -741,16 +752,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    try {
-      window.sessionStorage.removeItem(SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY);
-    } catch {
-      // ignore
-    }
-    setLightboxIndex(-1);
-    setPhotoDetailModalImage(null);
-  }, [selectedDateTag, selectedLocationTag, selectedMomentTag, selectedWithTag]);
-
-  useEffect(() => {
     setHeroVisible(true);
 
     const onScroll = () => {
@@ -786,7 +787,7 @@ export default function Home() {
     syncFromLocation();
     window.addEventListener("popstate", syncFromLocation);
     return () => window.removeEventListener("popstate", syncFromLocation);
-  }, []);
+  }, [pathname]);
 
   const parsedUrlParams = useMemo(
     () => new URLSearchParams(urlQueryString.replace(/^\?/, "")),
@@ -803,20 +804,44 @@ export default function Home() {
     rawUrlSort === "oldest" || rawUrlSort === "popular" ? rawUrlSort : "latest";
   const rawUrlView = (parsedUrlParams.get(QUERY_VIEW) ?? "").trim().toLowerCase();
   const urlViewMode: "grid" | "feed" = rawUrlView === "feed" ? "feed" : "grid";
+  const urlDateKeyRaw = (parsedUrlParams.get(QUERY_DATE_KEY) ?? "").trim();
+
+  useEffect(() => {
+    if (!urlDateKeyRaw) return;
+    const dateKey = parseGalleryDateKeyParam(urlDateKeyRaw);
+    if (dateKey != null) pendingRecordDateKeyRef.current = dateKey;
+  }, [urlDateKeyRaw]);
 
   useEffect(() => {
     if (skipNextUrlHydrationRef.current) {
       skipNextUrlHydrationRef.current = false;
       return;
     }
-    setSelectedDateTag((prev) => (prev === urlDate ? prev : urlDate));
+
+    let dateToSet = urlDate;
+    const dateKeyToResolve =
+      pendingRecordDateKeyRef.current ??
+      (urlDateKeyRaw ? parseGalleryDateKeyParam(urlDateKeyRaw) : null);
+
+    if (dateToSet === "all" && dateKeyToResolve != null && images.length > 0) {
+      const folder = resolveGalleryFolderForDateKey(images, dateKeyToResolve);
+      if (folder) {
+        dateToSet = folder;
+        pendingRecordDateKeyRef.current = null;
+        pendingGalleryBrowseScrollRef.current = true;
+      } else {
+        pendingRecordDateKeyRef.current = null;
+      }
+    }
+
+    setSelectedDateTag((prev) => (prev === dateToSet ? prev : dateToSet));
     setSelectedLocationTag((prev) => (prev === urlPlace ? prev : urlPlace));
     setSelectedMomentTag((prev) => (prev === urlMoment ? prev : urlMoment));
     setSelectedWithTag((prev) => (prev === urlWith ? prev : urlWith));
     setSortOrder((prev) => (prev === urlSort ? prev : urlSort));
     setViewMode((prev) => (prev === urlViewMode ? prev : urlViewMode));
     didHydrateFiltersFromUrlRef.current = true;
-  }, [urlDate, urlMoment, urlPlace, urlSort, urlViewMode, urlWith]);
+  }, [urlDate, urlDateKeyRaw, urlMoment, urlPlace, urlSort, urlViewMode, urlWith, images]);
 
   const galleryPhotoIdsKey = useMemo(
     () =>
@@ -1287,6 +1312,28 @@ export default function Home() {
   const filteredTotal = sortedFilteredImages.length;
 
   useEffect(() => {
+    if (!pendingGalleryBrowseScrollRef.current) return;
+    if (loading) return;
+    if (selectedDateTag === "all") return;
+
+    const tryScroll = (attemptsLeft: number) => {
+      const el = galleryBrowseRef.current;
+      if (el) {
+        pendingGalleryBrowseScrollRef.current = false;
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (attemptsLeft <= 0) {
+        pendingGalleryBrowseScrollRef.current = false;
+        return;
+      }
+      window.requestAnimationFrame(() => tryScroll(attemptsLeft - 1));
+    };
+
+    window.requestAnimationFrame(() => tryScroll(12));
+  }, [loading, selectedDateTag, filteredTotal]);
+
+  useEffect(() => {
     sortedFilteredImagesRef.current = sortedFilteredImages;
   }, [sortedFilteredImages]);
 
@@ -1309,6 +1356,24 @@ export default function Home() {
     setLightboxIndex(-1);
   }, [clearLightboxRestoreKey]);
 
+  const filterSelectionKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const key = `${selectedDateTag}|${selectedLocationTag}|${selectedMomentTag}|${selectedWithTag}`;
+    const previous = filterSelectionKeyRef.current;
+    filterSelectionKeyRef.current = key;
+    if (previous === null || previous === key) return;
+    clearLightboxRestoreKey();
+    setLightboxIndex(-1);
+    setPhotoDetailModalImage(null);
+  }, [
+    selectedDateTag,
+    selectedLocationTag,
+    selectedMomentTag,
+    selectedWithTag,
+    clearLightboxRestoreKey,
+  ]);
+
   const consumeLightboxRestoreFromSession = useCallback(() => {
     if (typeof window === "undefined") return false;
     if (lightboxIndexRef.current >= 0) return false;
@@ -1316,9 +1381,9 @@ export default function Home() {
     if (params.get(QUERY_PHOTO)) return false;
     const id = window.sessionStorage.getItem(SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY)?.trim();
     if (!id) return false;
-    window.sessionStorage.removeItem(SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY);
     const idx = sortedFilteredImagesRef.current.findIndex((img) => img.id === id);
     if (idx < 0) return false;
+    window.sessionStorage.removeItem(SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY);
     setLightboxIndex(idx);
     return true;
   }, [urlQueryString]);
@@ -1363,6 +1428,15 @@ export default function Home() {
   }, [consumeLightboxRestoreFromSession]);
 
   useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      void consumeLightboxRestoreFromSession();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [consumeLightboxRestoreFromSession]);
+
+  useEffect(() => {
     if (loading) return;
     if (sortedFilteredImages.length === 0) return;
     void consumeLightboxRestoreFromSession();
@@ -1370,6 +1444,11 @@ export default function Home() {
 
   useEffect(() => {
     if (!didHydrateFiltersFromUrlRef.current) return;
+
+    const awaitingRecordDateKey =
+      pendingRecordDateKeyRef.current != null ||
+      (urlDateKeyRaw.length > 0 && selectedDateTag === "all");
+    if (awaitingRecordDateKey && (loading || images.length === 0)) return;
 
     const params = new URLSearchParams(urlQueryString.replace(/^\?/, ""));
     const setOrDelete = (key: string, value: string, fallback: string) => {
@@ -1387,6 +1466,9 @@ export default function Home() {
     setOrDelete(QUERY_SORT, sortOrder, "latest");
     setOrDelete(QUERY_VIEW, viewMode, "grid");
     params.delete("location");
+    if (selectedDateTag !== "all" || !awaitingRecordDateKey) {
+      params.delete(QUERY_DATE_KEY);
+    }
 
     const nextQuery = params.toString();
     const currentQuery = urlQueryString.replace(/^\?/, "");
@@ -1404,7 +1486,10 @@ export default function Home() {
     selectedWithTag,
     sortOrder,
     urlQueryString,
+    urlDateKeyRaw,
     viewMode,
+    loading,
+    images.length,
   ]);
 
   const visibleGalleryImages = useMemo(
@@ -1440,6 +1525,7 @@ export default function Home() {
     if (typeof window === "undefined") return;
 
     const persistScrollState = () => {
+      if (lightboxIndexRef.current >= 0) return;
       const nodes = document.querySelectorAll<HTMLElement>('[id^="photo-"]');
       const topCandidate = Array.from(nodes).find((node) => node.getBoundingClientRect().bottom > 120);
       const photoId = topCandidate?.id.replace("photo-", "");
@@ -1496,6 +1582,11 @@ export default function Home() {
     const params = new URLSearchParams(urlQueryString.replace(/^\?/, ""));
     if (params.get(QUERY_PHOTO)) return;
     if (typeof window === "undefined") return;
+
+    const pendingLightboxId = window.sessionStorage
+      .getItem(SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY)
+      ?.trim();
+    if (pendingLightboxId) return;
 
     const urlSaysGrid = params.get(QUERY_VIEW)?.toLowerCase() === "grid";
     const sessionView = window.sessionStorage.getItem(SCROLL_RESTORE_VIEW_KEY);
@@ -2249,6 +2340,7 @@ export default function Home() {
       </section>
 
       <div
+        id="gallery"
         ref={galleryRef}
         className="mx-auto min-h-screen w-full max-w-[1280px] bg-[#FFFFFF] px-5 pb-20 pt-8 sm:px-8 sm:pb-0 md:px-12"
       >
@@ -2335,6 +2427,8 @@ export default function Home() {
                 </Swiper>
               </div>
             </section>
+
+            <div ref={galleryBrowseRef} className="scroll-mt-24" aria-hidden />
 
             <div className="mb-8 md:hidden space-y-3">
               <button
@@ -2682,21 +2776,20 @@ export default function Home() {
                           ♥ {likesByPhoto[image.id] ?? 0}
                         </button>
                         <div className="flex shrink-0 items-center gap-1.5">
-                          <a
-                            href={image.downloadUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
                             className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 transition hover:bg-zinc-200"
                             aria-label={`Download ${image.name}`}
-                            onClick={() =>
+                            onClick={() => {
                               trackGaEvent("photo_download", {
                                 location: "feed",
                                 photo_id: image.id,
-                              })
-                            }
+                              });
+                              triggerPhotoDownload(image.downloadUrl);
+                            }}
                           >
                             ↓ Download
-                          </a>
+                          </button>
                           <button
                             type="button"
                             data-photo-share={image.id}
@@ -3164,7 +3257,7 @@ export default function Home() {
                               location: "lightbox",
                               photo_id: currentImage?.id ?? "",
                             });
-                            window.open(url, "_blank", "noopener,noreferrer");
+                            triggerPhotoDownload(url);
                           }}
                           className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
                         >

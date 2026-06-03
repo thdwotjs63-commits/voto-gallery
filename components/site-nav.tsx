@@ -1,12 +1,19 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { Images, ClipboardList, CalendarDays, Heart } from "lucide-react";
+import {
+  Images,
+  ClipboardList,
+  CalendarDays,
+  Heart,
+  Camera,
+} from "lucide-react";
 
 const ITEMS = [
-  { key: "gallery", label: "갤러리", href: "/", icon: Images },
-  { key: "records", label: "기록", href: "/records", icon: ClipboardList },
-  { key: "schedule", label: "일정", href: "/schedule", icon: CalendarDays },
+  { key: "gallery", label: "HOME", href: "/", icon: Images },
+  { key: "voto", label: "배구사진", href: "/voto", icon: Camera },
+  { key: "schedule", label: "배구일정", href: "/schedule", icon: CalendarDays },
+  { key: "records", label: "다인기록", href: "/records", icon: ClipboardList },
   { key: "guestbook", label: "방명록", href: "/?guestbook=1", icon: Heart },
 ];
 
@@ -27,7 +34,7 @@ export function SiteNav() {
   return (
     <>
       <nav className="sticky top-0 z-[70] hidden border-b border-zinc-200/70 bg-white/85 backdrop-blur-md sm:block">
-        <div className="mx-auto flex max-w-[1100px] items-center gap-1 px-5 py-2.5 sm:px-8">
+        <div className="mx-auto flex max-w-[1100px] flex-wrap items-center gap-1 px-5 py-2.5 sm:px-8">
           <span className="mr-3 text-sm font-medium lowercase tracking-[0.04em] text-zinc-900">voto gallery</span>
           {ITEMS.map((item) => {
             const Icon = item.icon;
@@ -64,7 +71,7 @@ export function SiteNav() {
                 }`}
               >
                 <Icon className="h-5 w-5" />
-                {item.label}
+                {"mobileLabel" in item && item.mobileLabel ? item.mobileLabel : item.label}
               </button>
             );
           })}

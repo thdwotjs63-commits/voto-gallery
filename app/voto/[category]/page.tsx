@@ -23,19 +23,19 @@ export async function generateMetadata({
   const { category: raw } = await params;
   const categoryId = resolveCategory(raw);
   if (!categoryId) {
-    return { title: "Voto Photo | DAENI.KR" };
+    return { title: "배구사진 | DAENI.KR" };
   }
 
   const label = getVotoCategoryLabel(categoryId);
   const path = getVotoCategoryUrl(categoryId);
-  const description = `${label} — Voto Photo 카테고리 고화질 김다인 경기 사진`;
+  const description = `${label} — 배구사진 카테고리 고화질 김다인 경기 사진`;
 
   return {
-    title: `${label} | Voto Photo`,
+    title: `${label} | 배구사진`,
     description,
     alternates: { canonical: `${SITE_URL}${path}` },
     openGraph: {
-      title: `${label} | Voto Photo`,
+      title: `${label} | 배구사진`,
       description,
       url: `${SITE_URL}${path}`,
       type: "website",

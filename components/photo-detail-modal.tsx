@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import { trackGaEvent } from "@/lib/analytics";
+import { triggerPhotoDownload } from "@/lib/photo-download";
 import { driveLh3FullDisplayUrl, type DriveImage } from "@/lib/drive-gallery-data";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 
@@ -119,20 +120,19 @@ export function PhotoDetailModal({ image, onClose }: PhotoDetailModalProps) {
             ) : null}
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 md:pt-0.5">
-            <a
-              href={image.downloadUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
               className="inline-flex min-h-10 items-center justify-center rounded-full bg-white/10 px-4 text-xs font-medium text-white transition hover:bg-white/20"
-              onClick={() =>
+              onClick={() => {
                 trackGaEvent("photo_download", {
                   location: "photo_detail_modal",
                   photo_id: image.id,
-                })
-              }
+                });
+                triggerPhotoDownload(image.downloadUrl);
+              }}
             >
               원본 다운로드
-            </a>
+            </button>
             <button
               type="button"
               onClick={() => void handleShare()}
