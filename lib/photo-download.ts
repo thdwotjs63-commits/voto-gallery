@@ -1,19 +1,42 @@
+export const LIGHTBOX_RESTORE_PHOTO_ID_KEY = "voto_restore_lightbox_photo_id";
+
+type TriggerPhotoDownloadOptions = {
+  /** 다운로드로 탭이 바뀐 뒤 라이트박스를 다시 열 때 사용 */
+  restorePhotoId?: string;
+};
+
 /**
- * SPA를 떠나지 않고 다운로드를 시도합니다.
- * (모바일 Safari에서 window.open은 새 탭/전체 이탈로 라이트박스가 닫히는 경우가 많음)
+ * Google Drive 다운로드 URL은 iframe(X-Frame-Options)에서 동작하지 않아
+ * 새 탭/창으로 연다. restorePhotoId를 넘기면 복귀 시 라이트박스 복원에 사용한다.
  */
-export function triggerPhotoDownload(url: string): void {
+export function triggerPhotoDownload(
+  url: string,
+  options?: TriggerPhotoDownloadOptions
+): void {
   if (!url || typeof document === "undefined") return;
 
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.setAttribute("tabindex", "-1");
-  iframe.style.cssText =
-    "position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none";
-  iframe.src = url;
-  document.body.appendChild(iframe);
+  if (options?.restorePhotoId) {
+    try {
+      window.sessionStorage.setItem(
+        LIGHTBOX_RESTORE_PHOTO_ID_KEY,
+        options.restorePhotoId
+      );
+    } catch {
+      // ignore quota / private mode
+    }
+  }
 
-  window.setTimeout(() => {
-    iframe.remove();
-  }, 120_000);
+  const tab = window.open(url, "_blank", "noopener,noreferrer");
+  if (tab) {
+    tab.opener = null;
+    return;
+  }
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }

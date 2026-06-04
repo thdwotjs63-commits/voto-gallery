@@ -523,7 +523,9 @@ export function VotoCategoryHome({
                                 location: "voto_lightbox",
                                 photo_id: (slide as { id?: string }).id ?? "",
                               });
-                              triggerPhotoDownload(url);
+                              triggerPhotoDownload(url, {
+                                restorePhotoId: currentImage?.id,
+                              });
                             }}
                             className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
                           >

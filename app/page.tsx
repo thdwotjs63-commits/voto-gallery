@@ -48,7 +48,7 @@ import {
   buildPhotoDetailPageUrl,
   buildPhotoShareClipboardText,
 } from "@/lib/photo-share";
-import { triggerPhotoDownload } from "@/lib/photo-download";
+import { triggerPhotoDownload, LIGHTBOX_RESTORE_PHOTO_ID_KEY } from "@/lib/photo-download";
 import {
   parseGalleryDateKeyParam,
   resolveGalleryFolderForDateKey,
@@ -426,7 +426,7 @@ const SCROLL_RESTORE_PHOTO_KEY = "voto_restore_photo_id";
 const SCROLL_RESTORE_Y_KEY = "voto_restore_scroll_y";
 const SCROLL_RESTORE_VIEW_KEY = "voto_restore_view_mode";
 const SCROLL_RESTORE_GRID_VISIBLE_KEY = "voto_restore_grid_visible";
-const SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY = "voto_restore_lightbox_photo_id";
+const SCROLL_RESTORE_LIGHTBOX_PHOTO_KEY = LIGHTBOX_RESTORE_PHOTO_ID_KEY;
 
 const PERSON_JSON_LD = {
   "@context": "https://schema.org",
@@ -3257,7 +3257,9 @@ export default function Home() {
                               location: "lightbox",
                               photo_id: currentImage?.id ?? "",
                             });
-                            triggerPhotoDownload(url);
+                            triggerPhotoDownload(url, {
+                              restorePhotoId: currentImage?.id,
+                            });
                           }}
                           className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white transition hover:bg-black/75"
                         >
