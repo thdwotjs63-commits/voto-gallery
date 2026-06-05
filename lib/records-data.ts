@@ -14,8 +14,11 @@ export type PlayerRecord = {
   setSuccess: string;
   setSuccessCount: number | null;
   setSuccessCountTotal: number | null;
+  setAttempts: number | null;
   setAvg: number | null;
   setSuccessRate: string;
+  /** CSV set_success_rate 원본 (예: "51/113" 또는 "0.43") */
+  setSuccessRateRaw: string;
   videoUrl: string;
   note: string;
   homeAway: string;
@@ -69,6 +72,7 @@ function parseNote(note: string): string {
 
 function mapRow(row: RawRow): PlayerRecord {
   const note = (row.note ?? "").trim();
+  const setSuccessRateRaw = (row.set_success_rate ?? "").trim();
   return {
     date: (row.date ?? "").trim(),
     opponent: (row.opponent ?? "").trim(),
@@ -83,8 +87,10 @@ function mapRow(row: RawRow): PlayerRecord {
     setSuccess: (row.set_success ?? "").trim(),
     setSuccessCount: parseSetSuccessCount(row.set_success ?? ""),
     setSuccessCountTotal: parseCountValue(row.set_success_count ?? ""),
+    setAttempts: toNum(row.set_attempts ?? ""),
     setAvg: toNum(row.set_avg ?? ""),
-    setSuccessRate: (row.set_success_rate ?? "").trim(),
+    setSuccessRate: setSuccessRateRaw,
+    setSuccessRateRaw,
     videoUrl: (row.video_url ?? "").trim(),
     note: parseNote(note),
     homeAway: parseHomeAway(row, note),
@@ -148,6 +154,17 @@ export async function fetchAllRecordsSheets(
   );
 
   return sheets;
+}
+
+export function parseSetFraction(raw: string): { made: number; attempts: number } | null {
+  const s = (raw ?? "").trim();
+  if (!s) return null;
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const made = Number(m[1]);
+  const attempts = Number(m[2]);
+  if (!Number.isFinite(made) || !Number.isFinite(attempts) || attempts <= 0) return null;
+  return { made, attempts };
 }
 
 export function parsePercent(v: string): number | null {

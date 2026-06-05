@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, ExternalLink } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import {
-  averagePercent,
   displayRecordValue,
   formatPercentDisplay,
   formatRate,
@@ -285,35 +284,55 @@ export default function RecordsPage() {
   const totals = useMemo(() => {
     const sum = (key: "points" | "serveAce" | "block" | "setSuccessCount") =>
       playedRecords.reduce((acc, r) => acc + (r[key] ?? 0), 0);
+
+    let madeSum = 0;
+    let attemptsSum = 0;
+    for (const r of playedRecords) {
+      const made = r.setSuccessCount ?? 0;
+      const att = r.setAttempts ?? 0;
+      if (att > 0) {
+        madeSum += made;
+        attemptsSum += att;
+      }
+    }
+    const weightedRate = attemptsSum > 0 ? (madeSum / attemptsSum) * 100 : null;
+
     return {
       games: playedRecords.length,
       points: sum("points"),
       serveAce: sum("serveAce"),
       block: sum("block"),
       setSuccessCount: sum("setSuccessCount"),
-      setSuccessRate: averagePercent(playedRecords.map((r) => r.setSuccessRate)),
+      setSuccessRate: weightedRate,
+      setMadeSum: madeSum,
+      setAttemptsSum: attemptsSum,
     };
   }, [playedRecords]);
 
-  const summaryCards = useMemo(
-    () =>
-      isAllTeams
-        ? [
-            { label: "경기", value: totals.games },
-            { label: "총 득점", value: totals.points },
-            { label: "서브에이스", value: totals.serveAce },
-            { label: "세트성공수", value: totals.setSuccessCount },
-            { label: "세트성공률", value: totals.setSuccessRate },
-          ]
-        : [
-            { label: "총 득점", value: totals.points },
-            { label: "서브에이스", value: totals.serveAce },
-            { label: "블로킹", value: totals.block },
-            { label: "세트성공수", value: totals.setSuccessCount },
-            { label: "세트성공률", value: totals.setSuccessRate },
-          ],
-    [isAllTeams, totals]
-  );
+  const summaryCards = useMemo(() => {
+    const rateDisplay =
+      totals.setSuccessRate == null ? "-" : formatPercentDisplay(totals.setSuccessRate);
+    const rateSubLabel =
+      totals.setAttemptsSum > 0
+        ? `성공 ${totals.setMadeSum.toLocaleString("ko-KR")} / 시도 ${totals.setAttemptsSum.toLocaleString("ko-KR")}`
+        : undefined;
+
+    return isAllTeams
+      ? [
+          { label: "경기", value: totals.games },
+          { label: "총 득점", value: totals.points },
+          { label: "서브에이스", value: totals.serveAce },
+          { label: "세트성공수", value: totals.setSuccessCount },
+          { label: "세트성공률", value: rateDisplay, subLabel: rateSubLabel },
+        ]
+      : [
+          { label: "총 득점", value: totals.points },
+          { label: "서브에이스", value: totals.serveAce },
+          { label: "블로킹", value: totals.block },
+          { label: "세트성공수", value: totals.setSuccessCount },
+          { label: "세트성공률", value: rateDisplay, subLabel: rateSubLabel },
+        ];
+  }, [isAllTeams, totals]);
 
   const xAxisInterval = useMemo(() => {
     if (chartData.length <= 6) return 0;
@@ -516,6 +535,9 @@ export default function RecordsPage() {
                     <div key={s.label} className="rounded-xl border border-zinc-200 bg-white px-3 py-3 text-center">
                       <div className="text-lg font-semibold text-[#00287A]">{s.value}</div>
                       <div className="text-[11px] text-zinc-500">{s.label}</div>
+                      {"subLabel" in s && s.subLabel ? (
+                        <p className="mt-0.5 text-[10px] tabular-nums text-zinc-400">{s.subLabel}</p>
+                      ) : null}
                     </div>
                   ))}
                 </div>
