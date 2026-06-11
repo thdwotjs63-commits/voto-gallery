@@ -24,7 +24,6 @@ import "swiper/css/pagination";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
-  CalendarDays,
   ChevronDown,
   Heart,
   Instagram,
@@ -2372,7 +2371,7 @@ export default function Home() {
       </section>
 
       {ongoingTournaments.length > 0 ? (
-        <div className="mb-6 px-5 sm:px-8">
+        <div className="mb-6 mt-8 px-5 sm:mt-10 sm:px-8">
           {ongoingTournaments.map((t) => (
             <div
               key={t.tournament}
@@ -2385,27 +2384,43 @@ export default function Home() {
               }}
               role="button"
               tabIndex={0}
-              className="mx-auto mb-2 flex max-w-[1100px] cursor-pointer items-center gap-3 rounded-2xl bg-[#00287A]/[0.06] px-4 py-3 transition hover:bg-[#00287A]/[0.1]"
+              className="relative mx-auto mb-2 h-[120px] max-w-[1100px] cursor-pointer overflow-hidden rounded-2xl bg-[#1a3a6b]"
             >
-              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#00287A]/15 text-[#00287A]">
-                <CalendarDays className="h-5 w-5" aria-hidden />
+              <img
+                src="/banner.jpg"
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+                loading="eager"
+              />
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(to top, rgba(0,18,50,0.85) 0%, rgba(0,18,50,0.2) 60%, transparent 100%)",
+                }}
+              />
+              <div className="absolute inset-x-3 bottom-3 flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-medium tracking-wide text-white/80">
+                    지금 진행 중
+                  </p>
+                  <p className="mt-0.5 truncate text-[15px] font-semibold text-white">
+                    {t.tournament}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-white/90">
+                    {formatScheduleMD(t.startDate)} ~ {formatScheduleMD(t.endDate)}
+                    {t.wins + t.losses > 0 ? (
+                      <>
+                        {" "}
+                        · {t.wins}승 {t.losses}패
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+                <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-[#0C2444]">
+                  일정 <ArrowRight className="h-3 w-3" aria-hidden />
+                </span>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-medium text-[#00287A]/70">지금 진행 중</p>
-                <p className="truncate text-sm font-medium text-[#00287A]">{t.tournament}</p>
-                <p className="text-[11px] text-[#00287A]/70">
-                  {formatScheduleMD(t.startDate)} ~ {formatScheduleMD(t.endDate)}
-                  {t.wins + t.losses > 0 ? (
-                    <>
-                      {" "}
-                      · <span className="font-medium">{t.wins}승 {t.losses}패</span>
-                    </>
-                  ) : null}
-                </p>
-              </div>
-              <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-[#00287A] px-3 py-1.5 text-xs text-white">
-                일정 <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-              </span>
             </div>
           ))}
         </div>
