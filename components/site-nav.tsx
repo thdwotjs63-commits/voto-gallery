@@ -25,6 +25,22 @@ export function SiteNav() {
     router.push(href);
   };
 
+  const handleGuestbook = () => {
+    if (pathname === "/") {
+      window.dispatchEvent(new Event("open-guestbook"));
+    } else {
+      router.push("/?guestbook=1");
+    }
+  };
+
+  const handleItemClick = (item: (typeof ITEMS)[number]) => {
+    if (item.key === "guestbook") {
+      handleGuestbook();
+      return;
+    }
+    go(item.href);
+  };
+
   const isActive = (href: string) => {
     if (href.startsWith("/?")) return false;
     if (href === "/") return pathname === "/";
@@ -43,7 +59,7 @@ export function SiteNav() {
               <button
                 key={item.key}
                 type="button"
-                onClick={() => go(item.href)}
+                onClick={() => handleItemClick(item)}
                 className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition ${
                   active ? "bg-[#00287A] text-white" : "text-zinc-600 hover:bg-zinc-100"
                 }`}
@@ -65,7 +81,7 @@ export function SiteNav() {
               <button
                 key={item.key}
                 type="button"
-                onClick={() => go(item.href)}
+                onClick={() => handleItemClick(item)}
                 className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] transition ${
                   active ? "text-[#00287A]" : "text-zinc-500"
                 }`}

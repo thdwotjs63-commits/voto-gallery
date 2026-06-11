@@ -1797,6 +1797,12 @@ export default function Home() {
     }
   }, []);
 
+  useEffect(() => {
+    const handler = () => setGuestbookModalOpen(true);
+    window.addEventListener("open-guestbook", handler);
+    return () => window.removeEventListener("open-guestbook", handler);
+  }, []);
+
   const bestPicks = useMemo(() => {
     const byLikes = (a: DriveImage, b: DriveImage) => {
       const likeDiff = (likesByPhoto[b.id] ?? 0) - (likesByPhoto[a.id] ?? 0);
