@@ -23,6 +23,8 @@ import "swiper/css/effect-fade";
 import "swiper/css/pagination";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowRight,
+  CalendarDays,
   ChevronDown,
   Heart,
   Instagram,
@@ -53,6 +55,10 @@ import {
   parseGalleryDateKeyParam,
   resolveGalleryFolderForDateKey,
 } from "@/lib/gallery-date-link";
+import {
+  getOngoingDaeinTournaments,
+  type Match as ScheduleMatch,
+} from "@/lib/schedule-data";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 import { SITE_URL } from "@/lib/seo-metadata";
 import { getLatestSetSuccessCountTotal, isSeasonRecord } from "@/lib/records-data";
@@ -71,6 +77,12 @@ const FILTER_DROPDOWN_TRIGGER_ACTIVE = "!bg-[#00287A] !text-white";
 const FILTER_DROPDOWN_TRIGGER_INACTIVE = "!bg-white !text-[#00287A]";
 const FILTER_DROPDOWN_MENU =
   "max-h-[min(18rem,calc(100dvh-24px))] overflow-auto rounded-2xl border border-[#00287A]/25 bg-white/95 p-2 shadow-[0_18px_38px_rgba(0,40,122,0.18)] backdrop-blur-[10px]";
+
+function formatScheduleMD(date: string): string {
+  const parts = date.split("-");
+  if (parts.length < 3) return date;
+  return `${Number(parts[1])}/${Number(parts[2])}`;
+}
 
 declare global {
   interface Window {
@@ -565,6 +577,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [heroSetSuccessCount, setHeroSetSuccessCount] = useState<number | null>(null);
+  const [scheduleMatches, setScheduleMatches] = useState<ScheduleMatch[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [photoDetailModalImage, setPhotoDetailModalImage] = useState<DriveImage | null>(
     null
@@ -696,6 +709,20 @@ export default function Home() {
         const sheets = Array.isArray(data?.sheets) ? data.sheets : [];
         const records = (sheets[0]?.records ?? []).filter(isSeasonRecord);
         setHeroSetSuccessCount(getLatestSetSuccessCountTotal(records));
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/schedule")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!mounted) return;
+        if (Array.isArray(data)) setScheduleMatches(data);
       })
       .catch(() => {});
     return () => {
@@ -1785,6 +1812,11 @@ export default function Home() {
     [images]
   );
 
+  const ongoingTournaments = useMemo(
+    () => getOngoingDaeinTournaments(scheduleMatches),
+    [scheduleMatches]
+  );
+
   const heroBackgroundTranslate = Math.max(-heroScrollY * 0.12, -140);
   const heroTextTranslate = Math.max(-heroScrollY * 0.32, -220);
 
@@ -2338,6 +2370,46 @@ export default function Home() {
           </button>
         </div>
       </section>
+
+      {ongoingTournaments.length > 0 ? (
+        <div className="mb-6 px-5 sm:px-8">
+          {ongoingTournaments.map((t) => (
+            <div
+              key={t.tournament}
+              onClick={() => router.push("/schedule")}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  router.push("/schedule");
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              className="mx-auto mb-2 flex max-w-[1100px] cursor-pointer items-center gap-3 rounded-2xl bg-[#00287A]/[0.06] px-4 py-3 transition hover:bg-[#00287A]/[0.1]"
+            >
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#00287A]/15 text-[#00287A]">
+                <CalendarDays className="h-5 w-5" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-medium text-[#00287A]/70">지금 진행 중</p>
+                <p className="truncate text-sm font-medium text-[#00287A]">{t.tournament}</p>
+                <p className="text-[11px] text-[#00287A]/70">
+                  {formatScheduleMD(t.startDate)} ~ {formatScheduleMD(t.endDate)}
+                  {t.wins + t.losses > 0 ? (
+                    <>
+                      {" "}
+                      · <span className="font-medium">{t.wins}승 {t.losses}패</span>
+                    </>
+                  ) : null}
+                </p>
+              </div>
+              <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-[#00287A] px-3 py-1.5 text-xs text-white">
+                일정 <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <div
         id="gallery"

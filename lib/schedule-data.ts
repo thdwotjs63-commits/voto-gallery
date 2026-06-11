@@ -14,7 +14,64 @@ export type Match = {
   scoreA: string;
   scoreB: string;
   url: string;
+  dain: boolean;
 };
+
+export type OngoingTournament = {
+  tournament: string;
+  startDate: string;
+  endDate: string;
+  wins: number;
+  losses: number;
+};
+
+const DAEIN_TEAMS = ["현대건설", "대한민국"];
+
+function daeinIsTeamA(row: Match): boolean {
+  return DAEIN_TEAMS.some((t) => (row.teamA ?? "").includes(t));
+}
+
+export function getOngoingDaeinTournaments(
+  rows: Match[],
+  today = new Date()
+): OngoingTournament[] {
+  const daeinRows = rows.filter((r) => r.dain && r.tournament && r.date);
+
+  const map = new Map<string, Match[]>();
+  for (const r of daeinRows) {
+    if (!map.has(r.tournament)) map.set(r.tournament, []);
+    map.get(r.tournament)!.push(r);
+  }
+
+  const todayStr = today.toISOString().slice(0, 10);
+  const result: OngoingTournament[] = [];
+
+  for (const [tournament, group] of map) {
+    const dates = group.map((r) => r.date).sort();
+    const min = dates[0];
+    const max = dates[dates.length - 1];
+    if (todayStr < min || todayStr > max) continue;
+
+    let wins = 0;
+    let losses = 0;
+    for (const r of group) {
+      const a = Number(r.scoreA);
+      const b = Number(r.scoreB);
+      if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+      if (a === 0 && b === 0) continue;
+      const isA = daeinIsTeamA(r);
+      const myScore = isA ? a : b;
+      const oppScore = isA ? b : a;
+      if (myScore > oppScore) wins++;
+      else if (myScore < oppScore) losses++;
+    }
+
+    result.push({ tournament, startDate: min, endDate: max, wins, losses });
+  }
+
+  result.sort((a, b) => a.startDate.localeCompare(b.startDate));
+  return result;
+}
 
 export type TournamentGroup = {
   tournament: string;
@@ -51,6 +108,7 @@ export async function fetchSchedule(csvUrl: string): Promise<Match[]> {
       scoreA: (row.score_a ?? "").trim(),
       scoreB: (row.score_b ?? "").trim(),
       url: (row.url ?? "").trim(),
+      dain: (row.dain ?? "").trim() === "1",
     }))
     .filter((m) => m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date));
 }
