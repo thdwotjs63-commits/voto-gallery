@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus, ExternalLink, Calculator } from "lucide-react";
 import { groupByDate, buildTournamentICS, buildAllScheduleICS, type Match, type DaySchedule } from "@/lib/schedule-data";
 import { SiteNav } from "@/components/site-nav";
 import { PageShareButton } from "@/components/page-share-button";
@@ -230,6 +230,14 @@ export default function SchedulePage() {
             <button type="button" aria-label="다음 달" onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))} className="rounded-lg border border-zinc-200 p-2 text-zinc-700 hover:bg-zinc-50"><ChevronRight className="h-4 w-4" /></button>
           </div>
           <div className="flex justify-center gap-1.5 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => router.push("/calculator")}
+              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 transition hover:bg-zinc-50"
+            >
+              <Calculator className="h-3.5 w-3.5" />
+              랭킹 계산기
+            </button>
             <button type="button" onClick={() => setView("calendar")} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition ${view === "calendar" ? "bg-[#00287A] text-white" : "border border-zinc-200 text-zinc-700 hover:bg-zinc-50"}`}><CalendarIcon className="h-3.5 w-3.5" /> 달력</button>
             <button type="button" onClick={() => setView("list")} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition ${view === "list" ? "bg-[#00287A] text-white" : "border border-zinc-200 text-zinc-700 hover:bg-zinc-50"}`}><ListIcon className="h-3.5 w-3.5" /> 리스트</button>
           </div>
