@@ -55,7 +55,7 @@ import {
   resolveGalleryFolderForDateKey,
 } from "@/lib/gallery-date-link";
 import {
-  getOngoingDaeinTournaments,
+  getNextDaeinMatch,
   type Match as ScheduleMatch,
 } from "@/lib/schedule-data";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
@@ -81,6 +81,12 @@ function formatScheduleMD(date: string): string {
   const parts = date.split("-");
   if (parts.length < 3) return date;
   return `${Number(parts[1])}/${Number(parts[2])}`;
+}
+
+function formatMatchDate(d: string) {
+  const dt = new Date(d + "T00:00:00");
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${dt.getMonth() + 1}월 ${dt.getDate()}일 (${days[dt.getDay()]})`;
 }
 
 declare global {
@@ -1817,8 +1823,8 @@ export default function Home() {
     [images]
   );
 
-  const ongoingTournaments = useMemo(
-    () => getOngoingDaeinTournaments(scheduleMatches),
+  const nextMatch = useMemo(
+    () => getNextDaeinMatch(scheduleMatches),
     [scheduleMatches]
   );
 
@@ -2376,59 +2382,55 @@ export default function Home() {
         </div>
       </section>
 
-      {ongoingTournaments.length > 0 ? (
+      {nextMatch ? (
         <div className="mb-6 mt-8 px-5 sm:mt-10 sm:px-8">
-          {ongoingTournaments.map((t) => (
+          <div
+            onClick={() => router.push("/schedule")}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                router.push("/schedule");
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            className="relative mx-auto h-[120px] max-w-[1100px] cursor-pointer overflow-hidden rounded-2xl bg-[#1a3a6b]"
+          >
+            <img
+              src="/banner.jpg"
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              loading="eager"
+            />
             <div
-              key={t.tournament}
-              onClick={() => router.push("/schedule")}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  router.push("/schedule");
-                }
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(to top, rgba(0,18,50,0.85) 0%, rgba(0,18,50,0.2) 60%, transparent 100%)",
               }}
-              role="button"
-              tabIndex={0}
-              className="relative mx-auto mb-2 h-[120px] max-w-[1100px] cursor-pointer overflow-hidden rounded-2xl bg-[#1a3a6b]"
-            >
-              <img
-                src="/banner.jpg"
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover"
-                loading="eager"
-              />
-              <div
-                className="absolute inset-0"
-                style={{
-                  background:
-                    "linear-gradient(to top, rgba(0,18,50,0.85) 0%, rgba(0,18,50,0.2) 60%, transparent 100%)",
-                }}
-              />
-              <div className="absolute inset-x-3 bottom-3 flex items-end justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-medium tracking-wide text-white/80">
-                    지금 진행 중
-                  </p>
-                  <p className="mt-0.5 truncate text-[15px] font-semibold text-white">
-                    {t.tournament}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-white/90">
-                    {formatScheduleMD(t.startDate)} ~ {formatScheduleMD(t.endDate)}
-                    {t.wins + t.losses > 0 ? (
-                      <>
-                        {" "}
-                        · {t.wins}승 {t.losses}패
-                      </>
-                    ) : null}
-                  </p>
-                </div>
-                <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-[#0C2444]">
-                  일정 <ArrowRight className="h-3 w-3" aria-hidden />
-                </span>
+            />
+            <div className="absolute inset-x-4 bottom-3 flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium tracking-wide text-white/80">
+                  다가오는 일정
+                </p>
+                <p className="mt-0.5 truncate text-[18px] font-semibold text-white sm:text-[20px]">
+                  {nextMatch.teamA} vs {nextMatch.teamB}
+                </p>
+                <p className="mt-0.5 text-[11px] text-white/90">
+                  {formatMatchDate(nextMatch.date)}
+                  {nextMatch.startTime && ` · ${nextMatch.startTime}`}
+                  {nextMatch.venue && ` · ${nextMatch.venue}`}
+                </p>
+                <p className="mt-0.5 truncate text-[10px] text-white/70">
+                  {nextMatch.tournament}
+                </p>
               </div>
+              <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-[#0C2444]">
+                일정 <ArrowRight className="h-3 w-3" aria-hidden />
+              </span>
             </div>
-          ))}
+          </div>
         </div>
       ) : null}
 

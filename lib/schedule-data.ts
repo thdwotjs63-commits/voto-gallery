@@ -25,6 +25,39 @@ export type OngoingTournament = {
   losses: number;
 };
 
+export type NextMatch = {
+  date: string;
+  startTime: string;
+  tournament: string;
+  teamA: string;
+  teamB: string;
+  venue: string;
+  scoreA: string;
+  scoreB: string;
+};
+
+export function getNextDaeinMatch(rows: Match[], today = new Date()): NextMatch | null {
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const daein = rows.filter((r) => r.dain && r.date && r.date >= todayStr);
+  daein.sort((a, b) =>
+    a.date === b.date
+      ? (a.startTime ?? "").localeCompare(b.startTime ?? "")
+      : a.date.localeCompare(b.date)
+  );
+  const m = daein[0];
+  if (!m) return null;
+  return {
+    date: m.date,
+    startTime: m.startTime ?? "",
+    tournament: m.tournament ?? "",
+    teamA: m.teamA ?? "",
+    teamB: m.teamB ?? "",
+    venue: m.venue ?? "",
+    scoreA: m.scoreA ?? "",
+    scoreB: m.scoreB ?? "",
+  };
+}
+
 const DAEIN_TEAMS = ["현대건설", "대한민국"];
 
 function daeinIsTeamA(row: Match): boolean {
