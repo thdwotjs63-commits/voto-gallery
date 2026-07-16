@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Heart,
   Camera,
+  Sparkles,
 } from "lucide-react";
 
 const ITEMS = [
@@ -14,6 +15,7 @@ const ITEMS = [
   { key: "voto", label: "배구사진", href: "/voto", icon: Camera },
   { key: "schedule", label: "배구일정", href: "/schedule", icon: CalendarDays },
   { key: "records", label: "다인기록", href: "/records", icon: ClipboardList },
+  { key: "saju", label: "궁합", href: "/saju", icon: Sparkles },
   { key: "guestbook", label: "방명록", href: "/?guestbook=1", icon: Heart },
 ];
 

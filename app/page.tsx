@@ -2382,8 +2382,8 @@ export default function Home() {
         </div>
       </section>
 
-      {nextMatch ? (
-        <div className="mb-6 mt-8 px-5 sm:mt-10 sm:px-8">
+      <div className="mb-6 mt-8 space-y-3 px-5 sm:mt-10 sm:px-8">
+        {nextMatch ? (
           <div
             onClick={() => router.push("/schedule")}
             onKeyDown={(event) => {
@@ -2431,8 +2431,25 @@ export default function Home() {
               </span>
             </div>
           </div>
+        ) : null}
+
+        <div
+          onClick={() => router.push("/saju")}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              router.push("/saju");
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          className="mx-auto flex max-w-[1100px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#D9C48A]/45 bg-[#131110] px-4 py-3"
+        >
+          <p className="min-w-0 truncate text-[13px] font-medium text-[#E9E3D6]">
+            🏐 다인이와 궁합테스트 — 사주로 보는 나와 다인이의 케미 →
+          </p>
         </div>
-      ) : null}
+      </div>
 
       <div
         id="gallery"
