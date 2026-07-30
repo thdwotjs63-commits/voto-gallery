@@ -2,20 +2,7 @@
 
 import type { TeamKoreaRecord } from "@/lib/schedule-data";
 
-type Tone = "navy" | "white";
-
-const TONE_STYLE: Record<Tone, string> = {
-  navy: "bg-[#00287A]/[0.06] text-[#00287A]",
-  white: "bg-white/10 text-white",
-};
-
-export function TeamKoreaBadge({
-  record,
-  tone = "navy",
-}: {
-  record: TeamKoreaRecord | null;
-  tone?: Tone;
-}) {
+export function TeamKoreaBadge({ record }: { record: TeamKoreaRecord | null }) {
   if (!record) return null;
   const text =
     record.streakActive && record.streak >= 2
@@ -23,9 +10,7 @@ export function TeamKoreaBadge({
       : `팀코리아 2026 ${record.wins}승 ${record.losses}패`;
 
   return (
-    <div
-      className={`mx-auto mb-4 flex max-w-[1100px] items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${TONE_STYLE[tone]}`}
-    >
+    <div className="mx-auto mb-4 flex w-fit max-w-[1100px] items-center justify-center gap-2 rounded-full bg-[#00287A] px-4 py-2 text-sm font-medium text-white shadow-[0_4px_12px_rgba(0,40,122,0.18)]">
       <span aria-hidden="true">🇰🇷</span>
       <span>{text}</span>
     </div>

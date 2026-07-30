@@ -2390,7 +2390,7 @@ export default function Home() {
       </section>
 
       <div className="mb-6 mt-8 space-y-3 px-5 sm:mt-10 sm:px-8">
-        <TeamKoreaBadge record={teamKoreaRecord} tone="white" />
+        <TeamKoreaBadge record={teamKoreaRecord} />
         {nextMatch ? (
           <div
             onClick={() => router.push("/schedule")}
