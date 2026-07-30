@@ -15,6 +15,8 @@ export type Match = {
   scoreB: string;
   url: string;
   dain: boolean;
+  /** 성인 대표팀(팀코리아) 경기 */
+  natl: boolean;
 };
 
 export type OngoingTournament = {
@@ -59,9 +61,60 @@ export function getNextDaeinMatch(rows: Match[], today = new Date()): NextMatch 
 }
 
 const DAEIN_TEAMS = ["현대건설", "대한민국"];
+const KOREA_TEAMS = ["대한민국"];
 
 function daeinIsTeamA(row: Match): boolean {
   return DAEIN_TEAMS.some((t) => (row.teamA ?? "").includes(t));
+}
+
+export type TeamKoreaRecord = {
+  wins: number;
+  losses: number;
+  /** 현재 연승 수 (직전 경기부터 이어진 승수) */
+  streak: number;
+  /** true면 연승 중, false면 직전 경기 패 */
+  streakActive: boolean;
+};
+
+export function getTeamKoreaRecord(rows: Match[]): TeamKoreaRecord | null {
+  const games = rows.filter((r) => {
+    if (!r.natl || !r.date) return false;
+    if (!r.date.startsWith("2026")) return false;
+    const a = Number(r.scoreA);
+    const b = Number(r.scoreB);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+    if (a === 0 && b === 0) return false;
+    return true;
+  });
+
+  if (games.length === 0) return null;
+
+  games.sort((x, y) =>
+    x.date === y.date
+      ? (x.startTime ?? "").localeCompare(y.startTime ?? "")
+      : x.date.localeCompare(y.date)
+  );
+
+  const results = games.map((r) => {
+    const a = Number(r.scoreA);
+    const b = Number(r.scoreB);
+    const koreaIsA = KOREA_TEAMS.some((t) => (r.teamA ?? "").includes(t));
+    const myScore = koreaIsA ? a : b;
+    const oppScore = koreaIsA ? b : a;
+    return myScore > oppScore;
+  });
+
+  const wins = results.filter((w) => w).length;
+  const losses = results.length - wins;
+
+  let streak = 0;
+  for (let i = results.length - 1; i >= 0; i--) {
+    if (results[i]) streak++;
+    else break;
+  }
+  const streakActive = results[results.length - 1] === true;
+
+  return { wins, losses, streak, streakActive };
 }
 
 export function getOngoingDaeinTournaments(
@@ -142,6 +195,7 @@ export async function fetchSchedule(csvUrl: string): Promise<Match[]> {
       scoreB: (row.score_b ?? "").trim(),
       url: (row.url ?? "").trim(),
       dain: (row.dain ?? "").trim() === "1",
+      natl: (row.natl ?? "").trim() === "1",
     }))
     .filter((m) => m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date));
 }

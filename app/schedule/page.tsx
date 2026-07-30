@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus, ExternalLink, Calculator } from "lucide-react";
-import { groupByDate, buildTournamentICS, buildAllScheduleICS, type Match, type DaySchedule } from "@/lib/schedule-data";
+import { groupByDate, buildTournamentICS, buildAllScheduleICS, getTeamKoreaRecord, type Match, type DaySchedule } from "@/lib/schedule-data";
 import { SiteNav } from "@/components/site-nav";
 import { PageShareButton } from "@/components/page-share-button";
+import { TeamKoreaBadge } from "@/components/team-korea-badge";
 
 const CATEGORY_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   "브이리그": { bg: "#E6F1FB", text: "#0C447C", label: "브이리그" },
@@ -187,6 +188,8 @@ export default function SchedulePage() {
   );
   const allDaySchedules = useMemo(() => groupByDate(matches), [matches]);
 
+  const teamKoreaRecord = useMemo(() => getTeamKoreaRecord(matches), [matches]);
+
   const downloadICS = (ics: string, filename: string) => {
     const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -221,6 +224,10 @@ export default function SchedulePage() {
           <button type="button" onClick={() => router.push("/")} className="rounded-full border border-zinc-200 px-4 py-2 text-xs text-zinc-700 transition hover:bg-zinc-50">← Gallery</button>
         </div>
       </header>
+
+      <div className="px-4 sm:px-8">
+        <TeamKoreaBadge record={teamKoreaRecord} />
+      </div>
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20 sm:px-8 sm:pb-0">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">

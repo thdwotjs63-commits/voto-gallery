@@ -56,8 +56,10 @@ import {
 } from "@/lib/gallery-date-link";
 import {
   getNextDaeinMatch,
+  getTeamKoreaRecord,
   type Match as ScheduleMatch,
 } from "@/lib/schedule-data";
+import { TeamKoreaBadge } from "@/components/team-korea-badge";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 import { SITE_URL } from "@/lib/seo-metadata";
 import { getLatestSetSuccessCountTotal, isSeasonRecord } from "@/lib/records-data";
@@ -1828,6 +1830,11 @@ export default function Home() {
     [scheduleMatches]
   );
 
+  const teamKoreaRecord = useMemo(
+    () => getTeamKoreaRecord(scheduleMatches),
+    [scheduleMatches]
+  );
+
   const heroBackgroundTranslate = Math.max(-heroScrollY * 0.12, -140);
   const heroTextTranslate = Math.max(-heroScrollY * 0.32, -220);
 
@@ -2383,6 +2390,7 @@ export default function Home() {
       </section>
 
       <div className="mb-6 mt-8 space-y-3 px-5 sm:mt-10 sm:px-8">
+        <TeamKoreaBadge record={teamKoreaRecord} tone="white" />
         {nextMatch ? (
           <div
             onClick={() => router.push("/schedule")}
