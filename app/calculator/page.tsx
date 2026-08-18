@@ -36,7 +36,10 @@ export default function CalculatorPage() {
     let maxI = 0;
     for (let i = 1; i < 6; i++) if (P[i] > P[maxI]) maxI = i;
     const rows = P.map((p, i) => {
-      const pts = (SSV[i] - emr) * m / 8;
+      let pts = (SSV[i] - emr) * m / 8;
+      // 승패 부호 보정 (FIVB 실제 표 검증: 이기면 최소 +0.01, 지면 최소 -0.01 보장)
+      if (i < 3 && pts < 0.01) pts = 0.01;
+      if (i >= 3 && pts > -0.01) pts = -0.01;
       return {
         label: LBL[i],
         prob: p,
@@ -174,6 +177,7 @@ export default function CalculatorPage() {
           <b>계산 방식</b> — Δ = 8 × (WRS_A − WRS_B) ÷ 1000 → 정규분포로 6가지 결과 확률 산출 → EMR = Σ(확률 × 세트변량) → 포인트 = (세트변량 − EMR) × MWF ÷ 8.<br />
           세트변량(SSV): 3-0 = +2, 3-1 = +1.5, 3-2 = +1, 2-3 = −1, 1-3 = −1.5, 0-3 = −2.<br />
           ※ 컷포인트 C1~C5는 FIVB가 공개하지 않아 대칭 분포 추정치(±1.06, ±0.394, 0)를 사용했습니다. 실제 공식 포인트와 1~2점 내외의 오차가 있을 수 있습니다.
+          <br />※ FIVB 실제 데이터 검증 결과, 이긴 경기는 최소 +0.01, 진 경기는 최소 −0.01이 되도록 보정했습니다.
         </footer>
       </div>
     </div>
