@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus, ExternalLink, Calculator } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus, ExternalLink, Calculator, Crown } from "lucide-react";
 import { groupByDate, buildTournamentICS, buildAllScheduleICS, getTeamKoreaRecord, type Match, type DaySchedule } from "@/lib/schedule-data";
+import { getHoliday, getDayType } from "@/lib/holidays";
 import { SiteNav } from "@/components/site-nav";
 import { PageShareButton } from "@/components/page-share-button";
 import { TeamKoreaBadge } from "@/components/team-korea-badge";
@@ -14,6 +15,7 @@ const CATEGORY_STYLE: Record<string, { bg: string; text: string; label: string }
   "그 외 배구": { bg: "#E1F5EE", text: "#085041", label: "그 외 배구" },
 };
 const FALLBACK_STYLE = { bg: "#F1EFE8", text: "#2C2C2A", label: "기타" };
+const HYUNDAI_STYLE = { bg: "#FEF3C7", text: "#92400E" };
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 function catStyle(category: string) {
@@ -30,10 +32,32 @@ function weekdayLabel(dateStr: string): string {
   return WEEKDAYS[parseDateString(dateStr).getDay()];
 }
 function weekdayClass(dateStr: string): string {
-  const day = parseDateString(dateStr).getDay();
-  if (day === 0) return "text-red-600";
-  if (day === 6) return "text-blue-600";
+  const holiday = getHoliday(dateStr);
+  const dayType = getDayType(dateStr);
+  if (holiday || dayType === "sun") return "text-red-600";
+  if (dayType === "sat") return "text-blue-600";
   return "text-zinc-500";
+}
+
+function calendarDateClass(dateStr: string, inMonth: boolean): string {
+  if (!inMonth) return "text-zinc-400";
+  const holiday = getHoliday(dateStr);
+  const dayType = getDayType(dateStr);
+  if (holiday || dayType === "sun") return "text-red-500";
+  if (dayType === "sat") return "text-blue-500";
+  return "text-zinc-800";
+}
+
+function isHyundaiMatch(m: Match): boolean {
+  return m.teamA.includes("현대건설") || m.teamB.includes("현대건설");
+}
+
+function isHyundaiHomeMatch(m: Match): boolean {
+  return m.homeAway === "홈";
+}
+
+function matchBlockStyle(category: string, matches: Match[]) {
+  return matches.some(isHyundaiMatch) ? HYUNDAI_STYLE : catStyle(category);
 }
 
 function needsIosSafariTip(): boolean {
@@ -50,12 +74,15 @@ function needsIosSafariTip(): boolean {
   return !isSafari;
 }
 
-function MatchLine({ m, inheritColor = false }: { m: Match; inheritColor?: boolean }) {
+function MatchLine({ m, inheritColor = false, showCrown = false }: { m: Match; inheritColor?: boolean; showCrown?: boolean }) {
   const winnerClass = inheritColor ? "font-semibold" : "font-medium text-zinc-900";
   const mutedClass = inheritColor ? "opacity-65" : "text-zinc-500";
 
   return (
     <span>
+      {showCrown && isHyundaiHomeMatch(m) ? (
+        <Crown className="mr-0.5 inline h-3 w-3 text-amber-400" aria-hidden />
+      ) : null}
       {m.startTime}{" "}
       {m.scoreA && m.scoreB ? (
         <>
@@ -89,11 +116,21 @@ function BroadcastLink({ url, compact = false }: { url: string; compact?: boolea
 }
 
 function MatchRow({ m, inheritColor = false, compact = false }: { m: Match; inheritColor?: boolean; compact?: boolean }) {
+  const isHome = isHyundaiHomeMatch(m);
+  const isHyundai = isHyundaiMatch(m);
   return (
-    <div className={`flex items-start gap-2 ${m.url ? "justify-between" : ""}`}>
-      <div className="flex min-w-0 flex-1 items-start gap-1">
-        <Clock className={`mt-0.5 shrink-0 text-zinc-500 ${compact ? "h-3 w-3" : "h-3.5 w-3.5"}`} />
-        <MatchLine m={m} inheritColor={inheritColor} />
+    <div className={`flex items-start gap-2 rounded-md ${isHyundai ? "bg-amber-50 px-2 py-1.5 -mx-2" : ""} ${m.url ? "justify-between" : ""}`}>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        {isHome ? (
+          <span className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+            <Crown className="h-4 w-4 text-amber-400" aria-hidden />
+            홈경기
+          </span>
+        ) : null}
+        <div className="flex items-start gap-1">
+          <Clock className={`mt-0.5 shrink-0 text-zinc-500 ${compact ? "h-3 w-3" : "h-3.5 w-3.5"}`} />
+          <MatchLine m={m} inheritColor={inheritColor} />
+        </div>
       </div>
       <BroadcastLink url={m.url} compact={compact} />
     </div>
@@ -321,25 +358,55 @@ export default function SchedulePage() {
         ) : view === "calendar" ? (
           <>
             <div className="mb-1 grid grid-cols-7 gap-1">
-              {WEEKDAYS.map((w) => (<div key={w} className="py-1 text-center text-[11px] text-zinc-500">{w}</div>))}
+              {WEEKDAYS.map((w, i) => (
+                <div
+                  key={w}
+                  className={`py-1 text-center text-[11px] ${
+                    i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-zinc-500"
+                  }`}
+                >
+                  {w}
+                </div>
+              ))}
             </div>
             <div className="grid grid-cols-7 gap-1">
               {calendarCells.map(({ date, inMonth }) => {
                 const key = ymd(date);
                 const day = dayMap.get(key);
                 const isSelected = selectedDate === key;
+                const holiday = inMonth ? getHoliday(key) : null;
+                const hasHyundai = day?.groups.some((g) => g.matches.some(isHyundaiMatch)) ?? false;
                 return (
-                  <button key={key} type="button" onClick={() => day && setSelectedDate(isSelected ? null : key)} className={`min-h-[4.5rem] rounded-md border bg-white p-1 text-left align-top text-xs text-zinc-900 sm:min-h-[100px] sm:p-1.5 ${isSelected ? "border-[1.5px] border-[#00287A]" : "border-zinc-200"} ${day ? "cursor-pointer hover:bg-zinc-50" : "cursor-default"}`}>
-                    <span className={`block text-[10px] font-medium sm:text-[11px] ${inMonth ? "text-zinc-800" : "text-zinc-400"}`}>{date.getDate()}</span>
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => day && setSelectedDate(isSelected ? null : key)}
+                    title={holiday ?? undefined}
+                    className={`min-h-[4.5rem] rounded-md border p-1 text-left align-top text-xs text-zinc-900 sm:min-h-[100px] sm:p-1.5 ${hasHyundai ? "bg-amber-50" : "bg-white"} ${isSelected ? "border-[1.5px] border-[#00287A]" : hasHyundai ? "border-amber-200" : "border-zinc-200"} ${day ? `cursor-pointer ${hasHyundai ? "hover:bg-amber-100/80" : "hover:bg-zinc-50"}` : "cursor-default"}`}
+                  >
+                    <span className={`block text-[10px] font-medium sm:text-[11px] ${calendarDateClass(key, inMonth)}`}>
+                      {date.getDate()}
+                    </span>
+                    {holiday ? (
+                      <span className="mt-0.5 hidden truncate text-[7px] leading-tight text-red-400 sm:block">
+                        {holiday}
+                      </span>
+                    ) : null}
                     {day?.groups.map((g, i) => {
-                      const s = catStyle(g.category);
+                      const s = matchBlockStyle(g.category, g.matches);
+                      const hasHome = g.matches.some(isHyundaiHomeMatch);
                       return (
                         <div key={i} className="mt-0.5 rounded px-0.5 py-0.5 text-[8px] leading-snug sm:mt-1 sm:px-1 sm:py-1 sm:text-[9px]" style={{ background: s.bg, color: s.text }}>
-                          <div className="line-clamp-2 font-medium leading-tight sm:line-clamp-none">{g.tournament}</div>
+                          <div className="line-clamp-2 font-medium leading-tight sm:line-clamp-none">
+                            {hasHome ? (
+                              <Crown className="mr-0.5 inline h-3 w-3 text-amber-400" aria-hidden />
+                            ) : null}
+                            {g.tournament}
+                          </div>
                           <div className="mt-0.5 hidden flex-col gap-0.5 sm:flex">
                             {g.matches.map((m, j) => (
                               <div key={j} className="leading-tight">
-                                <MatchLine m={m} inheritColor />
+                                <MatchLine m={m} inheritColor showCrown />
                                 {m.url ? (
                                   <div className="mt-0.5">
                                     <BroadcastLink url={m.url} compact />
@@ -372,9 +439,10 @@ export default function SchedulePage() {
                 </div>
                 <div className="space-y-2">
                   {selectedDay.groups.map((g, i) => {
-                    const s = catStyle(g.category);
+                    const s = matchBlockStyle(g.category, g.matches);
+                    const hasHyundai = g.matches.some(isHyundaiMatch);
                     return (
-                      <div key={i} className="rounded-lg border border-zinc-200 bg-white px-4 py-3">
+                      <div key={i} className={`rounded-lg border px-4 py-3 ${hasHyundai ? "border-amber-200 bg-amber-50" : "border-zinc-200 bg-white"}`}>
                         <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                           <span className="rounded-full px-2.5 py-0.5 text-[11px]" style={{ background: s.bg, color: s.text }}>{s.label}</span>
                           <span className="text-sm font-medium text-zinc-900">{g.tournament}</span>
@@ -403,9 +471,10 @@ export default function SchedulePage() {
                   </div>
                   <div className="space-y-2">
                     {day.groups.map((g, i) => {
-                      const s = catStyle(g.category);
+                      const s = matchBlockStyle(g.category, g.matches);
+                      const hasHyundai = g.matches.some(isHyundaiMatch);
                       return (
-                        <div key={i} className="rounded-lg border border-zinc-200 bg-white px-3 py-3 sm:px-4">
+                        <div key={i} className={`rounded-lg border px-3 py-3 sm:px-4 ${hasHyundai ? "border-amber-200 bg-amber-50" : "border-zinc-200 bg-white"}`}>
                           <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span className="rounded-full px-2.5 py-0.5 text-[11px]" style={{ background: s.bg, color: s.text }}>{s.label}</span>
                             <span className="text-sm font-medium text-zinc-900">{g.tournament}</span>

@@ -17,6 +17,8 @@ export type Match = {
   dain: boolean;
   /** 성인 대표팀(팀코리아) 경기 */
   natl: boolean;
+  /** 홈/원정 (예: "홈", "원정") */
+  homeAway: string;
 };
 
 export type OngoingTournament = {
@@ -174,13 +176,28 @@ export type DaySchedule = {
 
 type RawRow = Record<string, string>;
 
+function splitNote(note: string): { homeAway: string; note: string } {
+  if (note === "홈" || note === "원정") return { homeAway: note, note: "" };
+  const match = note.match(/^(홈|원정)(?:\s*[·|,]\s*|\s+)(.+)$/);
+  if (match) return { homeAway: match[1], note: match[2].trim() };
+  return { homeAway: "", note };
+}
+
+function parseHomeAway(row: RawRow, note: string): string {
+  const dedicated = (row.home_away ?? "").trim();
+  if (dedicated === "홈" || dedicated === "원정" || dedicated === "미출전") return dedicated;
+  return splitNote(note).homeAway;
+}
+
 export async function fetchSchedule(csvUrl: string): Promise<Match[]> {
   const res = await fetch(csvUrl, { next: { revalidate: 300 } });
   if (!res.ok) throw new Error(`Schedule CSV fetch failed (${res.status})`);
   const text = await res.text();
   const parsed = Papa.parse<RawRow>(text, { header: true, skipEmptyLines: true });
   return (parsed.data ?? [])
-    .map((row) => ({
+    .map((row) => {
+      const note = (row.note ?? "").trim();
+      return {
       date: (row.date ?? "").trim(),
       startTime: (row.start_time ?? "").trim(),
       category: (row.category ?? "").trim(),
@@ -190,13 +207,15 @@ export async function fetchSchedule(csvUrl: string): Promise<Match[]> {
       teamB: (row.team_b ?? "").trim(),
       venue: (row.venue ?? "").trim(),
       court: (row.court ?? "").trim(),
-      note: (row.note ?? "").trim(),
+      note,
       scoreA: (row.score_a ?? "").trim(),
       scoreB: (row.score_b ?? "").trim(),
       url: (row.url ?? "").trim(),
       dain: (row.dain ?? "").trim() === "1",
       natl: (row.natl ?? "").trim() === "1",
-    }))
+      homeAway: parseHomeAway(row, note),
+    };
+    })
     .filter((m) => m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date));
 }
 
