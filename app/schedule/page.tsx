@@ -57,7 +57,11 @@ function isHyundaiHomeMatch(m: Match): boolean {
 }
 
 function matchBlockStyle(category: string, matches: Match[]) {
-  return matches.some(isHyundaiMatch) ? HYUNDAI_STYLE : catStyle(category);
+  const base = catStyle(category);
+  if (matches.some(isHyundaiMatch)) {
+    return { ...base, bg: HYUNDAI_STYLE.bg, text: HYUNDAI_STYLE.text };
+  }
+  return base;
 }
 
 function needsIosSafariTip(): boolean {
