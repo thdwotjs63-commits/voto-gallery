@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
+import html2canvas from "html2canvas";
 
 const C = [-1.06, -0.394, 0, 0.394, 1.06];
 const SSV = [2, 1.5, 1, -1, -1.5, -2];
@@ -55,6 +56,29 @@ export default function CalculatorPage() {
   const swap = () => {
     setNameA(nameB); setNameB(nameA);
     setWrsA(wrsB); setWrsB(wrsA);
+  };
+
+  const captureRef = useRef<HTMLDivElement>(null);
+
+  const saveAsImage = async () => {
+    if (!captureRef.current) return;
+    try {
+      const canvas = await html2canvas(captureRef.current, {
+        backgroundColor: "#FAF6F0",
+        scale: 2,
+      });
+      const url = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      const fileName = `랭킹포인트_${nameA}_vs_${nameB}.png`.replace(/\s+/g, "");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error("이미지 저장 실패:", err);
+      alert("이미지 저장에 실패했어요. 다시 시도해 주세요.");
+    }
   };
 
   return (
@@ -137,41 +161,73 @@ export default function CalculatorPage() {
           </select>
         </div>
 
-        <div className="calc-stats">
-          <div className="calc-stat"><p>전력차 Δ</p><strong className="num">{result.d.toFixed(3)}</strong></div>
-          <div className="calc-stat"><p>기대 결과 EMR ({nameA} 기준)</p><strong className="num">{result.emr.toFixed(3)}</strong></div>
-          <div className="calc-stat"><p>{nameA} 승리 확률</p><strong className="num">{(result.winp * 100).toFixed(1)}%</strong></div>
-        </div>
-
-        <div className="calc-probbar" role="img" aria-label="6가지 경기 결과의 확률 분포">
-          {result.P.map((p, i) => (
-            <div key={i} style={{ width: `${(p * 100).toFixed(2)}%`, background: BARC[i] }}>
-              {p >= 0.07 ? LBL[i] : ""}
+        <div ref={captureRef} style={{ padding: "16px 0" }}>
+          <div style={{ textAlign: "center", marginBottom: "12px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "#22211E" }}>
+              {nameA} {wrsA} <span style={{ color: "#8A8276", fontWeight: 400 }}>vs</span> {nameB} {wrsB}
             </div>
-          ))}
-        </div>
-        <div className="calc-legend">
-          <span className="lw"><b>◀ {nameA} 승</b> (3-0 · 3-1 · 3-2)</span>
-          <span className="ll"><b>(2-3 · 1-3 · 0-3) {nameB} 승 ▶</b></span>
+            <div style={{ fontSize: "11px", color: "#8A8276", marginTop: "2px" }}>
+              대회 가중치 {mwf} · FIVB 세계랭킹 포인트 예상
+            </div>
+          </div>
+
+          <div className="calc-stats">
+            <div className="calc-stat"><p>전력차 Δ</p><strong className="num">{result.d.toFixed(3)}</strong></div>
+            <div className="calc-stat"><p>기대 결과 EMR ({nameA} 기준)</p><strong className="num">{result.emr.toFixed(3)}</strong></div>
+            <div className="calc-stat"><p>{nameA} 승리 확률</p><strong className="num">{(result.winp * 100).toFixed(1)}%</strong></div>
+          </div>
+
+          <div className="calc-probbar" role="img" aria-label="6가지 경기 결과의 확률 분포">
+            {result.P.map((p, i) => (
+              <div key={i} style={{ width: `${(p * 100).toFixed(2)}%`, background: BARC[i] }}>
+                {p >= 0.07 ? LBL[i] : ""}
+              </div>
+            ))}
+          </div>
+          <div className="calc-legend">
+            <span className="lw"><b>◀ {nameA} 승</b> (3-0 · 3-1 · 3-2)</span>
+            <span className="ll"><b>(2-3 · 1-3 · 0-3) {nameB} 승 ▶</b></span>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>결과</th><th>확률</th><th>{nameA} 포인트</th><th>{nameB} 포인트</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.rows.map((r, i) => (
+                <tr key={i} className={r.most ? "most" : ""}>
+                  <td>{r.label}{r.most && <span className="tag">최다 예상</span>}</td>
+                  <td className="pct num">{(r.prob * 100).toFixed(1)}%</td>
+                  <td className={"num " + (r.ptsPos ? "pos" : "neg")}>{r.ptsA}</td>
+                  <td className={"num " + (r.ptsPos ? "neg" : "pos")}>{r.ptsB}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>결과</th><th>확률</th><th>{nameA} 포인트</th><th>{nameB} 포인트</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.rows.map((r, i) => (
-              <tr key={i} className={r.most ? "most" : ""}>
-                <td>{r.label}{r.most && <span className="tag">최다 예상</span>}</td>
-                <td className="pct num">{(r.prob * 100).toFixed(1)}%</td>
-                <td className={"num " + (r.ptsPos ? "pos" : "neg")}>{r.ptsA}</td>
-                <td className={"num " + (r.ptsPos ? "neg" : "pos")}>{r.ptsB}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <button
+          type="button"
+          onClick={saveAsImage}
+          className="calc-save-btn"
+          style={{
+            display: "block",
+            margin: "20px auto 0",
+            padding: "10px 20px",
+            background: "#0E4744",
+            color: "#fff",
+            border: "none",
+            borderRadius: "8px",
+            fontSize: "14px",
+            fontWeight: 700,
+            cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          📷 결과 이미지로 저장
+        </button>
 
         <footer className="calc-footer">
           <b>계산 방식</b> — Δ = 8 × (WRS_A − WRS_B) ÷ 1000 → 정규분포로 6가지 결과 확률 산출 → EMR = Σ(확률 × 세트변량) → 포인트 = (세트변량 − EMR) × MWF ÷ 8.<br />
