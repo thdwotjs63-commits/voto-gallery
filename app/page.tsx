@@ -2467,6 +2467,23 @@ export default function Home() {
             🏐 다인이와 궁합테스트 — 사주로 보는 나와 다인이의 케미 →
           </p>
         </div>
+
+        <div
+          onClick={() => router.push("/calculator")}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              router.push("/calculator");
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          className="mx-auto flex max-w-[1100px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#1B6F6B]/50 bg-[#0E4744]/25 px-4 py-3"
+        >
+          <p className="min-w-0 truncate text-[13px] font-medium text-[#E9E3D6]">
+            🏆 국제대회 랭킹 계산기 — FIVB 세계랭킹 포인트 예상 →
+          </p>
+        </div>
       </div>
 
       <div

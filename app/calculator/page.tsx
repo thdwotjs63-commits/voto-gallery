@@ -8,6 +8,17 @@ const SSV = [2, 1.5, 1, -1, -1.5, -2];
 const BARC = ["#0E4744", "#1B6F6B", "#4D9C97", "#E8956F", "#D2683C", "#A8431F"];
 const LBL = ["3 - 0", "3 - 1", "3 - 2", "2 - 3", "1 - 3", "0 - 3"];
 
+const TOURNAMENT_OPTIONS = [
+  { id: "olympics", label: "올림픽 — 50", mwf: 50 },
+  { id: "world-cup", label: "FIVB 월드컵 — 50", mwf: 50 },
+  { id: "vnl", label: "발리볼네이션스리그(VNL) — 40", mwf: 40 },
+  { id: "continental", label: "대륙선수권 — 40", mwf: 40 },
+  { id: "annual-continental", label: "연간 대륙 대회 — 30", mwf: 30 },
+  { id: "zone", label: "존·인정단체 대회 — 20", mwf: 20 },
+] as const;
+
+type TournamentId = (typeof TOURNAMENT_OPTIONS)[number]["id"];
+
 function erf(x: number) {
   const s = x < 0 ? -1 : 1;
   x = Math.abs(x);
@@ -20,14 +31,20 @@ function cdf(z: number) { return 0.5 * (1 + erf(z / Math.SQRT2)); }
 export default function CalculatorPage() {
   const [nameA, setNameA] = useState("대한민국");
   const [nameB, setNameB] = useState("베트남");
-  const [wrsA, setWrsA] = useState("135");
+  const [wrsA, setWrsA] = useState("149.98");
   const [wrsB, setWrsB] = useState("150");
-  const [mwf, setMwf] = useState("30");
+  const [tournamentId, setTournamentId] =
+    useState<TournamentId>("annual-continental");
+
+  const tournament =
+    TOURNAMENT_OPTIONS.find((t) => t.id === tournamentId) ??
+    TOURNAMENT_OPTIONS[4];
+  const mwf = tournament.mwf;
 
   const result = useMemo(() => {
     const a = parseFloat(wrsA) || 0;
     const b = parseFloat(wrsB) || 0;
-    const m = parseFloat(mwf);
+    const m = mwf;
     const d = 8 * (a - b) / 1000;
     const cd = C.map((c) => cdf(c + d));
     const P = [cd[0], cd[1] - cd[0], cd[2] - cd[1], cd[3] - cd[2], cd[4] - cd[3], 1 - cd[4]];
@@ -151,13 +168,15 @@ export default function CalculatorPage() {
 
         <div className="calc-controls">
           <label>대회 가중치 (MWF)</label>
-          <select value={mwf} onChange={(e) => setMwf(e.target.value)}>
-            <option value="50">올림픽 — 50</option>
-            <option value="50">FIVB 월드컵 — 50</option>
-            <option value="40">발리볼네이션스리그(VNL) — 40</option>
-            <option value="40">대륙선수권 — 40</option>
-            <option value="30">연간 대륙 대회 — 30</option>
-            <option value="20">존·인정단체 대회 — 20</option>
+          <select
+            value={tournamentId}
+            onChange={(e) => setTournamentId(e.target.value as TournamentId)}
+          >
+            {TOURNAMENT_OPTIONS.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -167,7 +186,7 @@ export default function CalculatorPage() {
               {nameA} {wrsA} <span style={{ color: "#8A8276", fontWeight: 400 }}>vs</span> {nameB} {wrsB}
             </div>
             <div style={{ fontSize: "11px", color: "#8A8276", marginTop: "2px" }}>
-              대회 가중치 {mwf} · FIVB 세계랭킹 포인트 예상
+              {tournament.label.split(" — ")[0]} · 가중치 {mwf} · FIVB 세계랭킹 포인트 예상
             </div>
           </div>
 
