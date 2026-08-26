@@ -7,6 +7,7 @@ import { driveLh3S1000Url, type DriveImage } from "@/lib/drive-gallery-data";
 import { trackGaEvent } from "@/lib/analytics";
 import { fetchQuizTopRankings, insertQuizRanking, type QuizRankingEntry } from "@/lib/quiz-rankings";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
+import { buildPublicPageUrl } from "@/lib/seo-metadata";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 
 type QuizKind = "place" | "away-date" | "home-date";
@@ -27,8 +28,7 @@ const QUIZ_SHARE_BODY =
   "[Voto Gallery] 김다인 선수 사진 퀴즈 도전! 당신의 찐팬 지수는 몇 점? #현대건설배구단 #김다인";
 
 function getQuizPageUrl(): string {
-  if (typeof window === "undefined") return "";
-  return new URL("/quiz", window.location.origin).href;
+  return buildPublicPageUrl("/quiz");
 }
 
 function shuffle<T>(items: T[]): T[] {

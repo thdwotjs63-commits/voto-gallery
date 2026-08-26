@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { trackGaEvent } from "@/lib/analytics";
 import { triggerPhotoDownload } from "@/lib/photo-download";
 import { driveLh3FullDisplayUrl, type DriveImage } from "@/lib/drive-gallery-data";
+import { buildPhotoDetailPageUrl } from "@/lib/photo-share";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 
 const THUMB_BLUR_DATA_URL =
@@ -20,10 +21,11 @@ export function PhotoDetailModal({ image, onClose }: PhotoDetailModalProps) {
 
   const handleShare = useCallback(async () => {
     setShareHint(null);
+    const url = buildPhotoDetailPageUrl(image.id);
     const shareData = {
       title: image.name,
       text: image.scheduleDisplay ?? image.name,
-      url: typeof window !== "undefined" ? window.location.href : "",
+      url,
     };
     try {
       if (navigator.share) {
@@ -41,7 +43,7 @@ export function PhotoDetailModal({ image, onClose }: PhotoDetailModalProps) {
       setShareHint("복사에 실패했어요.");
       window.setTimeout(() => setShareHint(null), 2000);
     }
-  }, [image.name, image.scheduleDisplay]);
+  }, [image.id, image.name, image.scheduleDisplay]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;

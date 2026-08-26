@@ -44,6 +44,54 @@ function extractHashtags(text: string): string[] {
   return Array.from(new Set(matches.map((tag) => tag.toLowerCase())));
 }
 
+function normalizeTagToken(token: string): string {
+  const trimmed = token.replace(/^#/, "").trim();
+  return trimmed ? `#${trimmed.toLowerCase()}` : "";
+}
+
+function filenamePartToTag(part: string): string | null {
+  const trimmed = part.trim();
+  if (!trimmed) return null;
+
+  const ymdSeparated = trimmed.match(
+    /^(19\d{2}|20\d{2})[.\-_](0[1-9]|1[0-2])[.\-_]([0-2]\d|3[01])$/
+  );
+  if (ymdSeparated) {
+    return `#${ymdSeparated[1]}${ymdSeparated[2]}${ymdSeparated[3]}`.toLowerCase();
+  }
+
+  if (/^(19\d{2}|20\d{2})(0[1-9]|1[0-2])([0-2]\d|3[01])$/.test(trimmed)) {
+    return `#${trimmed}`.toLowerCase();
+  }
+
+  const normalized = normalizeTagToken(trimmed);
+  return normalized || null;
+}
+
+function extractTagsFromFilename(name: string): string[] {
+  const nameNoExt = (name ?? "").replace(/\.[^.]+$/, "");
+  const tags: string[] = [];
+  for (const part of nameNoExt.split("_")) {
+    const tag = filenamePartToTag(part);
+    if (tag && !tags.includes(tag)) tags.push(tag);
+  }
+  return tags;
+}
+
+function parseTags(description: string, name: string): string[] {
+  const fromDesc = extractHashtags(description);
+  const fromName = extractTagsFromFilename(name);
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const tag of [...fromDesc, ...fromName]) {
+    const normalized = normalizeTagToken(tag);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    merged.push(normalized);
+  }
+  return merged;
+}
+
 function extractStory(text: string): string | undefined {
   const withoutHashtags = text.replace(/#[\p{L}\p{N}_-]+/gu, " ");
   const normalized = withoutHashtags.replace(/\s+/g, " ").trim();
@@ -129,7 +177,7 @@ function mapDriveFileRowToImage(file: DriveFileRow): DriveImage {
   const width = file.imageMediaMetadata?.width ?? 1200;
   const height = file.imageMediaMetadata?.height ?? 1800;
   const description = file.description ?? "";
-  const tags = extractHashtags(description);
+  const tags = parseTags(description, file.name);
   const story = extractStory(description);
   const tagDateKey = Number((tags[0] ?? "").replace("#", "")) || 0;
   const schedule = parseScheduleFromFolderName(file.folderName);

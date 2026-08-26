@@ -63,7 +63,7 @@ import {
 import { TeamKoreaBadge } from "@/components/team-korea-badge";
 import { MedalRecordList } from "@/components/medal-record";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
-import { SITE_URL } from "@/lib/seo-metadata";
+import { SITE_URL, buildPublicPageUrl } from "@/lib/seo-metadata";
 import { getLatestSetSuccessCountTotal, isSeasonRecord } from "@/lib/records-data";
 
 /** 트윗 작성창에 넣을 갤러리 제목 */
@@ -1912,6 +1912,11 @@ export default function Home() {
     setPhotoDetailModalImage(found);
   }, [images, loading, pathname, router, showShareToast, urlQueryString]);
 
+  const publicPageUrl = useMemo(
+    () => buildPublicPageUrl("/", urlQueryString),
+    [urlQueryString]
+  );
+
   const copyPhotoShareLink = useCallback(
     async (photoId: string) => {
       const url = buildPhotoDetailPageUrl(photoId);
@@ -1958,7 +1963,7 @@ export default function Home() {
 
   const copyCurrentPageUrl = async (): Promise<boolean> => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(publicPageUrl);
       return true;
     } catch {
       return false;
@@ -1971,13 +1976,12 @@ export default function Home() {
       showShareToast("주소가 복사되었습니다. 원하는 곳에 붙여넣으세요!");
       setShareMenuOpen(false);
     } else {
-      window.prompt("주소를 복사해 주세요:", window.location.href);
+      window.prompt("주소를 복사해 주세요:", publicPageUrl);
     }
   };
 
   const handleTwitterShare = () => {
-    const href = window.location.href;
-    const draft = `${GALLERY_SHARE_TITLE}\n\n${href}`;
+    const draft = `${GALLERY_SHARE_TITLE}\n\n${publicPageUrl}`;
     window.open(
       `https://twitter.com/intent/tweet?text=${encodeURIComponent(draft)}`,
       "_blank",
@@ -1993,7 +1997,7 @@ export default function Home() {
         "링크를 복사했습니다. 인스타 스토리나 프로필에 공유해 보세요!"
       );
     } else {
-      window.prompt("주소를 복사해 주세요:", window.location.href);
+      window.prompt("주소를 복사해 주세요:", publicPageUrl);
     }
     setShareMenuOpen(false);
   };
@@ -2296,22 +2300,20 @@ export default function Home() {
       </div>
 
       <section className="relative h-screen w-full overflow-hidden bg-black">
-        {heroImage ? (
-          <div
-            className="absolute inset-0 will-change-transform"
-            style={{ transform: `translate3d(0, ${heroBackgroundTranslate}px, 0)` }}
-          >
-            <Image
-              src={driveLh3FullDisplayUrl(heroImage.id)}
-              alt={buildMatchPhotoAltFromFilename(heroImage.name)}
-              fill
-              priority
-              unoptimized
-              className="object-cover object-[center_28%] sm:object-center"
-              sizes="100vw"
-            />
-          </div>
-        ) : null}
+        <div
+          className="absolute inset-0 will-change-transform"
+          style={{ transform: `translate3d(0, ${heroBackgroundTranslate}px, 0)` }}
+        >
+          <Image
+            src="/hero.jpg"
+            alt="김다인 선수"
+            fill
+            priority
+            unoptimized
+            className="object-cover object-[center_28%] sm:object-center"
+            sizes="100vw"
+          />
+        </div>
 
         <div className="absolute inset-0 bg-black/55" />
 

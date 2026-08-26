@@ -2,24 +2,41 @@ import type { Metadata } from "next";
 
 /** 환경 변수 누락·오타 시에도 절대 URL 메타가 깨지지 않도록 */
 const FALLBACK_SITE_URL = "https://daeni.kr";
+const CANONICAL_HOSTS = new Set(["daeni.kr", "www.daeni.kr"]);
 
 function resolveSiteUrl(): string {
   const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (!raw) {
-    return FALLBACK_SITE_URL;
-  }
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+  if (raw) {
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return FALLBACK_SITE_URL;
+      }
+      const host = parsed.hostname.toLowerCase();
+      if (CANONICAL_HOSTS.has(host)) {
+        return FALLBACK_SITE_URL;
+      }
+      // 로컬 개발(localhost)만 예외 — Vercel/Cursor 프리뷰 URL은 공개 메타·공유에 쓰지 않음
+      if (
+        process.env.NODE_ENV !== "production" &&
+        (host === "localhost" || host === "127.0.0.1")
+      ) {
+        return parsed.origin;
+      }
+    } catch {
       return FALLBACK_SITE_URL;
     }
-    return parsed.origin;
-  } catch {
-    return FALLBACK_SITE_URL;
   }
+  return FALLBACK_SITE_URL;
 }
 
 export const SITE_URL = resolveSiteUrl();
+
+export function buildPublicPageUrl(pathname = "/", search = ""): string {
+  const base = SITE_URL.replace(/\/$/, "") || FALLBACK_SITE_URL;
+  const path = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return `${base}${path}${search}`;
+}
 
 export const DEFAULT_OG_IMAGE_URL =
   process.env.NEXT_PUBLIC_DEFAULT_OG_IMAGE_URL?.trim() ||
@@ -55,7 +72,7 @@ export function buildRootMetadata(input?: {
       title: GALLERY_TITLE,
       description: GALLERY_DESCRIPTION,
       url: "/",
-      siteName: "DAENI.KR",
+      siteName: "daeni.kr",
       type: "website",
       locale: "ko_KR",
       images: [

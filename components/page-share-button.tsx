@@ -1,16 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Instagram, Link2, Share2, Twitter } from "lucide-react";
+import { buildPublicPageUrl } from "@/lib/seo-metadata";
 
 type PageShareButtonProps = {
   shareTitle: string;
 };
 
-async function copyCurrentPageUrl() {
+async function copyPublicPageUrl(href: string) {
   try {
-    await navigator.clipboard.writeText(window.location.href);
+    await navigator.clipboard.writeText(href);
     return true;
   } catch {
     return false;
@@ -18,6 +20,12 @@ async function copyCurrentPageUrl() {
 }
 
 export function PageShareButton({ shareTitle }: PageShareButtonProps) {
+  const pathname = usePathname();
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    setSearch(window.location.search);
+  }, [pathname]);
+  const publicPageUrl = buildPublicPageUrl(pathname, search);
   const [menuOpen, setMenuOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -35,18 +43,17 @@ export function PageShareButton({ shareTitle }: PageShareButtonProps) {
   }, []);
 
   const handleCopyLink = async () => {
-    const ok = await copyCurrentPageUrl();
+    const ok = await copyPublicPageUrl(publicPageUrl);
     if (ok) {
       showToast("주소가 복사되었습니다. 원하는 곳에 붙여넣으세요!");
       setMenuOpen(false);
     } else {
-      window.prompt("주소를 복사해 주세요:", window.location.href);
+      window.prompt("주소를 복사해 주세요:", publicPageUrl);
     }
   };
 
   const handleTwitterShare = () => {
-    const href = window.location.href;
-    const draft = `${shareTitle}\n\n${href}`;
+    const draft = `${shareTitle}\n\n${publicPageUrl}`;
     window.open(
       `https://twitter.com/intent/tweet?text=${encodeURIComponent(draft)}`,
       "_blank",
@@ -56,11 +63,11 @@ export function PageShareButton({ shareTitle }: PageShareButtonProps) {
   };
 
   const handleInstagramShare = async () => {
-    const ok = await copyCurrentPageUrl();
+    const ok = await copyPublicPageUrl(publicPageUrl);
     if (ok) {
       showToast("링크를 복사했습니다. 인스타 스토리나 프로필에 공유해 보세요!");
     } else {
-      window.prompt("주소를 복사해 주세요:", window.location.href);
+      window.prompt("주소를 복사해 주세요:", publicPageUrl);
     }
     setMenuOpen(false);
   };
