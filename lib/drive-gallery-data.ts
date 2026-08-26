@@ -41,6 +41,7 @@ type FetchDriveGalleryImagesOptions = {
 
 const GOOGLE_DRIVE_API_KEY_ENV_KEY = "NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY";
 const GOOGLE_DRIVE_FOLDER_ID_ENV_KEY = "NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_ID";
+const META_POSITIONAL_TAGS = new Set(["#hero", "#banner"]);
 
 function extractHashtags(text: string): string[] {
   const matches = text.match(/#[\p{L}\p{N}_-]+/gu) ?? [];
@@ -90,11 +91,23 @@ function extractTagsFromFilename(name: string): string[] {
   return tags;
 }
 
+function dedupeNormalizedTags(rawTags: string[]): string[] {
+  return Array.from(new Set(rawTags.map(normalizeTagToken).filter(Boolean)));
+}
+
+function extractMetaTagsFromFilename(name: string): string[] {
+  return extractTagsFromFilename(name).filter((tag) => META_POSITIONAL_TAGS.has(tag));
+}
+
 function parseTags(description: string, name: string): string[] {
-  const rawTags = [...extractHashtags(description), ...extractTagsFromFilename(name)];
-  return Array.from(
-    new Set(rawTags.map(normalizeTagToken).filter(Boolean))
-  );
+  const descTags = dedupeNormalizedTags(extractHashtags(description));
+  if (descTags.length > 0) {
+    const metaFromName = dedupeNormalizedTags(extractMetaTagsFromFilename(name)).filter(
+      (tag) => !descTags.includes(tag)
+    );
+    return [...descTags, ...metaFromName];
+  }
+  return dedupeNormalizedTags(extractTagsFromFilename(name));
 }
 
 function extractStory(text: string): string | undefined {
@@ -178,7 +191,9 @@ type DriveFileRow = {
   folderSortKey: number;
 };
 
-const META_POSITIONAL_TAGS = new Set(["#hero", "#banner"]);
+function hasKorean(tag: string): boolean {
+  return /[가-힣]/.test(tag);
+}
 
 function assignPositionalTags(tags: string[]): {
   dateTag?: string;
@@ -186,7 +201,9 @@ function assignPositionalTags(tags: string[]): {
   momentTag?: string;
   withTags: string[];
 } {
-  const withTags = tags.slice(3).filter((tag) => !META_POSITIONAL_TAGS.has(tag));
+  const withTags = tags
+    .slice(3)
+    .filter((tag) => !META_POSITIONAL_TAGS.has(tag) && hasKorean(tag));
   return {
     dateTag: tags[0],
     locationTag: tags[1],
