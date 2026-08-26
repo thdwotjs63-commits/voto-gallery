@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import html2canvas from "html2canvas";
 
 const C = [-1.06, -0.394, 0, 0.394, 1.06];
@@ -29,6 +30,7 @@ function erf(x: number) {
 function cdf(z: number) { return 0.5 * (1 + erf(z / Math.SQRT2)); }
 
 export default function CalculatorPage() {
+  const router = useRouter();
   const [nameA, setNameA] = useState("대한민국");
   const [nameB, setNameB] = useState("베트남");
   const [wrsA, setWrsA] = useState("149.98");
@@ -105,6 +107,9 @@ export default function CalculatorPage() {
           font-family:'IBM Plex Sans KR',sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;padding:32px 16px 96px;}
         .calc-root .num{font-variant-numeric:tabular-nums;}
         .calc-wrap{max-width:860px;margin:0 auto;}
+        .calc-nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;}
+        .calc-nav-btn{font-family:inherit;font-size:12px;font-weight:600;color:var(--surround-deep);background:#FFF;border:1.5px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;transition:background .15s,border-color .15s;}
+        .calc-nav-btn:hover{background:var(--paper);border-color:var(--surround);}
         .calc-root .eyebrow{display:inline-block;font-size:12px;letter-spacing:.14em;font-weight:700;color:var(--surround);border:1.5px solid var(--surround);padding:4px 10px;border-radius:999px;margin-bottom:12px;}
         .calc-root h1{font-size:clamp(24px,4vw,34px);font-weight:700;line-height:1.25;}
         .calc-root h1 em{font-style:normal;color:var(--court-deep);}
@@ -144,6 +149,23 @@ export default function CalculatorPage() {
       `}</style>
 
       <div className="calc-wrap">
+        <nav className="calc-nav" aria-label="페이지 이동">
+          <button
+            type="button"
+            className="calc-nav-btn"
+            onClick={() => router.push("/")}
+          >
+            ← Gallery
+          </button>
+          <button
+            type="button"
+            className="calc-nav-btn"
+            onClick={() => router.push("/schedule")}
+          >
+            📅 캘린더
+          </button>
+        </nav>
+
         <header>
           <span className="eyebrow">FIVB WORLD RANKING</span>
           <h1>세계랭킹 포인트 <em>계산기</em></h1>

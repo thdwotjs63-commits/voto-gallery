@@ -285,11 +285,14 @@ export function groupByDate(matches: Match[]): DaySchedule[] {
     });
 }
 
-// ICS 형식용 날짜 변환: "2026-07-02" + "10:00" → "20260702T100000"
-function toICSDateTime(date: string, time: string): string {
-  const [y, m, d] = date.split("-");
-  const [hh, mm] = (time || "00:00").split(":");
-  return `${y}${m}${d}T${(hh ?? "00").padStart(2, "0")}${(mm ?? "00").padStart(2, "0")}00`;
+// ICS 형식용: KST(UTC+9) → UTC "Z" 표기 (예: 20260826T020000Z = KST 11:00)
+function toICSUtc(dateStr: string, timeStr: string): string {
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  const [h, mi] = (timeStr || "00:00").split(":").map(Number);
+  const utcMs = Date.UTC(y, mo - 1, d, h, mi) - 9 * 60 * 60 * 1000;
+  const dt = new Date(utcMs);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${dt.getUTCFullYear()}${pad(dt.getUTCMonth() + 1)}${pad(dt.getUTCDate())}T${pad(dt.getUTCHours())}${pad(dt.getUTCMinutes())}00Z`;
 }
 
 function escapeICS(text: string): string {
@@ -314,8 +317,8 @@ function buildTournamentVEVENT(group: TournamentGroup, date: string): string[] {
   const endHour = String(Math.min(23, Number(lh) + 2)).padStart(2, "0");
   const endTime = `${endHour}:${lm ?? "00"}`;
 
-  const dtStart = toICSDateTime(date, startTime);
-  const dtEnd = toICSDateTime(date, endTime);
+  const dtStart = toICSUtc(date, startTime);
+  const dtEnd = toICSUtc(date, endTime);
   const uid = `${date}-${group.tournament}-${group.venue}`.replace(/\s/g, "") + "@voto-gallery";
 
   const description = group.matches
