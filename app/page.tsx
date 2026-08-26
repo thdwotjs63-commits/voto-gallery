@@ -180,7 +180,11 @@ function matchesImageSelections(
   ) {
     return false;
   }
-  if (!ignore?.with && selections.with !== "all" && image.withTag !== selections.with) {
+  if (
+    !ignore?.with &&
+    selections.with !== "all" &&
+    !image.withTags.includes(selections.with)
+  ) {
     return false;
   }
   return true;
@@ -1224,9 +1228,7 @@ export default function Home() {
       ).sort((a, b) => a.localeCompare(b)),
       with: Array.from(
         new Set(
-          withCandidates
-            .map((image) => image.withTag)
-            .filter((tag): tag is string => Boolean(tag))
+          withCandidates.flatMap((image) => image.withTags).filter(Boolean)
         )
       ).sort((a, b) => a.localeCompare(b)),
     };
@@ -1261,9 +1263,10 @@ export default function Home() {
     const withCount: Record<string, number> = {};
     for (const image of images) {
       if (!matchesImageSelections(image, filterSelections, { with: true })) continue;
-      const tag = image.withTag;
-      if (!tag) continue;
-      withCount[tag] = (withCount[tag] ?? 0) + 1;
+      for (const tag of image.withTags) {
+        if (!tag) continue;
+        withCount[tag] = (withCount[tag] ?? 0) + 1;
+      }
     }
 
     return { date: dateCount, location: locationCount, moment: momentCount, with: withCount };
@@ -2964,7 +2967,7 @@ export default function Home() {
                                 if (image.momentTag === tag) {
                                   applyTagToggle(tag, "moment");
                                 }
-                                if (image.withTag === tag) {
+                                if (image.withTags.includes(tag)) {
                                   applyTagToggle(tag, "with");
                                 }
                               }}
@@ -3332,7 +3335,7 @@ export default function Home() {
                               const filterTags = [
                                 currentImage.scheduleDisplay || currentImage.folderName,
                                 currentImage.locationTag,
-                                currentImage.withTag,
+                                ...currentImage.withTags,
                               ].filter(Boolean);
                               if (filterTags.length === 0) return null;
                               return (
@@ -3346,7 +3349,7 @@ export default function Home() {
                                           setSelectedDateTag(currentImage.folderName);
                                         } else if (tag === currentImage.locationTag) {
                                           setSelectedLocationTag(tag as string);
-                                        } else if (tag === currentImage.withTag) {
+                                        } else if (currentImage.withTags.includes(tag as string)) {
                                           setSelectedWithTag(tag as string);
                                         }
                                         setViewMode("grid");

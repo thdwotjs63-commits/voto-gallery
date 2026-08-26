@@ -2,32 +2,19 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { GoogleAnalytics } from "@/components/google-analytics";
-import { buildRootMetadata } from "@/lib/seo-metadata";
-import { fetchDriveGalleryImages } from "@/lib/drive-gallery-data";
+import { buildRootMetadata, SITE_URL } from "@/lib/seo-metadata";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
-export async function generateMetadata(): Promise<Metadata> {
-  try {
-    const images = await fetchDriveGalleryImages();
-    const heroImage = images.find((image) => image.tags.includes("#hero"));
-    if (!heroImage) {
-      return buildRootMetadata();
-    }
-
-    return buildRootMetadata({
-      imageUrl: heroImage.originalUrl,
-      imageWidth: heroImage.width,
-      imageHeight: heroImage.height,
-      imageAlt: heroImage.name || "voto gallery",
-    });
-  } catch {
-    return buildRootMetadata();
-  }
-}
+export const metadata: Metadata = buildRootMetadata({
+  imageUrl: `${SITE_URL.replace(/\/$/, "")}/hero.jpg`,
+  imageWidth: 1200,
+  imageHeight: 630,
+  imageAlt: "배구선수 김다인",
+});
 
 export default function RootLayout({
   children,

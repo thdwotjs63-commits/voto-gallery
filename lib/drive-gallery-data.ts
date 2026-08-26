@@ -17,6 +17,9 @@ export type DriveImage = {
   dateTag?: string;
   locationTag?: string;
   momentTag?: string;
+  /** 4번째 description/파일명 태그부터 — 함께 있는 사람(복수) */
+  withTags: string[];
+  /** @deprecated 첫 번째 with만 — withTags[0]과 동일, 하위 호환 */
   withTag?: string;
   folderName: string;
   scheduleDateKey: number;
@@ -44,9 +47,18 @@ function extractHashtags(text: string): string[] {
   return Array.from(new Set(matches.map((tag) => tag.toLowerCase())));
 }
 
+function normalizeTag(raw: string): string {
+  return raw
+    .replace(/-?\s*\(\s*\d+\s*of\s*\d+\s*\)/gi, "")
+    .replace(/^[-_\s]+|[-_\s]+$/g, "")
+    .replace(/^#/, "")
+    .trim()
+    .toLowerCase();
+}
+
 function normalizeTagToken(token: string): string {
-  const trimmed = token.replace(/^#/, "").trim();
-  return trimmed ? `#${trimmed.toLowerCase()}` : "";
+  const normalized = normalizeTag(token);
+  return normalized ? `#${normalized}` : "";
 }
 
 function filenamePartToTag(part: string): string | null {
@@ -79,17 +91,10 @@ function extractTagsFromFilename(name: string): string[] {
 }
 
 function parseTags(description: string, name: string): string[] {
-  const fromDesc = extractHashtags(description);
-  const fromName = extractTagsFromFilename(name);
-  const seen = new Set<string>();
-  const merged: string[] = [];
-  for (const tag of [...fromDesc, ...fromName]) {
-    const normalized = normalizeTagToken(tag);
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    merged.push(normalized);
-  }
-  return merged;
+  const rawTags = [...extractHashtags(description), ...extractTagsFromFilename(name)];
+  return Array.from(
+    new Set(rawTags.map(normalizeTagToken).filter(Boolean))
+  );
 }
 
 function extractStory(text: string): string | undefined {
@@ -173,12 +178,30 @@ type DriveFileRow = {
   folderSortKey: number;
 };
 
+const META_POSITIONAL_TAGS = new Set(["#hero", "#banner"]);
+
+function assignPositionalTags(tags: string[]): {
+  dateTag?: string;
+  locationTag?: string;
+  momentTag?: string;
+  withTags: string[];
+} {
+  const withTags = tags.slice(3).filter((tag) => !META_POSITIONAL_TAGS.has(tag));
+  return {
+    dateTag: tags[0],
+    locationTag: tags[1],
+    momentTag: tags[2],
+    withTags,
+  };
+}
+
 function mapDriveFileRowToImage(file: DriveFileRow): DriveImage {
   const width = file.imageMediaMetadata?.width ?? 1200;
   const height = file.imageMediaMetadata?.height ?? 1800;
   const description = file.description ?? "";
   const tags = parseTags(description, file.name);
   const story = extractStory(description);
+  const positional = assignPositionalTags(tags);
   const tagDateKey = Number((tags[0] ?? "").replace("#", "")) || 0;
   const schedule = parseScheduleFromFolderName(file.folderName);
   const effectiveFolderKey =
@@ -194,10 +217,11 @@ function mapDriveFileRowToImage(file: DriveFileRow): DriveImage {
     description,
     story,
     tags,
-    dateTag: tags[0],
-    locationTag: tags[1],
-    momentTag: tags[2],
-    withTag: tags[3],
+    dateTag: positional.dateTag,
+    locationTag: positional.locationTag,
+    momentTag: positional.momentTag,
+    withTags: positional.withTags,
+    withTag: positional.withTags[0],
     folderName: file.folderName,
     scheduleDateKey: schedule.dateKey,
     scheduleLabel: schedule.label,

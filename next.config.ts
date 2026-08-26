@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL ?? "https://daeni.kr",
   },
   images: {
+    qualities: [60, 75],
     remotePatterns: [
       {
         protocol: "https",
