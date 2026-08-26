@@ -81,20 +81,73 @@ export default function CalculatorPage() {
 
   const saveAsImage = async () => {
     if (!captureRef.current) return;
+
+    const fileName = `랭킹포인트_${nameA}_vs_${nameB}.png`.replace(/\s+/g, "");
+    const ua = navigator.userAgent;
+    const isSafari = /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(ua);
+    const isIOS = /iphone|ipad|ipod/i.test(ua);
+    const useSafariFlow = isSafari || isIOS;
+
+    let safariWin: Window | null = null;
+    if (useSafariFlow) {
+      safariWin = window.open("", "_blank");
+      if (safariWin) {
+        safariWin.document.write(
+          "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>이미지 저장</title></head><body style=\"margin:0;padding:24px;font-family:sans-serif;background:#FAF6F0;color:#444;text-align:center;\"><p>이미지 생성 중...</p></body></html>"
+        );
+        safariWin.document.close();
+      }
+    }
+
     try {
       const canvas = await html2canvas(captureRef.current, {
         backgroundColor: "#FAF6F0",
         scale: 2,
       });
-      const url = canvas.toDataURL("image/png");
-      const a = document.createElement("a");
-      const fileName = `랭킹포인트_${nameA}_vs_${nameB}.png`.replace(/\s+/g, "");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+
+      await new Promise<void>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error("blob failed"));
+            return;
+          }
+
+          const url = URL.createObjectURL(blob);
+
+          if (useSafariFlow) {
+            if (!safariWin || safariWin.closed) {
+              URL.revokeObjectURL(url);
+              alert(
+                "팝업이 차단되어 있어요. 팝업을 허용한 뒤 다시 시도해 주세요."
+              );
+              resolve();
+              return;
+            }
+
+            safariWin.document.open();
+            safariWin.document.write(
+              `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${fileName}</title></head><body style="margin:0;background:#FAF6F0;display:flex;flex-direction:column;align-items:center;padding:16px;font-family:sans-serif;"><p style="font-size:14px;color:#444;margin:0 0 12px;text-align:center;">이미지를 길게 눌러 「사진에 저장」을 선택해 주세요.</p><img src="${url}" alt="${fileName}" style="max-width:100%;height:auto;"/></body></html>`
+            );
+            safariWin.document.close();
+            window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            resolve();
+            return;
+          }
+
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          resolve();
+        }, "image/png");
+      });
     } catch (err) {
+      if (safariWin && !safariWin.closed) {
+        safariWin.close();
+      }
       console.error("이미지 저장 실패:", err);
       alert("이미지 저장에 실패했어요. 다시 시도해 주세요.");
     }
