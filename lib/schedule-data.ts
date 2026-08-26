@@ -119,6 +119,50 @@ export function getTeamKoreaRecord(rows: Match[]): TeamKoreaRecord | null {
   return { wins, losses, streak, streakActive };
 }
 
+export type MedalRecord = {
+  tournament: string;
+  medal: "gold" | "silver" | "bronze";
+  emoji: string;
+  label: string;
+};
+
+export function getTeamKoreaMedals(rows: Match[]): MedalRecord[] {
+  const medals: MedalRecord[] = [];
+  for (const r of rows) {
+    if (!r.natl || !r.date) continue;
+    if (!r.date.startsWith("2026")) continue;
+    const a = Number(r.scoreA);
+    const b = Number(r.scoreB);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+    if (a === 0 && b === 0) continue;
+
+    const round = r.round ?? "";
+    const koreaIsA = KOREA_TEAMS.some((t) => (r.teamA ?? "").includes(t));
+    const won = koreaIsA ? a > b : b > a;
+
+    const isBronzeMatch = /3[·.]?4위|동메달|3위|3rd|bronze/i.test(round);
+    const isFinal = /결승|final|우승/i.test(round) && !/준결승|semi/i.test(round) && !isBronzeMatch;
+
+    if (isFinal) {
+      medals.push(
+        won
+          ? { tournament: r.tournament ?? "", medal: "gold", emoji: "🥇", label: "우승" }
+          : { tournament: r.tournament ?? "", medal: "silver", emoji: "🥈", label: "준우승" }
+      );
+    } else if (isBronzeMatch && won) {
+      medals.push({ tournament: r.tournament ?? "", medal: "bronze", emoji: "🥉", label: "3위" });
+    }
+  }
+
+  const byT = new Map<string, MedalRecord>();
+  const rank = { gold: 3, silver: 2, bronze: 1 } as const;
+  for (const m of medals) {
+    const ex = byT.get(m.tournament);
+    if (!ex || rank[m.medal] > rank[ex.medal]) byT.set(m.tournament, m);
+  }
+  return Array.from(byT.values());
+}
+
 export function getOngoingDaeinTournaments(
   rows: Match[],
   today = new Date()
