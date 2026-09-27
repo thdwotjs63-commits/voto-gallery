@@ -126,6 +126,15 @@ export type MedalRecord = {
   label: string;
 };
 
+/** 메달 산출과 별도로 표시하는 2026 팀코리아 성과 (일정 시트에 없는 항목) */
+export const TEAM_KOREA_2026_ACHIEVEMENTS: Pick<MedalRecord, "emoji" | "tournament" | "label">[] = [
+  {
+    emoji: "🏐",
+    tournament: "2026 아이치·나고야 아시안게임",
+    label: "4강 진출",
+  },
+];
+
 export function getTeamKoreaMedals(rows: Match[]): MedalRecord[] {
   const medals: MedalRecord[] = [];
   for (const r of rows) {

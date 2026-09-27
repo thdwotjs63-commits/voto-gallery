@@ -262,9 +262,6 @@ export function VotoCategoryHome({
             <h1 className="text-lg font-bold tracking-tight text-white sm:text-xl">
               배구사진
             </h1>
-            <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-200/90">
-              3 categories
-            </span>
           </div>
           <nav className="flex flex-wrap gap-2" aria-label="카테고리">
             {VOTO_CATEGORIES.map((tab) => (

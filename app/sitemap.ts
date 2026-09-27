@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { VOTO_CATEGORIES } from "@/lib/voto-categories";
+import { DEFAULT_VOTO_CATEGORY, VOTO_CATEGORIES } from "@/lib/voto-categories";
 import { SITE_URL } from "@/lib/seo-metadata";
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -18,7 +18,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.85,
     },
-    ...VOTO_CATEGORIES.filter((c) => c.id !== "hyundai").map((c) => ({
+    ...VOTO_CATEGORIES.filter((c) => c.id !== DEFAULT_VOTO_CATEGORY).map((c) => ({
       url: `${SITE_URL}/voto/${c.id}`,
       lastModified: now,
       changeFrequency: "weekly" as const,

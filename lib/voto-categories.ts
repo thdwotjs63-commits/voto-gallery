@@ -1,13 +1,13 @@
 export const VOTO_CATEGORIES = [
   {
-    id: "hyundai",
-    label: "현대건설",
-    envKeys: ["VOTO_DRIVE_FOLDER_HYUNDAI"] as const,
-  },
-  {
     id: "team_korea",
     label: "팀코리아",
     envKeys: ["VOTO_DRIVE_FOLDER_TEAM_KOREA"] as const,
+  },
+  {
+    id: "hyundai",
+    label: "현대건설",
+    envKeys: ["VOTO_DRIVE_FOLDER_HYUNDAI"] as const,
   },
   {
     id: "women_volleyball",
@@ -24,7 +24,7 @@ const LEGACY_CATEGORY_ALIASES: Record<string, VotoCategoryId> = {
   amateur: "women_volleyball",
 };
 
-export const DEFAULT_VOTO_CATEGORY: VotoCategoryId = "hyundai";
+export const DEFAULT_VOTO_CATEGORY: VotoCategoryId = "team_korea";
 
 export function isVotoCategoryId(value: string): value is VotoCategoryId {
   return VOTO_CATEGORIES.some((c) => c.id === value);
