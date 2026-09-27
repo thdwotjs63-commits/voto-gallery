@@ -286,10 +286,6 @@ export function VotoCategoryHome({
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-8 pb-20 sm:px-6 sm:pb-8">
-        <p className="mb-6 max-w-2xl text-sm leading-relaxed text-zinc-400">
-          현대건설 · 팀코리아 · 여자배구(브이리그·실업배구) — 각 드라이브 폴더와 그 안의 하위 폴더까지 사진을 모읍니다. 썸네일은 Google Drive에서 직접 제공되며
-          Vercel 이미지 최적화는 사용하지 않습니다.
-        </p>
         <p className="mb-5 text-xs text-amber-200/85">
           데이터 사용량 주의: 원본 이미지를 직접 불러오므로 모바일 데이터 사용량이 늘 수 있어요.
         </p>
