@@ -133,6 +133,11 @@ export const TEAM_KOREA_2026_ACHIEVEMENTS: Pick<MedalRecord, "emoji" | "tourname
     tournament: "2026 아이치·나고야 아시안게임",
     label: "4강 진출",
   },
+  {
+    emoji: "🌍",
+    tournament: "2027 FIVB 배구 월드컵",
+    label: "출전권 획득",
+  },
 ];
 
 export function getTeamKoreaMedals(rows: Match[]): MedalRecord[] {
