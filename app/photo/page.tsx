@@ -24,18 +24,25 @@ import {
 
 type Step = "frame" | "capture" | "result";
 
+/** public/frames PNG 교체 시 rev만 올리면 썸네일·칸 감지 캐시가 갱신됩니다 */
+const FRAME_PNG_REV = 2;
+
+function frameAssetSrc(path: string) {
+  return `${path}?v=${FRAME_PNG_REV}`;
+}
+
 const OVERLAY_FRAMES: OverlayFrameDef[] = [
   {
     id: "daein",
     label: "다인 국가대표",
     desc: "2026 아시안게임",
-    src: "/frames/daein.png",
+    src: frameAssetSrc("/frames/daein.png"),
   },
   {
     id: "hillstate-national",
     label: "현대건설 국가대표",
     desc: "2026 아시안게임",
-    src: "/frames/hillstate-national.png",
+    src: frameAssetSrc("/frames/hillstate-national.png"),
   },
 ];
 
@@ -184,9 +191,7 @@ export default function PhotoPage() {
     setLayoutLoading(true);
     setCellsInvalid(false);
     setDebugPreviewUrl(null);
-    if (process.env.NODE_ENV === "development") {
-      clearFrameLayoutCache(def.src);
-    }
+    clearFrameLayoutCache(def.src);
     try {
       const loaded = await loadFrameLayout(def.src);
       const next: FrameLayout = {
@@ -865,8 +870,8 @@ export default function PhotoPage() {
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
         try {
           await navigator.share({
-            title: "daeni.kr 인생네컷",
-            text: "daeni.kr 인생네컷 📸",
+            title: "다인네컷",
+            text: "다인이와 인생네컷~ 📸 daeni.kr/photo",
             files: [file],
           });
           setSaving(false);

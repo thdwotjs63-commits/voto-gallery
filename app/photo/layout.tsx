@@ -4,13 +4,12 @@ import { SITE_URL } from "@/lib/seo-metadata";
 import "./photo-page.css";
 
 export const metadata: Metadata = {
-  title: "네컷 프레임 | daeni.kr",
-  description:
-    "국가대표 선발 기념 네컷 프레임으로 사진을 찍고 저장·공유하세요. 촬영본은 기기에만 저장됩니다.",
+  title: "다인네컷 | daeni.kr",
+  description: "다인이와 인생네컷~ 김다인 프레임으로 네 장 찍고 저장·공유해 보세요.",
   alternates: { canonical: `${SITE_URL}/photo` },
   openGraph: {
-    title: "네컷 프레임 | daeni.kr",
-    description: "국가대표 선발 기념 네컷 프레임 — daeni.kr",
+    title: "다인네컷 | daeni.kr",
+    description: "다인이와 인생네컷~",
     url: `${SITE_URL}/photo`,
     type: "website",
   },
