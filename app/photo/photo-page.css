@@ -1,0 +1,362 @@
+/* Scoped to /photo only — imported from app/photo/layout.tsx */
+
+.photo-page {
+  --bg: #ffffff;
+  --ink: #1c1c24;
+  --ink-sub: #6b6860;
+  --red: #c8202c;
+  --navy: #1e3e96;
+  --card: #ffffff;
+  --line: rgba(28, 28, 36, 0.12);
+
+  min-height: 100dvh;
+  background-color: var(--bg);
+  color: var(--ink);
+}
+
+@media (max-width: 767px) {
+  .photo-page__captureShell {
+    background-color: var(--bg);
+  }
+}
+
+.photo-page__frameBackLink {
+  color: var(--ink-sub);
+  text-underline-offset: 2px;
+}
+
+.photo-page__frameBackLink:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+@media (min-width: 768px) {
+  .photo-page__frameBackLink {
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .photo-page__frameBackLink:hover {
+    text-decoration: none;
+    background: rgba(28, 28, 36, 0.04);
+  }
+}
+
+.photo-page__brand {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--navy);
+  font-weight: 600;
+}
+
+.photo-page__title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.photo-page__sub {
+  color: var(--ink-sub);
+}
+
+.photo-page__btn-outline {
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  background: transparent;
+}
+
+.photo-page__btn-primary {
+  background: var(--red);
+  color: #fff;
+  border: none;
+}
+
+.photo-page__framePicker {
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.25rem 0.25rem 0.75rem;
+  margin: 0 -0.25rem;
+}
+
+@media (min-width: 768px) {
+  .photo-page__framePicker {
+    justify-content: center;
+    overflow-x: visible;
+    flex-wrap: wrap;
+  }
+}
+
+.photo-page__frameCard {
+  flex: 0 0 auto;
+  scroll-snap-align: center;
+  width: min(72vw, 220px);
+  border: 3px solid transparent;
+  border-radius: 1rem;
+  background: var(--card);
+  padding: 0.75rem 0.75rem 1rem;
+  text-align: center;
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.photo-page__frameCard:hover {
+  box-shadow: 0 4px 16px rgba(28, 28, 36, 0.08);
+}
+
+.photo-page__frameCard--selected {
+  border-color: var(--red);
+  box-shadow: 0 4px 18px rgba(200, 32, 44, 0.12);
+}
+
+.photo-page__frameThumb {
+  display: flex;
+  height: 320px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background: #f6f6f4;
+}
+
+.photo-page__frameThumbImg {
+  display: block;
+  height: 320px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.photo-page__frameCardLabel {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.photo-page__frameCardDesc {
+  margin-top: 0.25rem;
+  font-size: 11px;
+}
+
+.photo-page__standGuide {
+  color: var(--ink);
+}
+
+.photo-page__standZone {
+  border-radius: 0.35rem;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.photo-page__mediaCard {
+  background: var(--card);
+  border-radius: 1rem;
+  box-shadow: 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+
+.photo-page__mediaCardInner {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: calc(1rem - 1px);
+  background: #111;
+}
+
+.photo-page__stripCanvas {
+  background: var(--card);
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 1px var(--line);
+  border: none;
+}
+
+.photo-page__dot {
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 9999px;
+  background: var(--line);
+}
+
+.photo-page__dot--done {
+  background: var(--navy);
+}
+
+.photo-page__dot--current {
+  background: var(--red);
+}
+
+.photo-page__captureShell {
+  min-height: 100dvh;
+  background: transparent;
+}
+
+.photo-page__shotLabel {
+  color: var(--ink);
+}
+
+.photo-page__iconBtn {
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.photo-page__alertWarn {
+  border: 1px solid rgba(180, 120, 0, 0.35);
+  background: rgba(255, 248, 230, 0.92);
+  color: #5c4a12;
+}
+
+.photo-page__alertError {
+  border: 1px solid rgba(200, 32, 44, 0.35);
+  background: rgba(255, 240, 242, 0.95);
+  color: #6b1220;
+}
+
+.photo-page__resultImg {
+  box-shadow: 0 4px 20px rgba(28, 28, 36, 0.12);
+}
+
+.photo-page__modalBackdrop {
+  background: rgba(28, 28, 36, 0.45);
+}
+
+.photo-page__modalPanel {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 12px 40px rgba(28, 28, 36, 0.15);
+}
+
+.photo-page__countSlash {
+  color: var(--ink-sub);
+}
+
+@media (min-width: 1024px) {
+  .photo-page--capturing {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    position: relative;
+    isolation: isolate;
+  }
+
+  .photo-page--capturing::before,
+  .photo-page--capturing::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    z-index: 0;
+    width: 35%;
+    height: 35%;
+    opacity: 0.85;
+  }
+
+  .photo-page--capturing::before {
+    top: 0;
+    right: 0;
+    background: radial-gradient(
+      ellipse 100% 100% at 100% 0%,
+      rgba(200, 32, 44, 0.55) 0%,
+      rgba(200, 32, 44, 0.28) 45%,
+      transparent 72%
+    );
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.045 0.8' numOctaves='3' seed='12'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='22'/%3E%3C/filter%3E%3Crect width='200' height='200' fill='white' filter='url(%23r)'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.045 0.8' numOctaves='3' seed='12'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='22'/%3E%3C/filter%3E%3Crect width='200' height='200' fill='white' filter='url(%23r)'/%3E%3C/svg%3E");
+    -webkit-mask-size: cover;
+    mask-size: cover;
+  }
+
+  .photo-page--capturing::after {
+    bottom: 0;
+    left: 0;
+    background: radial-gradient(
+      ellipse 100% 100% at 0% 100%,
+      rgba(30, 62, 150, 0.52) 0%,
+      rgba(30, 62, 150, 0.26) 45%,
+      transparent 72%
+    );
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.05 0.75' numOctaves='3' seed='4'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='24'/%3E%3C/filter%3E%3Crect width='200' height='200' fill='white' filter='url(%23n)'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.05 0.75' numOctaves='3' seed='4'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='24'/%3E%3C/filter%3E%3Crect width='200' height='200' fill='white' filter='url(%23n)'/%3E%3C/svg%3E");
+    -webkit-mask-size: cover;
+    mask-size: cover;
+  }
+
+  .photo-page--capturing .photo-page__header,
+  .photo-page--capturing .photo-page__main {
+    position: relative;
+    z-index: 1;
+  }
+
+  .photo-page__header--capture .photo-page__title {
+    font-size: 1rem;
+  }
+
+  .photo-page__header--capture .photo-page__brand {
+    font-size: 9px;
+  }
+
+  .photo-page__main--capture {
+    padding-bottom: 1rem;
+  }
+
+  .photo-page--capturing .photo-page__mediaCard {
+    box-shadow: 0 2px 16px rgba(28, 28, 36, 0.12);
+    border: none;
+  }
+
+  .photo-page__stripCard .photo-page__stripCanvas {
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .photo-page__captureFooter .photo-page__dot {
+    height: 12px;
+    width: 12px;
+  }
+
+  .photo-page__frameBackBtn {
+    border: 1px solid var(--ink);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .photo-page__frameBackBtn:hover {
+    background: rgba(28, 28, 36, 0.04);
+  }
+
+  .photo-page--capturing .photo-page__debugStrip {
+    display: none;
+  }
+}
+
+.photo-page__shotPill {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.75rem;
+  z-index: 25;
+  align-items: baseline;
+  gap: 0.15rem;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+
+.photo-page__shotPillSlash {
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.85;
+}

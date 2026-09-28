@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { SITE_URL } from "@/lib/seo-metadata";
+import "./photo-page.css";
 
 export const metadata: Metadata = {
   title: "네컷 프레임 | daeni.kr",

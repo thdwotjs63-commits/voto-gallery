@@ -24,6 +24,7 @@ import "swiper/css/pagination";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
+  Camera,
   ChevronDown,
   Heart,
   Instagram,
@@ -68,6 +69,9 @@ import { getLatestSetSuccessCountTotal, isSeasonRecord } from "@/lib/records-dat
 
 /** 트윗 작성창에 넣을 갤러리 제목 */
 const GALLERY_SHARE_TITLE = "voto gallery — Captured Moments of Kim Da-in";
+
+/** 홈 배너 — 국제대회 랭킹 계산기 (당분간 false) */
+const SHOW_RANKING_CALCULATOR_BANNER = false;
 const FILTER_PILL_BASE =
   "min-h-11 shrink-0 rounded-full border border-[#00287A] px-3.5 py-2 text-xs font-medium transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90";
 const FILTER_PILL_ACTIVE = "bg-[#00287A] text-white";
@@ -2448,21 +2452,43 @@ export default function Home() {
         </div>
 
         <div
-          onClick={() => router.push("/calculator")}
+          onClick={() => router.push("/photo")}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
-              router.push("/calculator");
+              router.push("/photo");
             }
           }}
           role="button"
           tabIndex={0}
-          className="mx-auto flex max-w-[1100px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#1B6F6B]/50 bg-[#0E4744]/25 px-4 py-3"
+          className="mx-auto flex min-h-11 max-w-[1100px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#C8202C]/45 bg-[#1a1214] px-4 py-3"
         >
-          <p className="min-w-0 truncate text-[13px] font-medium text-[#E9E3D6]">
-            🏆 국제대회 랭킹 계산기 — FIVB 세계랭킹 포인트 예상 →
+          <p className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-[#E9E3D6]">
+            📸 다인네컷 찍기 — 2026 아이치·나고야 아시안게임 프레임 →
           </p>
+          <span className="shrink-0 rounded-full bg-[#C8202C] px-2.5 py-1 text-[10px] font-bold tracking-wide text-white">
+            NEW!
+          </span>
         </div>
+
+        {SHOW_RANKING_CALCULATOR_BANNER ? (
+          <div
+            onClick={() => router.push("/calculator")}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                router.push("/calculator");
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            className="mx-auto flex max-w-[1100px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#1B6F6B]/50 bg-[#0E4744]/25 px-4 py-3"
+          >
+            <p className="min-w-0 truncate text-[13px] font-medium text-[#E9E3D6]">
+              🏆 국제대회 랭킹 계산기 — FIVB 세계랭킹 포인트 예상 →
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -3445,7 +3471,14 @@ export default function Home() {
         </button>
       </div>
 
-      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-5 z-40 flex flex-col items-start gap-4 sm:bottom-5">
+      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-5 z-40 flex flex-col items-start gap-3 sm:bottom-5">
+        <Link
+          href="/photo"
+          aria-label="다인네컷"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-white/55 text-zinc-800 shadow-md backdrop-blur-md transition hover:bg-white/75"
+        >
+          <Camera className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden />
+        </Link>
         <div ref={shareWrapRef} className="relative flex flex-col items-start">
           <AnimatePresence>
             {shareMenuOpen ? (
