@@ -49,6 +49,9 @@ type FrameLayout = {
 
 const EMPTY_SLOTS: (string | null)[] = [null, null, null, null];
 
+const COUNTDOWN_SECOND_OPTIONS = [3, 6, 9] as const;
+type CountdownSeconds = (typeof COUNTDOWN_SECOND_OPTIONS)[number];
+
 function sleep(ms: number) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 }
@@ -72,6 +75,12 @@ function fitDesktopCaptureLayout(
     stripH: h,
     stripW: h * frameAspect,
   };
+}
+
+function isStreamLive(stream: MediaStream | null): boolean {
+  if (!stream) return false;
+  const tracks = stream.getVideoTracks();
+  return tracks.length > 0 && tracks.every((t) => t.readyState === "live");
 }
 
 function playShutter() {
@@ -110,9 +119,16 @@ export default function PhotoPage() {
   const capturedImagesRef = useRef<(HTMLImageElement | null)[]>([null, null, null, null]);
   const shotIndexRef = useRef(0);
   const countdownRef = useRef<number | null>(null);
+  const countdownSecondsRef = useRef<CountdownSeconds>(3);
   const debugModeRef = useRef(false);
   const photoSlotsRef = useRef<(string | null)[]>([...EMPTY_SLOTS]);
   const facingModeRef = useRef<"user" | "environment">("user");
+  const stepRef = useRef<Step>("frame");
+  const startCameraRef = useRef<(options?: { forceNew?: boolean; isAutoRetry?: boolean }) => Promise<void>>(
+    async () => undefined
+  );
+  const facingModeOnCaptureInitializedRef = useRef(false);
+  const startCameraInFlightRef = useRef<Promise<void> | null>(null);
 
   const [debugMode, setDebugMode] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
@@ -125,8 +141,11 @@ export default function PhotoPage() {
   const [photoSlots, setPhotoSlots] = useState<(string | null)[]>([...EMPTY_SLOTS]);
   const [shotIndex, setShotIndex] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [countdownSeconds, setCountdownSeconds] = useState<CountdownSeconds>(3);
   const [flash, setFlash] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraRetryable, setCameraRetryable] = useState(false);
+  const [needsPlayGesture, setNeedsPlayGesture] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [debugPreviewUrl, setDebugPreviewUrl] = useState<string | null>(null);
@@ -144,8 +163,10 @@ export default function PhotoPage() {
   photoSlotsRef.current = photoSlots;
   shotIndexRef.current = shotIndex;
   countdownRef.current = countdown;
+  countdownSecondsRef.current = countdownSeconds;
   debugModeRef.current = debugMode;
   facingModeRef.current = facingMode;
+  stepRef.current = step;
 
   useEffect(() => {
     const debug = new URLSearchParams(window.location.search).get("debug") === "1";
@@ -203,7 +224,44 @@ export default function PhotoPage() {
     streamRef.current = null;
     const video = videoRef.current;
     if (video) video.srcObject = null;
+    setNeedsPlayGesture(false);
   }, []);
+
+  const tryPlayVideo = useCallback(async (video: HTMLVideoElement) => {
+    try {
+      await video.play();
+      setNeedsPlayGesture(false);
+    } catch (err) {
+      const name = err instanceof Error ? err.name : "";
+      if (name === "AbortError") {
+        return;
+      }
+      if (name === "NotAllowedError") {
+        setNeedsPlayGesture(true);
+        return;
+      }
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[photo] video.play() failed", name, err);
+      }
+    }
+  }, []);
+
+  const attachStreamToVideo = useCallback(
+    async (stream: MediaStream) => {
+      const video = videoRef.current;
+      if (!video) return;
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
+      }
+      await tryPlayVideo(video);
+    },
+    [tryPlayVideo]
+  );
+
+  const handleResumeCameraPlay = useCallback(() => {
+    const video = videoRef.current;
+    if (video) void tryPlayVideo(video);
+  }, [tryPlayVideo]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -213,31 +271,97 @@ export default function PhotoPage() {
     };
   }, [stopCamera]);
 
-  const startCamera = useCallback(async () => {
-    setCameraError(null);
-    stopCamera();
-    const cell = layoutRef.current?.cells[Math.min(shotIndexRef.current, 3)];
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: getCellVideoConstraints(facingModeRef.current, cell),
-        audio: false,
+  const startCamera = useCallback(
+    (options?: { forceNew?: boolean; isAutoRetry?: boolean }) => {
+      if (startCameraInFlightRef.current) {
+        return startCameraInFlightRef.current;
+      }
+
+      const run = (async () => {
+        if (!mountedRef.current) return;
+
+        setCameraError(null);
+        setCameraRetryable(false);
+
+        const cell = layoutRef.current?.cells[Math.min(shotIndexRef.current, 3)];
+
+        if (!options?.forceNew && isStreamLive(streamRef.current)) {
+          await attachStreamToVideo(streamRef.current!);
+          return;
+        }
+
+        stopCamera();
+
+        let stream: MediaStream;
+        try {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: getCellVideoConstraints(facingModeRef.current, cell),
+              audio: false,
+            });
+          } catch (inner) {
+            const innerName = inner instanceof Error ? inner.name : "";
+            if (innerName === "NotFoundError" || innerName === "OverconstrainedError") {
+              stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            } else {
+              throw inner;
+            }
+          }
+        } catch (err) {
+          if (process.env.NODE_ENV === "development") {
+            console.error(
+              "[photo] getUserMedia failed",
+              err instanceof Error ? err.name : err,
+              err instanceof Error ? err.message : err
+            );
+          }
+
+          const name = err instanceof Error ? err.name : "UnknownError";
+
+          if (name === "NotReadableError" && !options?.isAutoRetry) {
+            stopCamera();
+            await sleep(500);
+            if (mountedRef.current) {
+              startCameraInFlightRef.current = null;
+              await startCamera({ forceNew: true, isAutoRetry: true });
+            }
+            return;
+          }
+
+          if (name === "NotAllowedError" || name === "SecurityError") {
+            setCameraError("카메라 권한이 꺼져 있어요. 브라우저 설정에서 허용해 주세요");
+            setCameraRetryable(false);
+          } else if (name === "NotReadableError" || name === "AbortError") {
+            setCameraError("카메라를 다른 곳에서 쓰고 있어요");
+            setCameraRetryable(true);
+          } else {
+            setCameraError(`카메라를 시작하지 못했어요 (${name})`);
+            setCameraRetryable(false);
+          }
+          return;
+        }
+
+        if (!mountedRef.current) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        await attachStreamToVideo(stream);
+      })();
+
+      startCameraInFlightRef.current = run;
+      void run.finally(() => {
+        if (startCameraInFlightRef.current === run) {
+          startCameraInFlightRef.current = null;
+        }
       });
-      if (!mountedRef.current) {
-        stream.getTracks().forEach((t) => t.stop());
-        return;
-      }
-      streamRef.current = stream;
-      const video = videoRef.current;
-      if (video) {
-        video.srcObject = stream;
-        await video.play();
-      }
-    } catch {
-      setCameraError(
-        "카메라를 사용할 수 없어요. 브라우저 설정에서 카메라 권한을 허용한 뒤 다시 시도해 주세요."
-      );
-    }
-  }, [stopCamera, facingMode, shotIndex]);
+      return run;
+    },
+    [attachStreamToVideo, stopCamera]
+  );
+
+  startCameraRef.current = startCamera;
 
   const finishIfComplete = useCallback(() => {
     const L = layoutRef.current;
@@ -266,7 +390,8 @@ export default function PhotoPage() {
       setShotIndex(index);
       shotIndexRef.current = index;
 
-      for (let c = 3; c >= 1; c--) {
+      const seconds = countdownSecondsRef.current;
+      for (let c = seconds; c >= 1; c--) {
         if (!mountedRef.current) return false;
         setCountdown(c);
         countdownRef.current = c;
@@ -344,13 +469,44 @@ export default function PhotoPage() {
   );
 
   useEffect(() => {
-    if (step !== "capture") {
-      if (step !== "result") stopCamera();
+    if (step === "result") {
+      stopCamera();
       return;
     }
-    if (cellsInvalid || layoutLoading || !layout || layout.cells.length !== 4) return;
+    if (step !== "capture") {
+      return;
+    }
+    if (cellsInvalid || layoutLoading) return;
+    if (!layoutRef.current || layoutRef.current.cells.length !== 4) return;
     void startCamera();
-  }, [step, startCamera, stopCamera, cellsInvalid, layoutLoading, layout, facingMode, shotIndex]);
+  }, [step, startCamera, stopCamera, cellsInvalid, layoutLoading]);
+
+  useEffect(() => {
+    if (step !== "capture") {
+      facingModeOnCaptureInitializedRef.current = false;
+      return;
+    }
+    if (!facingModeOnCaptureInitializedRef.current) {
+      facingModeOnCaptureInitializedRef.current = true;
+      return;
+    }
+    stopCamera();
+    void startCamera({ forceNew: true });
+  }, [facingMode, step, startCamera, stopCamera]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        stopCamera();
+        return;
+      }
+      if (document.visibilityState === "visible" && stepRef.current === "capture") {
+        void startCameraRef.current();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [stopCamera]);
 
   useEffect(() => {
     if (step !== "capture") {
@@ -501,6 +657,47 @@ export default function PhotoPage() {
     setStep("capture");
   };
 
+  const handleBackToFrameSelect = () => {
+    resetCapturedImages();
+    setPreviewUrl(null);
+    setShotIndex(0);
+    shotIndexRef.current = 0;
+    setFacingMode("user");
+    setStripExpanded(false);
+    sequenceRunningRef.current = false;
+    setStep("frame");
+  };
+
+  const countdownPickerDisabled =
+    capturing || countdown !== null || sequenceRunningRef.current;
+
+  const countdownPicker = (
+    <div className="photo-page__countdownPick">
+      <p className="photo-page__sub text-center text-xs">촬영 전 카운트다운</p>
+      <div
+        className="photo-page__countdownPickRow"
+        role="radiogroup"
+        aria-label="카운트다운 시간"
+      >
+        {COUNTDOWN_SECOND_OPTIONS.map((sec) => (
+          <button
+            key={sec}
+            type="button"
+            role="radio"
+            aria-checked={countdownSeconds === sec}
+            disabled={countdownPickerDisabled}
+            onClick={() => setCountdownSeconds(sec)}
+            className={`photo-page__countdownOption${
+              countdownSeconds === sec ? " photo-page__countdownOption--active" : ""
+            }`}
+          >
+            {sec}초
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   const handleStripCanvasPointer = (
     event: React.PointerEvent<HTMLCanvasElement>,
     canvas: HTMLCanvasElement,
@@ -533,7 +730,8 @@ export default function PhotoPage() {
 
   const exitCaptureToFrame = () => {
     setStripExpanded(false);
-    stopCamera();
+    setCameraError(null);
+    setCameraRetryable(false);
     setStep("frame");
   };
 
@@ -579,8 +777,18 @@ export default function PhotoPage() {
         ref={videoRef}
         playsInline
         muted
+        autoPlay
         className={`absolute inset-0 h-full w-full object-cover ${mirrorPreview ? "scale-x-[-1]" : ""}`}
       />
+      {needsPlayGesture ? (
+        <button
+          type="button"
+          onClick={handleResumeCameraPlay}
+          className="absolute inset-0 z-[25] flex items-center justify-center bg-black/50 px-4 text-center text-sm font-semibold text-white"
+        >
+          화면을 눌러 카메라 켜기
+        </button>
+      ) : null}
       {showStandGuide && standHint?.zone ? (
         <div
           className="photo-page__standZone pointer-events-none absolute z-[15] border-2 border-dashed border-white/75"
@@ -740,6 +948,7 @@ export default function PhotoPage() {
                 );
               })}
             </div>
+            {countdownPicker}
             <p className="photo-page__sub text-center text-[11px]">
               사진은 서버로 보내지 않으며, 기기에만 저장됩니다.
             </p>
@@ -787,9 +996,18 @@ export default function PhotoPage() {
               <p className="photo-page__sub text-center text-sm">프레임 분석 중…</p>
             ) : null}
             {cameraError ? (
-              <p className="photo-page__alertError rounded-xl px-4 py-3 text-sm">
-                {cameraError}
-              </p>
+              <div className="photo-page__alertError mx-auto w-full max-w-md space-y-2 rounded-xl px-4 py-3 text-sm">
+                <p>{cameraError}</p>
+                {cameraRetryable ? (
+                  <button
+                    type="button"
+                    onClick={() => void startCamera({ forceNew: true })}
+                    className="photo-page__btn-outline w-full rounded-lg px-3 py-2 text-xs font-medium"
+                  >
+                    다시 시도
+                  </button>
+                ) : null}
+              </div>
             ) : null}
 
             <div
@@ -876,6 +1094,12 @@ export default function PhotoPage() {
               <div className="hidden lg:block" aria-hidden />
             </div>
 
+            {!cameraError && !captureBlocked ? (
+              <div className="mx-auto mt-3 w-full max-w-md shrink-0 px-0 max-lg:px-2">
+                {countdownPicker}
+              </div>
+            ) : null}
+
             {!capturing && filledCount < 4 && !cameraError && !captureBlocked ? (
               <button
                 type="button"
@@ -950,6 +1174,13 @@ export default function PhotoPage() {
                 className="photo-page__btn-outline w-full rounded-xl py-3 text-sm font-medium"
               >
                 🔄 다시 찍기
+              </button>
+              <button
+                type="button"
+                onClick={handleBackToFrameSelect}
+                className="photo-page__btn-outline w-full rounded-xl py-3 text-sm font-medium"
+              >
+                🖼️ 프레임 선택
               </button>
             </div>
             <p className="photo-page__sub text-center text-[11px]">
