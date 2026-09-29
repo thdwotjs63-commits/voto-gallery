@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { FlipHorizontal2, SwitchCamera } from "lucide-react";
 import {
   buildFourCutFileName,
   captureFromVideo,
@@ -64,6 +65,21 @@ const EMPTY_SLOTS: (string | null)[] = [null, null, null, null];
 
 const COUNTDOWN_SECOND_OPTIONS = [3, 6, 9] as const;
 type CountdownSeconds = (typeof COUNTDOWN_SECOND_OPTIONS)[number];
+
+const FACING_MODE_STORAGE_KEY = "voto-photo-facing-mode";
+
+function readStoredFacingMode(): "user" | "environment" {
+  try {
+    const v = sessionStorage.getItem(FACING_MODE_STORAGE_KEY);
+    return v === "environment" ? "environment" : "user";
+  } catch {
+    return "user";
+  }
+}
+
+function defaultMirrorForFacing(facing: "user" | "environment") {
+  return facing === "user";
+}
 
 function sleep(ms: number) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
@@ -130,21 +146,31 @@ export default function PhotoPage() {
   const sequenceRunningRef = useRef(false);
   const layoutRef = useRef<FrameLayout | null>(null);
   const capturedImagesRef = useRef<(HTMLImageElement | null)[]>([null, null, null, null]);
+  const capturedMirrorsRef = useRef<(boolean | null)[]>([null, null, null, null]);
   const shotIndexRef = useRef(0);
   const countdownRef = useRef<number | null>(null);
   const countdownSecondsRef = useRef<CountdownSeconds>(3);
   const debugModeRef = useRef(false);
   const photoSlotsRef = useRef<(string | null)[]>([...EMPTY_SLOTS]);
   const facingModeRef = useRef<"user" | "environment">("user");
+  const mirrorHorizontalRef = useRef(true);
   const stepRef = useRef<Step>("frame");
   const startCameraRef = useRef<(options?: { forceNew?: boolean; isAutoRetry?: boolean }) => Promise<void>>(
     async () => undefined
   );
   const facingModeOnCaptureInitializedRef = useRef(false);
   const startCameraInFlightRef = useRef<Promise<void> | null>(null);
+  const cameraSwitchPendingRef = useRef(false);
 
   const [debugMode, setDebugMode] = useState(false);
-  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+  const [facingMode, setFacingMode] = useState<"user" | "environment">(() =>
+    typeof window !== "undefined" ? readStoredFacingMode() : "user"
+  );
+  const [mirrorHorizontal, setMirrorHorizontal] = useState(() =>
+    typeof window !== "undefined" ? defaultMirrorForFacing(readStoredFacingMode()) : true
+  );
+  const [multipleVideoInputs, setMultipleVideoInputs] = useState(false);
+  const [cameraSwitching, setCameraSwitching] = useState(false);
   const [stripExpanded, setStripExpanded] = useState(false);
   const [step, setStep] = useState<Step>("frame");
   const [frameDef, setFrameDef] = useState<OverlayFrameDef>(OVERLAY_FRAMES[0]);
@@ -179,16 +205,51 @@ export default function PhotoPage() {
   countdownSecondsRef.current = countdownSeconds;
   debugModeRef.current = debugMode;
   facingModeRef.current = facingMode;
+  mirrorHorizontalRef.current = mirrorHorizontal;
   stepRef.current = step;
 
   useEffect(() => {
-    const debug = new URLSearchParams(window.location.search).get("debug") === "1";
+    try {
+      sessionStorage.setItem(FACING_MODE_STORAGE_KEY, facingMode);
+    } catch {
+      /* ignore */
+    }
+  }, [facingMode]);
+
+  useEffect(() => {
+    setMirrorHorizontal(defaultMirrorForFacing(facingMode));
+  }, [facingMode]);
+
+  const refreshVideoInputCount = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      setMultipleVideoInputs(false);
+      return;
+    }
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const count = devices.filter((d) => d.kind === "videoinput").length;
+      setMultipleVideoInputs(count >= 2);
+    } catch {
+      setMultipleVideoInputs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const debug = params.get("debug") === "1";
     setDebugMode(debug);
     debugModeRef.current = debug;
+
+    const frameId = params.get("frame")?.trim();
+    if (frameId) {
+      const matched = OVERLAY_FRAMES.find((f) => f.id === frameId);
+      if (matched) setFrameDef(matched);
+    }
   }, []);
 
   const resetCapturedImages = useCallback(() => {
     capturedImagesRef.current = [null, null, null, null];
+    capturedMirrorsRef.current = [null, null, null, null];
     setPhotoSlots([...EMPTY_SLOTS]);
     photoSlotsRef.current = [...EMPTY_SLOTS];
   }, []);
@@ -359,6 +420,7 @@ export default function PhotoPage() {
 
         streamRef.current = stream;
         await attachStreamToVideo(stream);
+        await refreshVideoInputCount();
       })();
 
       startCameraInFlightRef.current = run;
@@ -366,10 +428,14 @@ export default function PhotoPage() {
         if (startCameraInFlightRef.current === run) {
           startCameraInFlightRef.current = null;
         }
+        if (cameraSwitchPendingRef.current) {
+          cameraSwitchPendingRef.current = false;
+          setCameraSwitching(false);
+        }
       });
       return run;
     },
-    [attachStreamToVideo, stopCamera]
+    [attachStreamToVideo, stopCamera, refreshVideoInputCount]
   );
 
   startCameraRef.current = startCamera;
@@ -383,6 +449,7 @@ export default function PhotoPage() {
     stopCamera();
     const canvas = composeFrameFromImages(L.frameImage, L.cells, imgs, {
       debug: debugModeRef.current,
+      capturedMirrors: [...capturedMirrorsRef.current],
     });
     setPreviewUrl(canvas.toDataURL("image/jpeg", 0.92));
     setStep("result");
@@ -417,10 +484,8 @@ export default function PhotoPage() {
       setFlash(true);
       window.setTimeout(() => setFlash(false), 120);
 
-      const dataUrl = captureFromVideo(
-        videoRef.current,
-        facingModeRef.current === "user"
-      );
+      const mirrorAtCapture = mirrorHorizontalRef.current;
+      const dataUrl = captureFromVideo(videoRef.current, false);
       if (!dataUrl) {
         console.warn("[photo] capture skipped: video not ready");
         return false;
@@ -428,6 +493,7 @@ export default function PhotoPage() {
 
       const img = await loadImage(dataUrl);
       capturedImagesRef.current[index] = img;
+      capturedMirrorsRef.current[index] = mirrorAtCapture;
       setPhotoSlots((prev) => {
         const next = [...prev];
         next[index] = dataUrl;
@@ -588,15 +654,24 @@ export default function PhotoPage() {
       cells: layout.cells,
     };
     const imgs = capturedImagesRef.current;
+    const mirrors = capturedMirrorsRef.current;
     if (stripCanvasMiniRef.current) {
-      paintStripToCanvas(stripCanvasMiniRef.current, payload, imgs, shotIndex, 110, debugMode);
+      paintStripToCanvas(stripCanvasMiniRef.current, payload, imgs, shotIndex, 110, debugMode, mirrors);
     }
     if (stripCanvasRef.current) {
       const stripH = desktopMetrics?.stripH ?? 200;
-      paintStripToCanvas(stripCanvasRef.current, payload, imgs, shotIndex, stripH, debugMode);
+      paintStripToCanvas(stripCanvasRef.current, payload, imgs, shotIndex, stripH, debugMode, mirrors);
     }
     if (stripCanvasExpandedRef.current) {
-      paintStripToCanvas(stripCanvasExpandedRef.current, payload, imgs, shotIndex, 320, debugMode);
+      paintStripToCanvas(
+        stripCanvasExpandedRef.current,
+        payload,
+        imgs,
+        shotIndex,
+        320,
+        debugMode,
+        mirrors
+      );
     }
   }, [layout, shotIndex, debugMode, photoSlots, desktopMetrics?.stripH]);
 
@@ -651,7 +726,6 @@ export default function PhotoPage() {
     setPreviewUrl(null);
     setShotIndex(0);
     shotIndexRef.current = 0;
-    setFacingMode("user");
     setStripExpanded(false);
     sequenceRunningRef.current = false;
     setStep("capture");
@@ -662,7 +736,6 @@ export default function PhotoPage() {
     setPreviewUrl(null);
     setShotIndex(0);
     shotIndexRef.current = 0;
-    setFacingMode("user");
     setStripExpanded(false);
     sequenceRunningRef.current = false;
     setStep("capture");
@@ -673,7 +746,6 @@ export default function PhotoPage() {
     setPreviewUrl(null);
     setShotIndex(0);
     shotIndexRef.current = 0;
-    setFacingMode("user");
     setStripExpanded(false);
     sequenceRunningRef.current = false;
     setStep("frame");
@@ -728,6 +800,7 @@ export default function PhotoPage() {
     if (idx < 0 || !capturedImagesRef.current[idx]) return;
     if (closeExpanded) setStripExpanded(false);
     capturedImagesRef.current[idx] = null;
+    capturedMirrorsRef.current[idx] = null;
     setPhotoSlots((prev) => {
       const next = [...prev];
       next[idx] = null;
@@ -746,9 +819,19 @@ export default function PhotoPage() {
     setStep("frame");
   };
 
-  const toggleFacingMode = () => {
+  const cameraControlsDisabled = countdown !== null;
+
+  const switchCamera = useCallback(() => {
+    if (cameraControlsDisabled || cameraSwitching) return;
+    cameraSwitchPendingRef.current = true;
+    setCameraSwitching(true);
     setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
-  };
+  }, [cameraControlsDisabled, cameraSwitching]);
+
+  const toggleMirrorHorizontal = useCallback(() => {
+    if (cameraControlsDisabled) return;
+    setMirrorHorizontal((prev) => !prev);
+  }, [cameraControlsDisabled]);
 
   const captureBlocked = cellsInvalid || layoutLoading || !layout || layout.cells.length !== 4;
   const filledCount = photoSlots.filter(Boolean).length;
@@ -757,7 +840,7 @@ export default function PhotoPage() {
     currentCell && layout
       ? getFrameCellOverlayImageStyle(currentCell, layout.width, layout.height)
       : null;
-  const mirrorPreview = facingMode === "user";
+  const mirrorPreview = mirrorHorizontal;
   const shotLabel = `${Math.min(shotIndex, 3) + 1} / 4`;
   const activeShotIndex = Math.min(shotIndex, 3);
   const standHint = layout?.standHints[activeShotIndex] ?? null;
@@ -800,18 +883,6 @@ export default function PhotoPage() {
           화면을 눌러 카메라 켜기
         </button>
       ) : null}
-      {showStandGuide && standHint?.zone ? (
-        <div
-          className="photo-page__standZone pointer-events-none absolute z-[15] border-2 border-dashed border-white/75"
-          style={{
-            left: `${standHint.zone.left * 100}%`,
-            top: `${standHint.zone.top * 100}%`,
-            width: `${standHint.zone.width * 100}%`,
-            height: `${standHint.zone.height * 100}%`,
-          }}
-          aria-hidden
-        />
-      ) : null}
       {frameOverlayStyle ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -821,14 +892,49 @@ export default function PhotoPage() {
           style={frameOverlayStyle}
         />
       ) : null}
-      <button
-        type="button"
-        onClick={toggleFacingMode}
-        className="absolute bottom-2 right-2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-lg backdrop-blur-sm lg:bottom-3 lg:right-3 max-lg:left-2 max-lg:right-auto"
-        aria-label={facingMode === "user" ? "후면 카메라로 전환" : "전면 카메라로 전환"}
-      >
-        🔄
-      </button>
+      {cameraSwitching ? (
+        <div
+          className="absolute inset-0 z-[15] flex items-center justify-center bg-black/40 backdrop-blur-[1px]"
+          aria-live="polite"
+        >
+          <span className="text-sm font-medium text-white">카메라 전환 중…</span>
+        </div>
+      ) : null}
+      {multipleVideoInputs ? (
+        <div className="absolute bottom-2 left-2 z-20 flex flex-col items-center gap-0.5 lg:bottom-3 lg:left-3">
+          <button
+            type="button"
+            onClick={switchCamera}
+            disabled={cameraControlsDisabled || cameraSwitching}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm disabled:opacity-40"
+            aria-label="카메라 전환"
+          >
+            <SwitchCamera className="h-5 w-5" strokeWidth={2} aria-hidden />
+          </button>
+          <span className="text-[10px] font-medium leading-none text-white/90 drop-shadow-sm">
+            카메라
+          </span>
+        </div>
+      ) : null}
+      <div className="absolute bottom-2 right-2 z-20 flex flex-col items-center gap-0.5 lg:bottom-3 lg:right-3">
+        <button
+          type="button"
+          onClick={toggleMirrorHorizontal}
+          disabled={cameraControlsDisabled}
+          className={`flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-sm disabled:opacity-40 ${
+            mirrorHorizontal
+              ? "bg-white text-black"
+              : "bg-black/50 text-white"
+          }`}
+          aria-label="좌우 반전"
+          aria-pressed={mirrorHorizontal}
+        >
+          <FlipHorizontal2 className="h-5 w-5" strokeWidth={2} aria-hidden />
+        </button>
+        <span className="text-[10px] font-medium leading-none text-white/90 drop-shadow-sm">
+          반전
+        </span>
+      </div>
       <button
         type="button"
         onClick={() => setStripExpanded(true)}
@@ -1029,7 +1135,7 @@ export default function PhotoPage() {
                 <div className="photo-page__captureGrid mx-auto w-full max-md:max-w-[720px] lg:grid lg:h-full lg:max-w-none lg:grid-cols-[1fr_auto] lg:items-start lg:gap-10">
                   <div className="photo-page__captureCameraCol flex w-full min-w-0 flex-col items-center justify-center gap-2 max-lg:flex-col">
                     {showStandGuide && standHint?.message ? (
-                      <p className="photo-page__standGuide w-full text-center text-sm font-medium max-lg:px-2">
+                      <p className="photo-page__standGuide w-full max-lg:px-2">
                         {standHint.message}
                       </p>
                     ) : null}

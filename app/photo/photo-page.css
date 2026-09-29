@@ -159,12 +159,10 @@
 }
 
 .photo-page__standGuide {
-  color: var(--ink);
-}
-
-.photo-page__standZone {
-  border-radius: 0.35rem;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-sub);
 }
 
 .photo-page__countdownPick {

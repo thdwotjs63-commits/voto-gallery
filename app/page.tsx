@@ -35,6 +35,7 @@ import {
   Twitter,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
+import { Daeni4CutHomePopup } from "@/components/daeni-4cut-home-popup";
 import { GalleryChangelog } from "@/components/gallery-changelog";
 import { SiteNav } from "@/components/site-nav";
 import {
@@ -3554,6 +3555,7 @@ export default function Home() {
           </motion.div>
         ) : null}
       </AnimatePresence>
+      <Daeni4CutHomePopup />
       </div>
     </>
   );

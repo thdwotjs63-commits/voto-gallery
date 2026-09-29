@@ -8,19 +8,12 @@ export type OverlayFrameDef = {
   src: string;
 };
 
-/** 칸 안 선수(불투명) 픽셀 분포로 촬영 위치 안내 */
+/** 칸 안 선수(불투명) 픽셀 분포 → 촬영 위치 안내 문구 */
 export type CellStandHint = {
-  side: "left" | "right" | null;
   message: string | null;
-  /** 칸 내부 비율(0~1) — 서 있을 영역 */
-  zone: { left: number; top: number; width: number; height: number } | null;
 };
 
 const ALPHA_OPAQUE = 128;
-const STAND_SIDE_MARGIN = 0.05;
-const STAND_ZONE_WIDTH = 0.42;
-const STAND_ZONE_TOP = 0.08;
-const STAND_ZONE_HEIGHT = 0.84;
 
 /** 반투명 가장자리까지 같은 구멍으로 묶기 */
 const ALPHA_HOLE = 128;
@@ -114,9 +107,13 @@ export type PaintFourCutInput = {
   cells: FrameCellRect[];
   /** 0~3, 찍은 사진 캐시 */
   capturedImages: (HTMLImageElement | null)[];
+  /** 칸별 좌우 반전 (촬영 시점). capturedImages는 반전 없이 저장 */
+  capturedMirrors?: (boolean | null)[];
   /** 지금 찍는 칸 (0~3). 라이브 미리보기 없으면 -1 */
   activeIndex: number;
   liveVideo?: HTMLVideoElement | null;
+  /** 라이브 미리보기 좌우 반전 */
+  liveMirrorHorizontal?: boolean;
   countdown?: number | null;
   nowMs?: number;
   reduceMotion?: boolean;
@@ -133,8 +130,10 @@ export function paintFourCutFrame(ctx: CanvasRenderingContext2D, input: PaintFou
     frameImage,
     cells,
     capturedImages,
+    capturedMirrors,
     activeIndex,
     liveVideo,
+    liveMirrorHorizontal = true,
     countdown = null,
     nowMs = 0,
     reduceMotion = false,
@@ -150,9 +149,10 @@ export function paintFourCutFrame(ctx: CanvasRenderingContext2D, input: PaintFou
 
     const captured = capturedImages[i];
     if (captured) {
-      drawImageCoverInCell(ctx, captured, cell.x, cell.y, cell.w, cell.h, false);
+      const mirror = capturedMirrors?.[i] ?? false;
+      drawImageCoverInCell(ctx, captured, cell.x, cell.y, cell.w, cell.h, mirror);
     } else if (i === activeIndex && liveVideo && liveVideo.readyState >= 2 && liveVideo.videoWidth > 0) {
-      drawImageCoverInCell(ctx, liveVideo, cell.x, cell.y, cell.w, cell.h, true);
+      drawImageCoverInCell(ctx, liveVideo, cell.x, cell.y, cell.w, cell.h, liveMirrorHorizontal);
     } else {
       ctx.save();
       ctx.beginPath();
@@ -471,7 +471,7 @@ export function computeCellStandHints(
   const frameWidth = img.naturalWidth;
   const frameHeight = img.naturalHeight;
   if (frameWidth <= 0 || frameHeight <= 0) {
-    return cells.map(() => ({ side: null, message: null, zone: null }));
+    return cells.map(() => ({ message: null }));
   }
 
   const canvas = document.createElement("canvas");
@@ -479,7 +479,7 @@ export function computeCellStandHints(
   canvas.height = frameHeight;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) {
-    return cells.map(() => ({ side: null, message: null, zone: null }));
+    return cells.map(() => ({ message: null }));
   }
 
   ctx.drawImage(img, 0, 0);
@@ -499,34 +499,15 @@ export function computeCellStandHints(
       }
     }
 
-    const neutral: CellStandHint = { side: null, message: null, zone: null };
-    if (leftOpaque + rightOpaque === 0) return neutral;
+    if (leftOpaque + rightOpaque === 0) return { message: null };
 
     if (rightOpaque >= leftOpaque * 1.2) {
-      return {
-        side: "left",
-        message: "왼쪽에 서 주세요 👈",
-        zone: {
-          left: STAND_SIDE_MARGIN,
-          top: STAND_ZONE_TOP,
-          width: STAND_ZONE_WIDTH,
-          height: STAND_ZONE_HEIGHT,
-        },
-      };
+      return { message: "왼쪽에 서 주세요 👈" };
     }
     if (leftOpaque >= rightOpaque * 1.2) {
-      return {
-        side: "right",
-        message: "오른쪽에 서 주세요 👉",
-        zone: {
-          left: 1 - STAND_SIDE_MARGIN - STAND_ZONE_WIDTH,
-          top: STAND_ZONE_TOP,
-          width: STAND_ZONE_WIDTH,
-          height: STAND_ZONE_HEIGHT,
-        },
-      };
+      return { message: "오른쪽에 서 주세요 👉" };
     }
-    return neutral;
+    return { message: null };
   });
 }
 
@@ -573,6 +554,7 @@ export function clearFrameLayoutCache(src?: string) {
 
 export type ComposeFrameOptions = {
   debug?: boolean;
+  capturedMirrors?: (boolean | null)[];
 };
 
 /** 저장용 — Image 캐시로 합성 (미리보기와 동일 paintFourCutFrame) */
@@ -596,6 +578,7 @@ export function composeFrameFromImages(
     frameImage,
     cells,
     capturedImages,
+    capturedMirrors: options?.capturedMirrors,
     activeIndex: -1,
     debug: options?.debug,
   });
@@ -729,7 +712,8 @@ export function paintStripToCanvas(
   capturedImages: (HTMLImageElement | null)[],
   activeIndex: number,
   displayHeightPx: number,
-  debug?: boolean
+  debug?: boolean,
+  capturedMirrors?: (boolean | null)[]
 ) {
   const dpr = Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 2);
   const { width, height } = getStripPreviewCanvasSize(
@@ -746,6 +730,7 @@ export function paintStripToCanvas(
     frameImage: layout.frameImage,
     cells: layout.cells,
     capturedImages,
+    capturedMirrors,
     activeIndex,
     debug,
   });
