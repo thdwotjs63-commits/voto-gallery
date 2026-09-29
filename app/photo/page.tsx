@@ -25,7 +25,7 @@ import {
 type Step = "frame" | "capture" | "result";
 
 /** public/frames PNG 교체 시 rev만 올리면 썸네일·칸 감지 캐시가 갱신됩니다 */
-const FRAME_PNG_REV = 2;
+const FRAME_PNG_REV = 3;
 
 function frameAssetSrc(path: string) {
   return `${path}?v=${FRAME_PNG_REV}`;
@@ -34,13 +34,19 @@ function frameAssetSrc(path: string) {
 const OVERLAY_FRAMES: OverlayFrameDef[] = [
   {
     id: "daein",
-    label: "다인 국가대표",
+    label: "팀코리아 김다인",
     desc: "2026 아시안게임",
     src: frameAssetSrc("/frames/daein.png"),
   },
   {
+    id: "daein-2",
+    label: "팀코리아 김다인2",
+    desc: "2026 아시안게임",
+    src: frameAssetSrc("/frames/daein-2.png"),
+  },
+  {
     id: "hillstate-national",
-    label: "현대건설 국가대표",
+    label: "팀코리아 현대건설",
     desc: "2026 아시안게임",
     src: frameAssetSrc("/frames/hillstate-national.png"),
   },
