@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { GoogleAnalytics } from "@/components/google-analytics";
@@ -15,6 +15,10 @@ export const metadata: Metadata = buildRootMetadata({
   imageHeight: 630,
   imageAlt: "배구선수 김다인",
 });
+
+export const viewport: Viewport = {
+  themeColor: "#1e3e96",
+};
 
 export default function RootLayout({
   children,

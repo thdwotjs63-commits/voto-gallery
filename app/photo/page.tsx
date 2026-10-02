@@ -5,6 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FlipHorizontal2, SwitchCamera } from "lucide-react";
 import {
+  allocateNextBoothSequence,
+  buildBoothCompositeFileName,
+  buildBoothOriginalFileName,
+  formatBoothSequenceLabel,
+  isPhotoBoothMode,
+  readBoothSequence,
+  resetBoothSequence,
+} from "@/lib/photo-booth";
+import {
   buildFourCutFileName,
   captureFromVideo,
   clearFrameLayoutCache,
@@ -65,6 +74,13 @@ const EMPTY_SLOTS: (string | null)[] = [null, null, null, null];
 
 const COUNTDOWN_SECOND_OPTIONS = [3, 6, 9] as const;
 type CountdownSeconds = (typeof COUNTDOWN_SECOND_OPTIONS)[number];
+
+const BOOTH_COUNTDOWN_SECOND_OPTIONS = [3, 5, 10] as const;
+type BoothCountdownSeconds = (typeof BOOTH_COUNTDOWN_SECOND_OPTIONS)[number];
+
+const BOOTH_SHARE_MAIL_TEXT = "현대건설 커피차 다인네컷 📸 daeni.kr";
+const BOOTH_SHARE_UNSUPPORTED =
+  "이 브라우저는 공유를 지원하지 않아요. 사파리로 열어주세요";
 
 const FACING_MODE_STORAGE_KEY = "voto-photo-facing-mode";
 
@@ -161,8 +177,19 @@ export default function PhotoPage() {
   const facingModeOnCaptureInitializedRef = useRef(false);
   const startCameraInFlightRef = useRef<Promise<void> | null>(null);
   const cameraSwitchPendingRef = useRef(false);
+  const boothModeRef = useRef(false);
+  const frameDefRef = useRef(OVERLAY_FRAMES[0]);
+  const boothCountdownSecondsRef = useRef<BoothCountdownSeconds>(3);
+  const boothSaveOriginalsRef = useRef(false);
+  const resultShareFileRef = useRef<File | null>(null);
 
   const [debugMode, setDebugMode] = useState(false);
+  const [boothMode, setBoothMode] = useState(false);
+  const [boothSettingsOpen, setBoothSettingsOpen] = useState(false);
+  const [boothCountdownSeconds, setBoothCountdownSeconds] = useState<BoothCountdownSeconds>(3);
+  const [boothSaveOriginals, setBoothSaveOriginals] = useState(false);
+  const [boothSavedSeqLabel, setBoothSavedSeqLabel] = useState<string | null>(null);
+  const [boothShareHint, setBoothShareHint] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<"user" | "environment">(() =>
     typeof window !== "undefined" ? readStoredFacingMode() : "user"
   );
@@ -207,6 +234,10 @@ export default function PhotoPage() {
   facingModeRef.current = facingMode;
   mirrorHorizontalRef.current = mirrorHorizontal;
   stepRef.current = step;
+  boothModeRef.current = boothMode;
+  frameDefRef.current = frameDef;
+  boothCountdownSecondsRef.current = boothCountdownSeconds;
+  boothSaveOriginalsRef.current = boothSaveOriginals;
 
   useEffect(() => {
     try {
@@ -245,7 +276,17 @@ export default function PhotoPage() {
       const matched = OVERLAY_FRAMES.find((f) => f.id === frameId);
       if (matched) setFrameDef(matched);
     }
+
+    const booth = isPhotoBoothMode(params);
+    setBoothMode(booth);
+    boothModeRef.current = booth;
   }, []);
+
+  useEffect(() => {
+    if (!boothSavedSeqLabel) return;
+    const t = window.setTimeout(() => setBoothSavedSeqLabel(null), 2000);
+    return () => window.clearTimeout(t);
+  }, [boothSavedSeqLabel]);
 
   const resetCapturedImages = useCallback(() => {
     capturedImagesRef.current = [null, null, null, null];
@@ -440,20 +481,68 @@ export default function PhotoPage() {
 
   startCameraRef.current = startCamera;
 
+  const downloadBlob = useCallback((blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const runBoothAutoSave = useCallback(
+    async (canvas: HTMLCanvasElement) => {
+      const frameId = frameDefRef.current.id;
+      const seq = allocateNextBoothSequence();
+      const fileName = buildBoothCompositeFileName(frameId, seq);
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92)
+      );
+      if (blob) {
+        downloadBlob(blob, fileName);
+        resultShareFileRef.current = new File([blob], fileName, { type: "image/jpeg" });
+      }
+      if (boothSaveOriginalsRef.current) {
+        const slots = photoSlotsRef.current;
+        for (let i = 0; i < 4; i++) {
+          const url = slots[i];
+          if (!url) continue;
+          try {
+            const res = await fetch(url);
+            const originalBlob = await res.blob();
+            downloadBlob(originalBlob, buildBoothOriginalFileName(frameId, seq, i));
+          } catch {
+            /* ignore single slot */
+          }
+        }
+      }
+      setBoothSavedSeqLabel(formatBoothSequenceLabel(seq));
+    },
+    [downloadBlob]
+  );
+
   const finishIfComplete = useCallback(() => {
     const L = layoutRef.current;
     if (!L) return;
     const imgs = capturedImagesRef.current;
     if (imgs.some((img) => !img)) return;
 
-    stopCamera();
     const canvas = composeFrameFromImages(L.frameImage, L.cells, imgs, {
       debug: debugModeRef.current,
       capturedMirrors: [...capturedMirrorsRef.current],
     });
     setPreviewUrl(canvas.toDataURL("image/jpeg", 0.92));
+    setBoothShareHint(null);
+
+    if (boothModeRef.current) {
+      void runBoothAutoSave(canvas);
+    } else {
+      stopCamera();
+    }
     setStep("result");
-  }, [stopCamera]);
+  }, [stopCamera, runBoothAutoSave]);
 
   const captureAtIndex = useCallback(
     async (index: number) => {
@@ -468,7 +557,9 @@ export default function PhotoPage() {
       setShotIndex(index);
       shotIndexRef.current = index;
 
-      const seconds = countdownSecondsRef.current;
+      const seconds = boothModeRef.current
+        ? boothCountdownSecondsRef.current
+        : countdownSecondsRef.current;
       for (let c = seconds; c >= 1; c--) {
         if (!mountedRef.current) return false;
         setCountdown(c);
@@ -547,16 +638,20 @@ export default function PhotoPage() {
 
   useEffect(() => {
     if (step === "result") {
-      stopCamera();
+      if (!boothModeRef.current) {
+        stopCamera();
+      }
       return;
     }
-    if (step !== "capture") {
+    const wantsCamera =
+      step === "capture" || (boothModeRef.current && step === "frame");
+    if (!wantsCamera) {
       return;
     }
     if (cellsInvalid || layoutLoading) return;
     if (!layoutRef.current || layoutRef.current.cells.length !== 4) return;
     void startCamera();
-  }, [step, startCamera, stopCamera, cellsInvalid, layoutLoading]);
+  }, [step, boothMode, startCamera, stopCamera, cellsInvalid, layoutLoading]);
 
   useEffect(() => {
     if (step !== "capture") {
@@ -586,7 +681,8 @@ export default function PhotoPage() {
   }, [stopCamera]);
 
   useEffect(() => {
-    if (step !== "capture") {
+    const wantsWakeLock = boothMode || step === "capture";
+    if (!wantsWakeLock) {
       void wakeLockRef.current?.release().catch(() => undefined);
       wakeLockRef.current = null;
       return;
@@ -610,7 +706,7 @@ export default function PhotoPage() {
       void wakeLockRef.current?.release().catch(() => undefined);
       wakeLockRef.current = null;
     };
-  }, [step]);
+  }, [step, boothMode]);
 
   useEffect(() => {
     if (step !== "capture") {
@@ -749,6 +845,54 @@ export default function PhotoPage() {
     setStripExpanded(false);
     sequenceRunningRef.current = false;
     setStep("frame");
+  };
+
+  const handleBoothNextPerson = () => {
+    resetCapturedImages();
+    setPreviewUrl(null);
+    resultShareFileRef.current = null;
+    setBoothShareHint(null);
+    setShotIndex(0);
+    shotIndexRef.current = 0;
+    setStripExpanded(false);
+    sequenceRunningRef.current = false;
+    setStep("frame");
+  };
+
+  const handleBoothResetSequence = () => {
+    resetBoothSequence();
+    setBoothSettingsOpen(false);
+  };
+
+  const canShareResultFile = useCallback(() => {
+    const file = resultShareFileRef.current;
+    if (!file || !navigator.share) return false;
+    try {
+      return navigator.canShare?.({ files: [file] }) ?? false;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const handleBoothShare = async (variant: "airdrop" | "mail") => {
+    const file = resultShareFileRef.current;
+    if (!file) return;
+    if (!canShareResultFile()) {
+      setBoothShareHint(BOOTH_SHARE_UNSUPPORTED);
+      return;
+    }
+    setBoothShareHint(null);
+    try {
+      await navigator.share({
+        title: "다인네컷",
+        text: variant === "mail" ? BOOTH_SHARE_MAIL_TEXT : undefined,
+        files: [file],
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
+    }
   };
 
   const countdownPickerDisabled =
@@ -959,17 +1103,6 @@ export default function PhotoPage() {
     </div>
   ) : null;
 
-  const downloadBlob = (blob: Blob, fileName: string) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   const handleSave = async () => {
     if (!previewUrl) return;
     setSaving(true);
@@ -1003,8 +1136,107 @@ export default function PhotoPage() {
     }
   };
 
+  const boothCountdownPicker = (
+    <div className="photo-page__countdownPick">
+      <p className="photo-page__sub text-center text-xs">촬영 전 카운트다운</p>
+      <div
+        className="photo-page__countdownPickRow"
+        role="radiogroup"
+        aria-label="카운트다운 시간"
+      >
+        {BOOTH_COUNTDOWN_SECOND_OPTIONS.map((sec) => (
+          <button
+            key={sec}
+            type="button"
+            role="radio"
+            aria-checked={boothCountdownSeconds === sec}
+            disabled={countdownPickerDisabled}
+            onClick={() => setBoothCountdownSeconds(sec)}
+            className={`photo-page__countdownOption${
+              boothCountdownSeconds === sec ? " photo-page__countdownOption--active" : ""
+            }`}
+          >
+            {sec}초
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const boothSettingsPanel = boothMode ? (
+    <>
+      <button
+        type="button"
+        onClick={() => setBoothSettingsOpen((o) => !o)}
+        className="photo-page__boothGear fixed z-[70] flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white/95 text-lg shadow-md backdrop-blur-sm"
+        style={{
+          top: "max(12px, env(safe-area-inset-top))",
+          right: "max(12px, env(safe-area-inset-right))",
+        }}
+        aria-label="행사 모드 설정"
+        aria-expanded={boothSettingsOpen}
+      >
+        <span className="leading-none text-zinc-800" aria-hidden>
+          ⚙
+        </span>
+      </button>
+      {boothSettingsOpen ? (
+        <div
+          className="photo-page__modalBackdrop fixed inset-0 z-[65]"
+          role="presentation"
+          onClick={() => setBoothSettingsOpen(false)}
+        />
+      ) : null}
+      {boothSettingsOpen ? (
+        <div
+          className="photo-page__boothSettings photo-page__modalPanel fixed z-[70] w-[min(calc(100vw-2rem),20rem)] rounded-2xl p-4 shadow-xl"
+          style={{
+            top: "max(56px, calc(env(safe-area-inset-top) + 44px))",
+            right: "max(12px, env(safe-area-inset-right))",
+          }}
+          role="dialog"
+          aria-label="행사 모드 설정"
+        >
+          <p className="mb-3 text-sm font-semibold text-zinc-900">행사 모드 설정</p>
+          {boothCountdownPicker}
+          <label className="mt-4 flex cursor-pointer items-center justify-between gap-3 text-sm">
+            <span>원본 4장 저장</span>
+            <input
+              type="checkbox"
+              checked={boothSaveOriginals}
+              onChange={(e) => setBoothSaveOriginals(e.target.checked)}
+              className="h-5 w-5 accent-[#1e3e96]"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={handleBoothResetSequence}
+            className="photo-page__btn-outline mt-4 w-full rounded-lg px-3 py-2 text-xs font-medium"
+          >
+            저장 순번 초기화 (다음 {formatBoothSequenceLabel(readBoothSequence() + 1)}번)
+          </button>
+        </div>
+      ) : null}
+      {boothSavedSeqLabel ? (
+        <div
+          className="photo-page__boothToast pointer-events-none fixed left-1/2 z-[80] -translate-x-1/2 rounded-full bg-zinc-900/90 px-4 py-2 text-sm font-medium text-white shadow-lg"
+          style={{ top: "max(16px, env(safe-area-inset-top))" }}
+          role="status"
+        >
+          ✅ 저장됨 · {boothSavedSeqLabel}번
+        </div>
+      ) : null}
+    </>
+  ) : null;
+
   return (
-    <div className={`photo-page${step === "capture" ? " photo-page--capturing" : ""}`}>
+    <div
+      className={`photo-page${step === "capture" ? " photo-page--capturing" : ""}${
+        boothMode ? " photo-page--booth" : ""
+      }`}
+    >
+      {boothSettingsPanel}
+      {!boothMode ? (
       <header
         className={`photo-page__header mx-auto flex w-full max-w-lg items-center justify-between px-4 py-4 lg:max-w-[1400px] lg:px-12 lg:py-3 ${
           step === "capture" ? "max-md:hidden photo-page__header--capture" : ""
@@ -1030,6 +1262,7 @@ export default function PhotoPage() {
           </button>
         </div>
       </header>
+      ) : null}
 
       <main
         className={`photo-page__main mx-auto max-w-lg px-4 pb-16 ${
@@ -1065,10 +1298,12 @@ export default function PhotoPage() {
                 );
               })}
             </div>
-            {countdownPicker}
-            <p className="photo-page__sub text-center text-[11px]">
-              사진은 서버로 보내지 않으며, 기기에만 저장됩니다.
-            </p>
+            {!boothMode ? countdownPicker : null}
+            {!boothMode ? (
+              <p className="photo-page__sub text-center text-[11px]">
+                사진은 서버로 보내지 않으며, 기기에만 저장됩니다.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -1080,17 +1315,21 @@ export default function PhotoPage() {
               paddingBottom: "max(0px, env(safe-area-inset-bottom))",
             }}
           >
-            <div className="flex shrink-0 items-center justify-between py-2 md:hidden">
-              <span className="photo-page__shotLabel text-sm font-semibold tabular-nums">{shotLabel}</span>
-              <button
-                type="button"
-                onClick={exitCaptureToFrame}
-                className="photo-page__iconBtn flex h-9 w-9 items-center justify-center rounded-full text-lg"
-                aria-label="닫기"
-              >
-                ✕
-              </button>
-            </div>
+            {!boothMode ? (
+              <div className="flex shrink-0 items-center justify-between py-2 md:hidden">
+                <span className="photo-page__shotLabel text-sm font-semibold tabular-nums">
+                  {shotLabel}
+                </span>
+                <button
+                  type="button"
+                  onClick={exitCaptureToFrame}
+                  className="photo-page__iconBtn flex h-9 w-9 items-center justify-center rounded-full text-lg"
+                  aria-label="닫기"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : null}
 
             {cellsInvalid ? (
               <p className="photo-page__alertWarn rounded-xl px-4 py-3 text-sm">
@@ -1200,18 +1439,20 @@ export default function PhotoPage() {
                     {capturing ? "촬영 중…" : `${filledCount}장 완료`}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={exitCaptureToFrame}
-                  className="photo-page__frameBackLink photo-page__frameBackBtn max-md:w-full max-md:py-1 max-lg:w-full max-lg:text-center lg:shrink-0 lg:rounded-lg lg:px-4 lg:py-2 lg:text-xs"
-                >
-                  프레임 다시 고르기
-                </button>
+                {!boothMode ? (
+                  <button
+                    type="button"
+                    onClick={exitCaptureToFrame}
+                    className="photo-page__frameBackLink photo-page__frameBackBtn max-md:w-full max-md:py-1 max-lg:w-full max-lg:text-center lg:shrink-0 lg:rounded-lg lg:px-4 lg:py-2 lg:text-xs"
+                  >
+                    프레임 다시 고르기
+                  </button>
+                ) : null}
               </div>
               <div className="hidden lg:block" aria-hidden />
             </div>
 
-            {!cameraError && !captureBlocked ? (
+            {!boothMode && !cameraError && !captureBlocked ? (
               <div className="mx-auto mt-3 w-full max-w-md shrink-0 px-0 max-lg:px-2">
                 {countdownPicker}
               </div>
@@ -1227,9 +1468,12 @@ export default function PhotoPage() {
               </button>
             ) : null}
 
-            <p className="photo-page__captureFinePrint photo-page__sub hidden shrink-0 text-center text-[11px] lg:mt-3 lg:block">
-              사진은 서버로 전송되지 않으며, 기기에만 저장됩니다. 찍은 칸을 탭하면 다시 찍을 수 있어요.
-            </p>
+            {!boothMode ? (
+              <p className="photo-page__captureFinePrint photo-page__sub hidden shrink-0 text-center text-[11px] lg:mt-3 lg:block">
+                사진은 서버로 전송되지 않으며, 기기에만 저장됩니다. 찍은 칸을 탭하면 다시 찍을
+                수 있어요.
+              </p>
+            ) : null}
 
             {stripExpanded ? (
               <div
@@ -1269,41 +1513,80 @@ export default function PhotoPage() {
         ) : null}
 
         {step === "result" && previewUrl ? (
-          <div className="space-y-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewUrl}
-              alt="인생네컷 결과"
-              className="photo-page__resultImg mx-auto w-full max-w-[360px] rounded-lg"
-            />
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void handleSave()}
-                className="photo-page__btn-primary w-full rounded-xl py-3 text-sm font-bold disabled:opacity-60"
-              >
-                {saving ? "처리 중…" : "💾 사진 저장"}
-              </button>
-              <button
-                type="button"
-                onClick={handleRetake}
-                className="photo-page__btn-outline w-full rounded-xl py-3 text-sm font-medium"
-              >
-                🔄 다시 찍기
-              </button>
-              <button
-                type="button"
-                onClick={handleBackToFrameSelect}
-                className="photo-page__btn-outline w-full rounded-xl py-3 text-sm font-medium"
-              >
-                🖼️ 프레임 선택
-              </button>
+          boothMode ? (
+            <div className="photo-page__boothResult flex min-h-[calc(100dvh-2rem)] flex-col gap-4 pb-8">
+              <div className="flex min-h-0 flex-1 items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewUrl}
+                  alt="인생네컷 결과"
+                  className="photo-page__boothResultImg max-h-[calc(100dvh-12rem)] w-auto max-w-full rounded-lg object-contain"
+                />
+              </div>
+              {boothShareHint ? (
+                <p className="text-center text-sm text-red-600">{boothShareHint}</p>
+              ) : null}
+              <div className="flex shrink-0 flex-col gap-3 px-1">
+                <button
+                  type="button"
+                  onClick={() => void handleBoothShare("airdrop")}
+                  className="photo-page__boothBtnPrimary w-full rounded-xl py-4 text-base font-bold text-white"
+                >
+                  📲 아이폰으로 받기 (AirDrop)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleBoothShare("mail")}
+                  className="photo-page__boothBtnSecondary w-full rounded-xl py-4 text-base font-bold text-white"
+                >
+                  ✉️ 메일로 받기
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBoothNextPerson}
+                  className="photo-page__boothBtnNext w-full rounded-xl border border-zinc-300 bg-white py-2.5 text-sm font-medium text-zinc-600"
+                >
+                  ➡️ 다음 사람
+                </button>
+              </div>
             </div>
-            <p className="photo-page__sub text-center text-[11px]">
-              모바일에서는 공유 시트가 열릴 수 있어요. PC는 JPG 파일이 내려받기 됩니다.
-            </p>
-          </div>
+          ) : (
+            <div className="space-y-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewUrl}
+                alt="인생네컷 결과"
+                className="photo-page__resultImg mx-auto w-full max-w-[360px] rounded-lg"
+              />
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void handleSave()}
+                  className="photo-page__btn-primary w-full rounded-xl py-3 text-sm font-bold disabled:opacity-60"
+                >
+                  {saving ? "처리 중…" : "💾 사진 저장"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRetake}
+                  className="photo-page__btn-outline w-full rounded-xl py-3 text-sm font-medium"
+                >
+                  🔄 다시 찍기
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBackToFrameSelect}
+                  className="photo-page__btn-outline w-full rounded-xl py-3 text-sm font-medium"
+                >
+                  🖼️ 프레임 선택
+                </button>
+              </div>
+              <p className="photo-page__sub text-center text-[11px]">
+                모바일에서는 공유 시트가 열릴 수 있어요. PC는 JPG 파일이 내려받기 됩니다.
+              </p>
+            </div>
+          )
         ) : null}
       </main>
     </div>

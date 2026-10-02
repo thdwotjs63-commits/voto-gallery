@@ -1,0 +1,31 @@
+{
+  "name": "daeni.kr — 김다인 갤러리",
+  "short_name": "daeni.kr",
+  "description": "현대건설 힐스테이트 No.3 세터 김다인 선수의 고화질 경기 사진, 팬 갤러리 및 소통 공간입니다.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e3e96",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
