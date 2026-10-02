@@ -37,7 +37,15 @@ export type DriveImage = {
 
 type FetchDriveGalleryImagesOptions = {
   excludeFolderIds?: string[];
+  /** 폴더 이름(소문자) 일치 시 하위 탐색 제외 — selfie 등 */
+  excludeFolderNames?: string[];
 };
+
+const DEFAULT_EXCLUDED_FOLDER_NAMES = ["selfie"];
+
+function isExcludedFolderName(name: string, excludedNames: Set<string>): boolean {
+  return excludedNames.has(name.trim().toLowerCase());
+}
 
 const GOOGLE_DRIVE_API_KEY_ENV_KEY = "NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY";
 const GOOGLE_DRIVE_FOLDER_ID_ENV_KEY = "NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_ID";
@@ -268,6 +276,11 @@ export async function fetchDriveGalleryImages(
   const excludedFolderIds = new Set(
     (options?.excludeFolderIds ?? []).map((id) => id.trim()).filter(Boolean)
   );
+  const excludedFolderNames = new Set(
+    (options?.excludeFolderNames ?? DEFAULT_EXCLUDED_FOLDER_NAMES).map((n) =>
+      n.trim().toLowerCase()
+    )
+  );
 
   if (!apiKey || !driveFolderId) {
     const missing = [
@@ -384,6 +397,7 @@ export async function fetchDriveGalleryImages(
 
     for (const folder of subfolders) {
       if (excludedFolderIds.has(folder.id)) continue;
+      if (isExcludedFolderName(folder.name ?? "", excludedFolderNames)) continue;
       queue.push({ id: folder.id, name: folder.name ?? "" });
     }
 

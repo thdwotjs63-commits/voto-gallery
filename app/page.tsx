@@ -71,8 +71,15 @@ import { getLatestSetSuccessCountTotal, isSeasonRecord } from "@/lib/records-dat
 /** 트윗 작성창에 넣을 갤러리 제목 */
 const GALLERY_SHARE_TITLE = "voto gallery — Captured Moments of Kim Da-in";
 
+/** Google Drive voto gallery 루트 (selfie 하위 폴더 제외한 사진 수와 동일 기준) */
+const VOTO_GALLERY_DRIVE_FOLDER_URL =
+  "https://drive.google.com/drive/folders/1OaG_nMXgFZtIjeiVb4QXxUi4uqWVuPDO";
+
 /** 홈 배너 — 국제대회 랭킹 계산기 (당분간 false) */
 const SHOW_RANKING_CALCULATOR_BANNER = false;
+
+/** 홈 — 팀코리아 승패·메달 성과 블록 (다시 켤 때 true) */
+const SHOW_HOME_TEAM_KOREA_RECORD = false;
 const FILTER_PILL_BASE =
   "min-h-11 shrink-0 rounded-full border border-[#00287A] px-3.5 py-2 text-xs font-medium transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90";
 const FILTER_PILL_ACTIVE = "bg-[#00287A] text-white";
@@ -2371,6 +2378,27 @@ export default function Home() {
             Explore Gallery
           </button>
 
+          {loading ? (
+            <p className="mt-3 text-[12px] text-zinc-400" aria-live="polite">
+              사진 개수 불러오는 중…
+            </p>
+          ) : !error && images.length > 0 ? (
+            <p className="mt-3 text-[12px] text-zinc-300">
+              <a
+                href={VOTO_GALLERY_DRIVE_FOLDER_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-white/35 underline-offset-2 transition hover:text-white hover:decoration-white/70"
+              >
+                다인이 사진{" "}
+                <span className="tabular-nums font-semibold text-white">
+                  {images.length.toLocaleString("ko-KR")}
+                </span>
+                장
+              </a>
+            </p>
+          ) : null}
+
           <button
             type="button"
             onClick={scrollToGallery}
@@ -2383,8 +2411,12 @@ export default function Home() {
       </section>
 
       <div className="mb-6 mt-8 space-y-3 px-5 sm:mt-10 sm:px-8">
-        <TeamKoreaBadge record={teamKoreaRecord} />
-        <MedalRecordList medals={medals} />
+        {SHOW_HOME_TEAM_KOREA_RECORD ? (
+          <>
+            <TeamKoreaBadge record={teamKoreaRecord} />
+            <MedalRecordList medals={medals} />
+          </>
+        ) : null}
         {nextMatch ? (
           <div
             onClick={() => router.push("/schedule")}
