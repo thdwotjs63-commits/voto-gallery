@@ -878,7 +878,7 @@ export default function PhotoPage() {
     setStep("frame");
   };
 
-  const handleBoothNextPerson = () => {
+  const resetBoothResult = (nextStep: Step) => {
     resetCapturedImages();
     setPreviewUrl(null);
     resultShareFileRef.current = null;
@@ -887,8 +887,11 @@ export default function PhotoPage() {
     shotIndexRef.current = 0;
     setStripExpanded(false);
     sequenceRunningRef.current = false;
-    setStep("frame");
+    setStep(nextStep);
   };
+
+  const handleBoothNextPerson = () => resetBoothResult("capture");
+  const handleBoothChooseFrame = () => resetBoothResult("frame");
 
   const handleBoothResetSequence = () => {
     resetBoothSequence();
@@ -1504,15 +1507,16 @@ export default function PhotoPage() {
                     {capturing ? "촬영 중…" : `${filledCount}장 완료`}
                   </p>
                 </div>
-                {!boothMode ? (
-                  <button
-                    type="button"
-                    onClick={exitCaptureToFrame}
-                    className="photo-page__frameBackLink photo-page__frameBackBtn max-md:w-full max-md:py-1 max-lg:w-full max-lg:text-center lg:shrink-0 lg:rounded-lg lg:px-4 lg:py-2 lg:text-xs"
-                  >
-                    프레임 다시 고르기
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  onClick={exitCaptureToFrame}
+                  disabled={boothMode && capturing}
+                  className={`photo-page__frameBackLink photo-page__frameBackBtn max-md:w-full max-md:py-1 max-lg:w-full max-lg:text-center lg:shrink-0 lg:rounded-lg lg:px-4 lg:py-2 lg:text-xs${
+                    boothMode && capturing ? " invisible" : ""
+                  }`}
+                >
+                  프레임 다시 고르기
+                </button>
               </div>
               <div className="hidden lg:block" aria-hidden />
             </div>
@@ -1606,13 +1610,22 @@ export default function PhotoPage() {
                 >
                   ✉️ 메일로 받기
                 </button>
-                <button
-                  type="button"
-                  onClick={handleBoothNextPerson}
-                  className="photo-page__boothBtnNext w-full rounded-xl border border-zinc-300 bg-white py-2.5 text-sm font-medium text-zinc-600"
-                >
-                  ➡️ 다음 사람
-                </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={handleBoothChooseFrame}
+                    className="photo-page__boothBtnNext w-full rounded-xl border border-zinc-300 bg-white py-2.5 text-sm font-medium text-zinc-600"
+                  >
+                    🖼️ 프레임 선택
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBoothNextPerson}
+                    className="photo-page__boothBtnNext w-full rounded-xl border border-zinc-300 bg-white py-2.5 text-sm font-medium text-zinc-600"
+                  >
+                    ➡️ 다음 사람
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
