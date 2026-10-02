@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FlipHorizontal2, SwitchCamera } from "lucide-react";
+import { FlipHorizontal2, RotateCcw, SwitchCamera } from "lucide-react";
 import {
   allocateNextBoothSequence,
   buildBoothCompositeFileName,
@@ -170,6 +170,8 @@ export default function PhotoPage() {
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const mountedRef = useRef(true);
   const sequenceRunningRef = useRef(false);
+  /** 값이 바뀌면 진행 중인 촬영 시퀀스는 다음 확인 지점에서 중단 */
+  const captureRunIdRef = useRef(0);
   const layoutRef = useRef<FrameLayout | null>(null);
   const capturedImagesRef = useRef<(HTMLImageElement | null)[]>([null, null, null, null]);
   const capturedMirrorsRef = useRef<(boolean | null)[]>([null, null, null, null]);
@@ -564,10 +566,12 @@ export default function PhotoPage() {
   }, [stopCamera, runBoothAutoSave]);
 
   const captureAtIndex = useCallback(
-    async (index: number) => {
+    async (index: number, runId: number) => {
+      const cancelled = () => !mountedRef.current || captureRunIdRef.current !== runId;
       if (!videoRef.current || !layoutRef.current) return false;
       const video = videoRef.current;
       const ready = await waitForVideoReady(video);
+      if (cancelled()) return false;
       if (!ready) {
         setCameraError("카메라가 아직 준비되지 않았어요. 잠시 후 다시 시도해 주세요.");
         return false;
@@ -580,15 +584,16 @@ export default function PhotoPage() {
         ? boothCountdownSecondsRef.current
         : countdownSecondsRef.current;
       for (let c = seconds; c >= 1; c--) {
-        if (!mountedRef.current) return false;
+        if (cancelled()) return false;
         setCountdown(c);
         countdownRef.current = c;
         await sleep(1000);
       }
+      if (cancelled()) return false;
       setCountdown(null);
       countdownRef.current = null;
 
-      if (!mountedRef.current || !videoRef.current) return false;
+      if (!videoRef.current) return false;
 
       playShutter();
       setFlash(true);
@@ -602,6 +607,7 @@ export default function PhotoPage() {
       }
 
       const img = await loadImage(dataUrl);
+      if (cancelled()) return false;
       capturedImagesRef.current[index] = img;
       capturedMirrorsRef.current[index] = mirrorAtCapture;
       setPhotoSlots((prev) => {
@@ -625,10 +631,12 @@ export default function PhotoPage() {
       const L = layoutRef.current;
       if (!L || L.cells.length !== 4) return;
 
+      const runId = ++captureRunIdRef.current;
+      const cancelled = () => !mountedRef.current || captureRunIdRef.current !== runId;
       sequenceRunningRef.current = true;
       setCapturing(true);
       try {
-        if (!mountedRef.current) return;
+        if (cancelled()) return;
 
         const indices =
           onlyIndex !== undefined
@@ -636,20 +644,22 @@ export default function PhotoPage() {
             : [0, 1, 2, 3].filter((i) => !capturedImagesRef.current[i]);
 
         for (const i of indices) {
-          if (!mountedRef.current) break;
-          const ok = await captureAtIndex(i);
+          if (cancelled()) break;
+          const ok = await captureAtIndex(i, runId);
           if (!ok) break;
           if (indices.length > 1 && i !== indices[indices.length - 1]) {
             await sleep(2000);
           }
         }
 
-        if (mountedRef.current && capturedImagesRef.current.every(Boolean)) {
+        if (!cancelled() && capturedImagesRef.current.every(Boolean)) {
           finishIfComplete();
         }
       } finally {
-        setCapturing(false);
-        sequenceRunningRef.current = false;
+        if (captureRunIdRef.current === runId) {
+          setCapturing(false);
+          sequenceRunningRef.current = false;
+        }
       }
     },
     [captureAtIndex, finishIfComplete]
@@ -745,12 +755,14 @@ export default function PhotoPage() {
   }, [step]);
 
   useEffect(() => {
+    if (boothMode) return;
     if (step !== "capture" || cameraError || cellsInvalid || layoutLoading) return;
     if (!layout || layout.cells.length !== 4) return;
     if (photoSlots.some(Boolean)) return;
     const t = window.setTimeout(() => void runCaptureSequence(), 800);
     return () => window.clearTimeout(t);
   }, [
+    boothMode,
     step,
     cameraError,
     cellsInvalid,
@@ -975,6 +987,20 @@ export default function PhotoPage() {
     void runCaptureSequence(idx);
   };
 
+  /** 촬영 중 중단 → 전부 비우고 1번 칸부터 (일반 모드는 자동 시작 effect 가 다시 돌리고, 행사 모드는 촬영 시작 대기) */
+  const handleRestartCapture = () => {
+    captureRunIdRef.current += 1;
+    sequenceRunningRef.current = false;
+    setCapturing(false);
+    setCountdown(null);
+    countdownRef.current = null;
+    setFlash(false);
+    resetCapturedImages();
+    setShotIndex(0);
+    shotIndexRef.current = 0;
+    setStripExpanded(false);
+  };
+
   const exitCaptureToFrame = () => {
     setStripExpanded(false);
     setCameraError(null);
@@ -1114,6 +1140,26 @@ export default function PhotoPage() {
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/45">
           <span className="text-7xl font-black tabular-nums text-white">{countdown}</span>
         </div>
+      ) : null}
+      {boothMode && !capturing && filledCount < 4 ? (
+        <button
+          type="button"
+          onClick={() => void runCaptureSequence()}
+          disabled={cameraSwitching}
+          className="photo-page__btn-primary absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full px-8 py-4 text-lg font-bold shadow-lg disabled:opacity-50"
+        >
+          {filledCount === 0 ? "촬영 시작" : "이어서 촬영"}
+        </button>
+      ) : null}
+      {capturing ? (
+        <button
+          type="button"
+          onClick={handleRestartCapture}
+          className="absolute bottom-2 left-1/2 z-20 flex h-11 -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-4 text-sm font-semibold text-white backdrop-blur-sm lg:bottom-3"
+        >
+          <RotateCcw className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+          다시 찍기
+        </button>
       ) : null}
       {flash ? (
         <div className="pointer-events-none absolute inset-0 z-30 bg-white/80 animate-pulse" />
@@ -1477,7 +1523,7 @@ export default function PhotoPage() {
               </div>
             ) : null}
 
-            {!capturing && filledCount < 4 && !cameraError && !captureBlocked ? (
+            {!boothMode && !capturing && filledCount < 4 && !cameraError && !captureBlocked ? (
               <button
                 type="button"
                 onClick={() => void runCaptureSequence()}
