@@ -3,6 +3,8 @@ import {
   buildBoothCompositeFileName,
   buildBoothOriginalFileName,
   formatBoothSequenceLabel,
+  listFramesForMode,
+  resolveInitialFrame,
 } from "./photo-booth";
 
 describe("photo-booth filenames", () => {
@@ -22,5 +24,34 @@ describe("photo-booth filenames", () => {
 
   it("pads sequence label", () => {
     expect(formatBoothSequenceLabel(7)).toBe("007");
+  });
+});
+
+describe("photo-booth frame visibility", () => {
+  const frames = [
+    { id: "daein" },
+    { id: "daein-2" },
+    { id: "baeyuna", boothOnly: true },
+  ];
+  const ids = (list: { id: string }[]) => list.map((f) => f.id);
+
+  it("hides boothOnly frames in regular mode", () => {
+    expect(ids(listFramesForMode(frames, false))).toEqual(["daein", "daein-2"]);
+  });
+
+  it("puts boothOnly frames first in booth mode", () => {
+    expect(ids(listFramesForMode(frames, true))).toEqual(["baeyuna", "daein", "daein-2"]);
+  });
+
+  it("ignores a boothOnly frame requested in regular mode", () => {
+    expect(resolveInitialFrame(frames, false, "baeyuna").id).toBe("daein");
+  });
+
+  it("honors a visible requested frame", () => {
+    expect(resolveInitialFrame(frames, false, "daein-2").id).toBe("daein-2");
+  });
+
+  it("defaults to the boothOnly frame in booth mode", () => {
+    expect(resolveInitialFrame(frames, true).id).toBe("baeyuna");
   });
 });

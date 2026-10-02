@@ -63,3 +63,25 @@ export function buildBoothOriginalFileName(
 export function isPhotoBoothMode(searchParams: URLSearchParams): boolean {
   return searchParams.get("booth") === "1";
 }
+
+type BoothVisibleFrame = { id: string; boothOnly?: boolean };
+
+/** 일반 모드: boothOnly 제외 / 행사 모드: boothOnly 를 맨 앞에 */
+export function listFramesForMode<T extends BoothVisibleFrame>(
+  frames: readonly T[],
+  booth: boolean
+): T[] {
+  const regular = frames.filter((f) => !f.boothOnly);
+  if (!booth) return regular;
+  return [...frames.filter((f) => f.boothOnly), ...regular];
+}
+
+/** 현재 모드에서 보이지 않는 프레임 id 는 무시하고 목록 첫 프레임으로 */
+export function resolveInitialFrame<T extends BoothVisibleFrame>(
+  frames: readonly T[],
+  booth: boolean,
+  requestedId?: string | null
+): T {
+  const visible = listFramesForMode(frames, booth);
+  return visible.find((f) => f.id === requestedId) ?? visible[0];
+}

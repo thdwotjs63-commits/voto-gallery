@@ -10,8 +10,10 @@ import {
   buildBoothOriginalFileName,
   formatBoothSequenceLabel,
   isPhotoBoothMode,
+  listFramesForMode,
   readBoothSequence,
   resetBoothSequence,
+  resolveInitialFrame,
 } from "@/lib/photo-booth";
 import {
   buildFourCutFileName,
@@ -60,7 +62,15 @@ const OVERLAY_FRAMES: OverlayFrameDef[] = [
     desc: "2026 아시안게임",
     src: frameAssetSrc("/frames/hillstate-national.png"),
   },
+  {
+    id: "baeyuna",
+    label: "배유나 선수 커피차 기념",
+    src: frameAssetSrc("/frames/baeyuna.png"),
+    boothOnly: true,
+  },
 ];
+
+const DEFAULT_FRAME = resolveInitialFrame(OVERLAY_FRAMES, false);
 
 type FrameLayout = {
   cells: FrameCellRect[];
@@ -171,6 +181,7 @@ export default function PhotoPage() {
   const facingModeRef = useRef<"user" | "environment">("user");
   const mirrorHorizontalRef = useRef(true);
   const stepRef = useRef<Step>("frame");
+  const framePickerRef = useRef<HTMLDivElement>(null);
   const startCameraRef = useRef<(options?: { forceNew?: boolean; isAutoRetry?: boolean }) => Promise<void>>(
     async () => undefined
   );
@@ -178,7 +189,7 @@ export default function PhotoPage() {
   const startCameraInFlightRef = useRef<Promise<void> | null>(null);
   const cameraSwitchPendingRef = useRef(false);
   const boothModeRef = useRef(false);
-  const frameDefRef = useRef(OVERLAY_FRAMES[0]);
+  const frameDefRef = useRef(DEFAULT_FRAME);
   const boothCountdownSecondsRef = useRef<BoothCountdownSeconds>(3);
   const boothSaveOriginalsRef = useRef(false);
   const resultShareFileRef = useRef<File | null>(null);
@@ -200,7 +211,7 @@ export default function PhotoPage() {
   const [cameraSwitching, setCameraSwitching] = useState(false);
   const [stripExpanded, setStripExpanded] = useState(false);
   const [step, setStep] = useState<Step>("frame");
-  const [frameDef, setFrameDef] = useState<OverlayFrameDef>(OVERLAY_FRAMES[0]);
+  const [frameDef, setFrameDef] = useState<OverlayFrameDef>(DEFAULT_FRAME);
   const [layout, setLayout] = useState<FrameLayout | null>(null);
   const [layoutLoading, setLayoutLoading] = useState(false);
   const [cellsInvalid, setCellsInvalid] = useState(false);
@@ -271,15 +282,11 @@ export default function PhotoPage() {
     setDebugMode(debug);
     debugModeRef.current = debug;
 
-    const frameId = params.get("frame")?.trim();
-    if (frameId) {
-      const matched = OVERLAY_FRAMES.find((f) => f.id === frameId);
-      if (matched) setFrameDef(matched);
-    }
-
     const booth = isPhotoBoothMode(params);
     setBoothMode(booth);
     boothModeRef.current = booth;
+
+    setFrameDef(resolveInitialFrame(OVERLAY_FRAMES, booth, params.get("frame")?.trim()));
   }, []);
 
   useEffect(() => {
@@ -331,6 +338,18 @@ export default function PhotoPage() {
   useEffect(() => {
     void loadLayoutForFrame(frameDef);
   }, [frameDef, loadLayoutForFrame]);
+
+  /** 모바일 가로 스크롤 피커는 목록 앞에 프레임이 끼어들어도 기존 카드에 스냅이 남아 있어서 선택 카드로 맞춰 줌 */
+  useEffect(() => {
+    if (step !== "frame") return;
+    const picker = framePickerRef.current;
+    const card = picker?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!picker || !card) return;
+    const pickerRect = picker.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    picker.scrollLeft +=
+      cardRect.left + cardRect.width / 2 - (pickerRect.left + pickerRect.width / 2);
+  }, [step, boothMode, frameDef.id]);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -1274,8 +1293,8 @@ export default function PhotoPage() {
         {step === "frame" ? (
           <div className="space-y-4">
             <p className="photo-page__sub text-sm">프레임을 골라주세요.</p>
-            <div className="photo-page__framePicker" role="listbox" aria-label="프레임 선택">
-              {OVERLAY_FRAMES.map((f) => {
+            <div ref={framePickerRef} className="photo-page__framePicker" role="listbox" aria-label="프레임 선택">
+              {listFramesForMode(OVERLAY_FRAMES, boothMode).map((f) => {
                 const selected = f.id === frameDef.id;
                 return (
                   <button

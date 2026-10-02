@@ -6,6 +6,8 @@ export type OverlayFrameDef = {
   label: string;
   desc?: string;
   src: string;
+  /** 행사 모드(?booth=1)에서만 노출 */
+  boothOnly?: boolean;
 };
 
 /** 칸 안 선수(불투명) 픽셀 분포 → 촬영 위치 안내 문구 */
