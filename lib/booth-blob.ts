@@ -118,3 +118,25 @@ export function boothBlobList(
 export function boothBlobDel(scope: string, urls: string[]) {
   return withBoothBlob(scope, (auth) => del(urls, auth));
 }
+
+/** CDN 캐시 없이 최신 내용을 읽는다. 파일이 없으면 null */
+export function privateBlobGetText(scope: string, pathname: string): Promise<string | null> {
+  return withBoothBlob(scope, async (auth) => {
+    const result = await get(pathname, { access: BOOTH_BLOB_ACCESS, useCache: false, ...auth });
+    if (!result || result.statusCode !== 200) return null;
+    return new Response(result.stream).text();
+  });
+}
+
+export function privateBlobPutJson(scope: string, pathname: string, value: unknown) {
+  return withBoothBlob(scope, (auth) =>
+    put(pathname, JSON.stringify(value), {
+      access: BOOTH_BLOB_ACCESS,
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
+      cacheControlMaxAge: 60,
+      ...auth,
+    })
+  );
+}

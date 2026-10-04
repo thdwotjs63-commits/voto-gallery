@@ -1,0 +1,462 @@
+.book-root {
+  --book-red: #c8202c;
+  --book-navy: #1e3e96;
+  --book-ink: #1c1c24;
+  --book-paper: #fffdf8;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ece6dc;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  color: var(--book-ink);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic",
+    system-ui, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.book-stage {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 14px 4px;
+  perspective: 1400px;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.book-page {
+  position: relative;
+  display: none;
+  width: 100%;
+  max-width: 440px;
+  height: 100%;
+  max-height: 780px;
+  overflow: hidden;
+  border-radius: 6px 14px 14px 6px;
+  background: var(--book-paper);
+  box-shadow:
+    0 1px 2px rgba(28, 28, 36, 0.08),
+    0 12px 32px rgba(28, 28, 36, 0.14);
+}
+
+.book-page::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 2;
+  width: 14px;
+  pointer-events: none;
+  background: linear-gradient(to right, rgba(28, 28, 36, 0.1), transparent);
+}
+
+.book-page[data-active="true"] {
+  display: flex;
+  flex-direction: column;
+}
+
+.book-page--enter-next {
+  transform-origin: left center;
+  animation: book-turn-next 0.32s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.book-page--enter-prev {
+  transform-origin: right center;
+  animation: book-turn-prev 0.32s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+@keyframes book-turn-next {
+  from {
+    opacity: 0.4;
+    transform: rotateY(-32deg) translateX(6%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes book-turn-prev {
+  from {
+    opacity: 0.4;
+    transform: rotateY(32deg) translateX(-6%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book-page--enter-next,
+  .book-page--enter-prev {
+    animation: none;
+  }
+}
+
+/* 표지 */
+.book-cover {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  padding: 40px 30px;
+  background: #fbfaf7;
+}
+
+.book-brush {
+  position: absolute;
+  border-radius: 999px;
+  transform: rotate(-28deg);
+}
+
+.book-brush--red-1 {
+  top: -6%;
+  left: -30%;
+  width: 95%;
+  height: 64px;
+  background: var(--book-red);
+}
+
+.book-brush--red-2 {
+  top: 7%;
+  left: -38%;
+  width: 80%;
+  height: 26px;
+  background: var(--book-red);
+  opacity: 0.8;
+}
+
+.book-brush--red-3 {
+  top: 13%;
+  left: -20%;
+  width: 48%;
+  height: 10px;
+  background: var(--book-red);
+  opacity: 0.55;
+}
+
+.book-brush--navy-1 {
+  right: -30%;
+  bottom: -5%;
+  width: 95%;
+  height: 70px;
+  background: var(--book-navy);
+}
+
+.book-brush--navy-2 {
+  right: -36%;
+  bottom: 8%;
+  width: 78%;
+  height: 26px;
+  background: var(--book-navy);
+  opacity: 0.8;
+}
+
+.book-brush--navy-3 {
+  right: -18%;
+  bottom: 15%;
+  width: 46%;
+  height: 10px;
+  background: var(--book-navy);
+  opacity: 0.55;
+}
+
+.book-cover-eyebrow {
+  position: relative;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  color: var(--book-red);
+}
+
+.book-cover-title {
+  position: relative;
+  margin-top: 14px;
+  font-size: clamp(40px, 12.5vw, 58px);
+  font-weight: 900;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--book-navy);
+  word-break: keep-all;
+}
+
+.book-cover-title span {
+  display: block;
+}
+
+.book-cover-title span:nth-child(3) {
+  color: var(--book-red);
+}
+
+.book-cover-date {
+  position: relative;
+  margin-top: 22px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: #55524b;
+}
+
+.book-cover-number {
+  position: absolute;
+  top: 24px;
+  right: 26px;
+  font-size: 22px;
+  font-style: italic;
+  font-weight: 900;
+  color: var(--book-navy);
+}
+
+/* 본문 공통 */
+.book-sheet {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 34px 28px 26px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 380px) {
+  .book-stage {
+    padding: 10px 10px 2px;
+  }
+
+  .book-sheet {
+    padding: 26px 20px 20px;
+  }
+}
+
+.book-sheet-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--book-red);
+}
+
+.book-letter-body {
+  margin-top: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--book-fit, 1));
+  font-size: calc(15.5px * var(--book-fit, 1));
+  line-height: 1.85;
+}
+
+.book-letter-sign {
+  margin-top: auto;
+  padding-top: 24px;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--book-navy);
+}
+
+.book-messages > :first-child {
+  margin-top: auto;
+}
+
+.book-messages > :last-child {
+  margin-bottom: auto;
+}
+
+.book-message + .book-message {
+  margin-top: calc(24px * var(--book-fit, 1));
+  border-top: 1.5px dashed #e2dbcf;
+  padding-top: calc(24px * var(--book-fit, 1));
+}
+
+.book-message-from {
+  font-size: calc(16px * var(--book-fit, 1));
+  font-weight: 800;
+  color: var(--book-red);
+}
+
+.book-message-from span {
+  margin-right: 2px;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 700;
+  color: var(--book-navy);
+}
+
+.book-message-text {
+  margin-top: calc(10px * var(--book-fit, 1));
+  white-space: pre-wrap;
+  font-size: calc(16px * var(--book-fit, 1));
+  line-height: 1.75;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.book-message--long .book-message-text {
+  font-size: calc(14.5px * var(--book-fit, 1));
+  line-height: 1.7;
+}
+
+.book-message-date {
+  margin-top: calc(12px * var(--book-fit, 1));
+  text-align: right;
+  font-size: 12px;
+  color: #8a857b;
+}
+
+.book-center {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.book-empty {
+  font-size: 15px;
+  color: #6b6860;
+}
+
+.book-end-count {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.5;
+  color: var(--book-navy);
+}
+
+.book-end-site {
+  margin-top: 18px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--book-red);
+}
+
+.book-print {
+  margin-top: 36px;
+  min-height: 48px;
+  border: none;
+  border-radius: 999px;
+  background: var(--book-navy);
+  padding: 0 28px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* 넘기기 */
+.book-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 6px 0 10px;
+}
+
+.book-arrow {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  padding-bottom: 3px;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--book-navy);
+  box-shadow: 0 2px 8px rgba(28, 28, 36, 0.12);
+  touch-action: manipulation;
+}
+
+.book-arrow:disabled {
+  opacity: 0.3;
+}
+
+.book-counter {
+  min-width: 64px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #55524b;
+}
+
+/* PDF 저장: 한 페이지씩 */
+@media print {
+  @page {
+    size: 148mm 210mm;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  .book-root {
+    position: static;
+    display: block;
+    height: auto;
+    overflow: visible;
+    background: #fff;
+    padding: 0;
+  }
+
+  .book-stage {
+    display: block;
+    padding: 0;
+    perspective: none;
+  }
+
+  .book-page {
+    display: flex !important;
+    width: 148mm;
+    max-width: none;
+    height: 210mm;
+    max-height: none;
+    flex-direction: column;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none !important;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .book-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .book-page::before {
+    display: none;
+  }
+
+  .book-sheet {
+    --book-fit: 1 !important;
+    overflow: visible;
+    padding: 34px 28px 26px;
+  }
+
+  .book-controls,
+  .book-print {
+    display: none !important;
+  }
+
+  .book-root * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
