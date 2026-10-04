@@ -145,11 +145,8 @@
   flex-direction: column;
 }
 
-.daeni4cut-popup-photoBody .daeni4cut-popup-desc {
-  margin-top: 0;
-}
-
 .daeni4cut-popup-photoBody .daeni4cut-popup-cta {
+  margin-top: 0;
   padding: 0 0.5rem;
   font-size: 0.875rem;
 }

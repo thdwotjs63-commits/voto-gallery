@@ -224,7 +224,6 @@ export function Daeni4CutHomePopup() {
                   />
                 </div>
                 <div className="daeni4cut-popup-photoBody">
-                  <p className="daeni4cut-popup-desc">다인이랑 같이 네 컷 찍어봐요</p>
                   <button
                     ref={photoBtnRef}
                     type="button"
