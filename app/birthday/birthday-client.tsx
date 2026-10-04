@@ -20,6 +20,14 @@ import {
   type BirthdayMessage,
 } from "@/lib/birthday";
 import { SiteNav } from "@/components/site-nav";
+import {
+  hideMyBirthdayMessage,
+  newLocalMessageId,
+  refreshBirthdayMessageCounts,
+  saveMyBirthdayMessage,
+  useBirthdayMessageCounts,
+  useMyBirthdayMessages,
+} from "@/lib/birthday-counts-client";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 
 const YELLOW = "#F7C331";
@@ -87,6 +95,11 @@ export default function BirthdayClient() {
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
 
+  const countsState = useBirthdayMessageCounts();
+  const myMessages = useMyBirthdayMessages();
+  /** 방금 저장한 메시지의 공개 여부 — 완료 표시용, 다시 쓰기 시작하면 지운다 */
+  const [savedAs, setSavedAs] = useState<"public" | "private" | null>(null);
+
   const showToast = useCallback((next: Toast) => {
     clearTimeout(toastTimerRef.current);
     setToast(next);
@@ -146,6 +159,7 @@ export default function BirthdayClient() {
     }
 
     setFormError(null);
+    setSavedAs(null);
     setSubmitting(true);
     const submittedPublic = isPublic;
     try {
@@ -162,10 +176,19 @@ export default function BirthdayClient() {
         return;
       }
 
+      saveMyBirthdayMessage({
+        localId: newLocalMessageId(),
+        nickname: trimmedNickname,
+        message: trimmedMessage,
+        isPublic: submittedPublic,
+        createdAt: new Date().toISOString(),
+      });
       setNickname("");
       setMessage("");
       setIsPublic(true);
-      showToast({ kind: "success", text: "축하 메시지가 전달되었어요!" });
+      setSavedAs(submittedPublic ? "public" : "private");
+      showToast({ kind: "success", text: "✅ 메시지가 잘 저장됐어요" });
+      void refreshBirthdayMessageCounts();
       if (submittedPublic) void loadMessages();
     } catch (error) {
       console.error("[birthday] insert threw:", error);
@@ -202,6 +225,54 @@ export default function BirthdayClient() {
           </p>
         </header>
 
+        {myMessages.length > 0 ? (
+          <section className="px-5 pt-8" aria-labelledby="birthday-mine-title">
+            <div className="rounded-3xl border-2 border-dashed border-[#1E3A9E]/20 bg-white/80 p-5">
+              <h2 id="birthday-mine-title" className="text-lg font-extrabold">
+                📝 내가 쓴 메시지
+              </h2>
+              <p className="mt-1 text-xs leading-relaxed text-[#1E3A9E]/55">
+                이 기기에만 남아 있는 사본이에요. 다른 사람에게는 보이지 않아요.
+              </p>
+              <ul className="mt-3 space-y-3">
+                {myMessages.map((mine) => (
+                  <li key={mine.localId} className="rounded-2xl bg-[#FFFDF6] px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate text-[15px] font-extrabold">
+                        {mine.nickname}
+                      </p>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                          mine.isPublic
+                            ? "bg-[#FFF3CC] text-[#1E3A9E]"
+                            : "bg-[#1E3A9E]/10 text-[#1E3A9E]/75"
+                        }`}
+                      >
+                        {mine.isPublic ? "공개" : "비공개"}
+                      </span>
+                    </div>
+                    <p className="mt-1.5 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[#1E2A55]">
+                      {mine.message}
+                    </p>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <time dateTime={mine.createdAt} className="text-xs text-[#1E3A9E]/45">
+                        {formatBirthdayMessageDate(mine.createdAt)}
+                      </time>
+                      <button
+                        type="button"
+                        onClick={() => hideMyBirthdayMessage(mine.localId)}
+                        className="min-h-9 rounded-full px-2 text-xs font-semibold text-[#1E3A9E]/55 underline underline-offset-2"
+                      >
+                        이 기기에서 숨기기
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        ) : null}
+
         <section className="px-5 pt-8" aria-labelledby="birthday-write-title">
           <div className="rounded-3xl border-2 border-[#1E3A9E]/10 bg-white p-5 shadow-[0_4px_16px_rgba(30,58,158,0.08)]">
             <h2
@@ -210,6 +281,20 @@ export default function BirthdayClient() {
             >
               축하 메시지 남기기
             </h2>
+
+            {savedAs ? (
+              <p
+                role="status"
+                className="mt-4 rounded-2xl bg-[#E8F6EC] px-4 py-3 text-[15px] font-bold leading-relaxed text-[#1F6B3A]"
+              >
+                ✅ 메시지가 잘 저장됐어요
+                {savedAs === "private" ? (
+                  <span className="mt-0.5 block text-[13px] font-semibold">
+                    (비공개로 저장돼서 다른 사람에게는 안 보여요)
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
 
             {isClosed ? (
               <p className="mt-4 rounded-2xl bg-[#FFF3CC] px-4 py-5 text-center text-[15px] font-semibold leading-relaxed">
@@ -229,7 +314,10 @@ export default function BirthdayClient() {
                     type="text"
                     value={nickname}
                     maxLength={BIRTHDAY_NICKNAME_MAX}
-                    onChange={(e) => setNickname(e.target.value)}
+                    onChange={(e) => {
+                      setNickname(e.target.value);
+                      setSavedAs(null);
+                    }}
                     placeholder="최대 20자"
                     autoComplete="nickname"
                     disabled={submitting}
@@ -248,7 +336,10 @@ export default function BirthdayClient() {
                     id="birthday-message"
                     value={message}
                     maxLength={BIRTHDAY_MESSAGE_MAX}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={(e) => {
+                      setMessage(e.target.value);
+                      setSavedAs(null);
+                    }}
                     placeholder="다인 선수에게 전하고 싶은 축하를 적어주세요"
                     rows={6}
                     disabled={submitting}
@@ -315,7 +406,16 @@ export default function BirthdayClient() {
           <h2 id="birthday-list-title" className="text-xl font-extrabold">
             팬들의 축하 메시지
           </h2>
-          {!listLoading && !listError ? (
+          {countsState.status === "ready" ? (
+            <div className="mt-1.5">
+              <p className="text-sm font-semibold text-[#1E3A9E]/80">
+                💌 지금까지 {countsState.counts.total}명이 마음을 보냈어요
+              </p>
+              <p className="mt-0.5 text-xs text-[#1E3A9E]/55">
+                공개 {countsState.counts.publicCount} · 비공개 {countsState.counts.privateCount}
+              </p>
+            </div>
+          ) : countsState.status === "error" && !listLoading && !listError ? (
             <p className="mt-1.5 text-sm font-semibold text-[#1E3A9E]/70">
               지금까지 {messages.length}개의 축하가 모였어요
             </p>

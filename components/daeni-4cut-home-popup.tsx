@@ -12,6 +12,7 @@ import {
 import { clockNow, useClock } from "@/lib/clock";
 import { birthdayCardPill, isOnOrBeforeDate, seoulDateKey } from "@/lib/home-notice";
 import { BirthdayCountdown } from "./birthday-countdown";
+import { BirthdayParticipants } from "./birthday-participants";
 
 const PHOTO_END_DATE = "2026-10-31";
 
@@ -191,6 +192,7 @@ export function Daeni4CutHomePopup() {
               <p className="daeni4cut-popup-desc">
                 다인 선수에게 생일 축하 메시지를 남겨주세요
               </p>
+              <BirthdayParticipants className="mt-1 text-[13px] font-bold text-[#C8202C]" />
               <BirthdayCountdown
                 deadline={BIRTHDAY_DEADLINE}
                 label="메시지 마감까지"

@@ -9,6 +9,7 @@ import {
 import { useClock } from "@/lib/clock";
 import { birthdayBannerState } from "@/lib/home-notice";
 import { BirthdayCountdown } from "./birthday-countdown";
+import { BirthdayParticipants } from "./birthday-participants";
 
 const BIRTHDAY_URL = "/birthday";
 const BANNER_SURFACE =
@@ -53,6 +54,7 @@ export function BirthdayHomeBanner({ className = "" }: { className?: string }) {
           <p className="mt-1.5 text-[14px] leading-snug text-white/90 sm:text-[16px]">
             다인 선수에게 생일 축하 메시지를 남겨주세요
           </p>
+          <BirthdayParticipants className="mt-1.5 text-[13px] font-bold text-white sm:text-[14px]" />
         </div>
         <div className="flex shrink-0 flex-col gap-3 sm:items-end">
           <BirthdayCountdown deadline={BIRTHDAY_DEADLINE} label="메시지 마감까지" variant="banner" />
