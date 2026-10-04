@@ -43,10 +43,19 @@ export function birthdayCardPill(
   return `D-${Math.round((birthday - today) / DAY_MS)}`;
 }
 
+/** 생일 메시지 접수 기간(showFrom 날짜 ~ 마감 시각) — 홈 배너 카운트다운, 하단 메뉴 생일 항목 */
+export function isBirthdayMessagePeriod(now: Date, showFromKey: string, deadline: Date): boolean {
+  if (now >= deadline) return false;
+  const today = dateKeyToUtcMs(seoulDateKey(now));
+  const showFrom = dateKeyToUtcMs(showFromKey);
+  if (today === null || showFrom === null) return false;
+  return today >= showFrom;
+}
+
 export type BirthdayBannerState = "countdown" | "celebrate";
 
 /**
- * 홈 생일 배너. showFrom 날짜부터 마감 전까지는 카운트다운, 마감 후에는 생일 당일에만 축하 문구.
+ * 홈 생일 배너. 메시지 접수 기간에는 카운트다운, 마감 후에는 생일 당일에만 축하 문구.
  * 마감 당일 마감 시각 이후(생일 전날 밤)와 생일 다음 날부터는 null.
  */
 export function birthdayBannerState(
@@ -55,12 +64,8 @@ export function birthdayBannerState(
   birthdayKey: string,
   deadline: Date
 ): BirthdayBannerState | null {
-  const todayKey = seoulDateKey(now);
-  if (now >= deadline) return todayKey === birthdayKey ? "celebrate" : null;
-  const today = dateKeyToUtcMs(todayKey);
-  const showFrom = dateKeyToUtcMs(showFromKey);
-  if (today === null || showFrom === null) return null;
-  return today >= showFrom ? "countdown" : null;
+  if (now >= deadline) return seoulDateKey(now) === birthdayKey ? "celebrate" : null;
+  return isBirthdayMessagePeriod(now, showFromKey, deadline) ? "countdown" : null;
 }
 
 export function isOnOrBeforeDate(todayKey: string, endKey: string): boolean {

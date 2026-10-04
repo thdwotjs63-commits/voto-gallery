@@ -19,6 +19,7 @@ import {
   isBirthdayClosed,
   type BirthdayMessage,
 } from "@/lib/birthday";
+import { SiteNav } from "@/components/site-nav";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 
 const YELLOW = "#F7C331";
@@ -182,7 +183,8 @@ export default function BirthdayClient() {
 
   return (
     <div className="min-h-dvh bg-[#FFF8E6] text-[#1E3A9E]">
-      <main className="mx-auto w-full max-w-md pb-16">
+      <SiteNav />
+      <main className="mx-auto w-full max-w-md pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-16">
         <header
           className="rounded-b-[2.5rem] px-6 pb-10 pt-12 text-center shadow-[0_8px_24px_rgba(30,58,158,0.15)]"
           style={{ backgroundColor: YELLOW }}

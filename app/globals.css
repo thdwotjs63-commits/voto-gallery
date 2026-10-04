@@ -24,3 +24,33 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes site-nav-gift-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(-14deg);
+  }
+  40% {
+    transform: rotate(12deg);
+  }
+  60% {
+    transform: rotate(-8deg);
+  }
+  80% {
+    transform: rotate(4deg);
+  }
+}
+
+.site-nav-gift-wiggle {
+  transform-origin: 50% 30%;
+  animation: site-nav-gift-wiggle 0.7s ease-in-out 0.5s 1 both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-nav-gift-wiggle {
+    animation: none;
+  }
+}

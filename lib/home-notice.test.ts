@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   birthdayBannerState,
   birthdayCardPill,
+  isBirthdayMessagePeriod,
   isOnOrBeforeDate,
   seoulDateKey,
 } from "./home-notice";
@@ -64,6 +65,18 @@ describe("birthdayBannerState", () => {
     expect(banner(at("2026-10-15T00:00:00"))).toBe("celebrate");
     expect(banner(at("2026-10-15T23:59:59"))).toBe("celebrate");
     expect(banner(at("2026-10-16T00:00:00"))).toBeNull();
+  });
+});
+
+describe("isBirthdayMessagePeriod", () => {
+  const period = (now: Date) => isBirthdayMessagePeriod(now, "2026-10-04", DEADLINE);
+
+  it("runs from showFrom until the deadline", () => {
+    expect(period(at("2026-10-03T23:59:59"))).toBe(false);
+    expect(period(at("2026-10-04T00:00:00"))).toBe(true);
+    expect(period(at("2026-10-14T21:59:59"))).toBe(true);
+    expect(period(at("2026-10-14T22:00:00"))).toBe(false);
+    expect(period(at("2026-10-15T12:00:00"))).toBe(false);
   });
 });
 
