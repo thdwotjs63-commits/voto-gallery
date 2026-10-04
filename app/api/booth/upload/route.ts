@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { rejectInvalidBoothRequest } from "@/lib/booth-auth";
+import { BOOTH_BLOB_ACCESS, boothBlobToken } from "@/lib/booth-blob";
 import { BOOTH_UPLOAD_MAX_BYTES, boothDateKey, boothPhotoBlobPath } from "@/lib/booth-share";
 
 export const runtime = "nodejs";
@@ -35,9 +36,10 @@ export async function POST(req: NextRequest) {
   const id = crypto.randomUUID();
   try {
     await put(boothPhotoBlobPath(date, id), Buffer.from(body), {
-      access: "public",
+      access: BOOTH_BLOB_ACCESS,
       addRandomSuffix: false,
       contentType: "image/jpeg",
+      token: boothBlobToken(),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

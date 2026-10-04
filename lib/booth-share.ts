@@ -43,6 +43,11 @@ export function boothPhotoPagePath(dateKey: string, id: string): string {
   return `/p/${dateKey}/${id}`;
 }
 
+/** private 스토어라 Blob 주소 대신 서버가 대신 읽어 주는 경로 */
+export function boothPhotoApiPath(dateKey: string, id: string): string {
+  return `/api/booth/photo/${dateKey}/${id}`;
+}
+
 export const BOOTH_NETWORK_ERROR_MESSAGE = "인터넷 연결을 확인해 주세요";
 
 /** fetch 는 성공했지만 응답이 실패일 때 결과 화면에 보일 문구 */

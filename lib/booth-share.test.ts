@@ -3,6 +3,7 @@ import {
   boothDateKey,
   boothDayPrefix,
   boothPhotoBlobPath,
+  boothPhotoApiPath,
   boothPhotoPagePath,
   boothUploadErrorMessage,
   decodeBoothKeyHeader,
@@ -23,6 +24,7 @@ describe("booth-share", () => {
     expect(boothDayPrefix("20261005")).toBe("booth/20261005/");
     expect(boothPhotoBlobPath("20261005", id)).toBe(`booth/20261005/${id}.jpg`);
     expect(boothPhotoPagePath("20261005", id)).toBe(`/p/20261005/${id}`);
+    expect(boothPhotoApiPath("20261005", id)).toBe(`/api/booth/photo/20261005/${id}`);
   });
 
   it("validates date keys and ids", () => {

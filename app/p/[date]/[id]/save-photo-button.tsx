@@ -23,11 +23,9 @@ function downloadFile(file: File) {
 
 export function SavePhotoButton({
   src,
-  downloadUrl,
   fileName,
 }: {
   src: string;
-  downloadUrl: string;
   fileName: string;
 }) {
   /** iOS 는 탭 직후에 share() 를 불러야 해서 미리 받아 둠 */
@@ -61,7 +59,7 @@ export function SavePhotoButton({
       downloadFile(file);
       return;
     }
-    window.location.href = downloadUrl;
+    window.location.href = src;
   };
 
   return (
