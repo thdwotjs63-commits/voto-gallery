@@ -43,6 +43,26 @@ export function birthdayCardPill(
   return `D-${Math.round((birthday - today) / DAY_MS)}`;
 }
 
+export type BirthdayBannerState = "countdown" | "celebrate";
+
+/**
+ * 홈 생일 배너. showFrom 날짜부터 마감 전까지는 카운트다운, 마감 후에는 생일 당일에만 축하 문구.
+ * 마감 당일 마감 시각 이후(생일 전날 밤)와 생일 다음 날부터는 null.
+ */
+export function birthdayBannerState(
+  now: Date,
+  showFromKey: string,
+  birthdayKey: string,
+  deadline: Date
+): BirthdayBannerState | null {
+  const todayKey = seoulDateKey(now);
+  if (now >= deadline) return todayKey === birthdayKey ? "celebrate" : null;
+  const today = dateKeyToUtcMs(todayKey);
+  const showFrom = dateKeyToUtcMs(showFromKey);
+  if (today === null || showFrom === null) return null;
+  return today >= showFrom ? "countdown" : null;
+}
+
 export function isOnOrBeforeDate(todayKey: string, endKey: string): boolean {
   const today = dateKeyToUtcMs(todayKey);
   const end = dateKeyToUtcMs(endKey);

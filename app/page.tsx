@@ -35,6 +35,7 @@ import {
   Twitter,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
+import { BirthdayHomeBanner } from "@/components/birthday-home-banner";
 import { Daeni4CutHomePopup } from "@/components/daeni-4cut-home-popup";
 import { GalleryChangelog } from "@/components/gallery-changelog";
 import { SiteNav } from "@/components/site-nav";
@@ -2290,7 +2291,7 @@ export default function Home() {
         </div>
       </div>
 
-      <section className="relative h-screen w-full overflow-hidden bg-black">
+      <section className="relative flex h-screen w-full flex-col overflow-hidden bg-black">
         <div
           className="absolute inset-0 will-change-transform"
           style={{ transform: `translate3d(0, ${heroBackgroundTranslate}px, 0)` }}
@@ -2308,8 +2309,10 @@ export default function Home() {
 
         <div className="absolute inset-0 bg-black/55" />
 
+        <BirthdayHomeBanner className="relative z-10 shrink-0 px-4 pt-4 sm:px-8 sm:pt-6" />
+
         <div
-          className={`relative z-10 flex h-full flex-col items-center justify-center px-6 text-center text-white transition-all duration-1000 ${
+          className={`relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center text-white transition-all duration-1000 ${
             heroVisible ? "opacity-100" : "opacity-0"
           }`}
           style={{ transform: `translate3d(0, ${heroTextTranslate}px, 0)` }}

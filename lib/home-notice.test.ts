@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { birthdayCardPill, isOnOrBeforeDate, seoulDateKey } from "./home-notice";
+import {
+  birthdayBannerState,
+  birthdayCardPill,
+  isOnOrBeforeDate,
+  seoulDateKey,
+} from "./home-notice";
 
 const DEADLINE = new Date("2026-10-14T22:00:00+09:00");
 const at = (kst: string) => new Date(`${kst}+09:00`);
@@ -35,6 +40,30 @@ describe("birthdayCardPill", () => {
 
   it("is hidden when dates are not filled in", () => {
     expect(pill(at("2026-10-10T12:00:00"), "YYYY-MM-DD", "YYYY-MM-DD")).toBeNull();
+  });
+});
+
+describe("birthdayBannerState", () => {
+  const banner = (now: Date) => birthdayBannerState(now, "2026-10-04", "2026-10-15", DEADLINE);
+
+  it("is hidden before showFrom", () => {
+    expect(banner(at("2026-10-03T23:59:59"))).toBeNull();
+  });
+
+  it("counts down from showFrom until the deadline", () => {
+    expect(banner(at("2026-10-04T00:00:00"))).toBe("countdown");
+    expect(banner(at("2026-10-14T21:59:59"))).toBe("countdown");
+  });
+
+  it("disappears at the deadline on the night before the birthday", () => {
+    expect(banner(at("2026-10-14T22:00:00"))).toBeNull();
+    expect(banner(at("2026-10-14T23:59:59"))).toBeNull();
+  });
+
+  it("celebrates only on the birthday", () => {
+    expect(banner(at("2026-10-15T00:00:00"))).toBe("celebrate");
+    expect(banner(at("2026-10-15T23:59:59"))).toBe("celebrate");
+    expect(banner(at("2026-10-16T00:00:00"))).toBeNull();
   });
 });
 

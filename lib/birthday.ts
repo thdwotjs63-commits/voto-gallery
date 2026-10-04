@@ -1,5 +1,9 @@
-/** 생일 메시지 접수 마감 — /birthday 페이지와 홈 팝업이 함께 쓴다 */
+/** 생일 메시지 접수 마감 — /birthday 페이지, 홈 배너, 홈 팝업이 함께 쓴다 */
 export const BIRTHDAY_DEADLINE = new Date("2026-10-14T22:00:00+09:00"); // KST 마감
+
+/** 한국 시간 YYYY-MM-DD */
+export const BIRTHDAY_DATE_KEY = "2026-10-15"; // 생일 날짜
+export const BIRTHDAY_NOTICE_SHOW_FROM = "2026-10-04"; // 이 날부터 홈 배너·팝업 카드 노출
 
 export const BIRTHDAY_NICKNAME_MAX = 20;
 export const BIRTHDAY_MESSAGE_MAX = 500;

@@ -4,11 +4,15 @@ import "./daeni-4cut-home-popup.css";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { BIRTHDAY_DEADLINE } from "@/lib/birthday";
+import {
+  BIRTHDAY_DATE_KEY,
+  BIRTHDAY_DEADLINE,
+  BIRTHDAY_NOTICE_SHOW_FROM,
+} from "@/lib/birthday";
+import { clockNow, useClock } from "@/lib/clock";
 import { birthdayCardPill, isOnOrBeforeDate, seoulDateKey } from "@/lib/home-notice";
+import { BirthdayCountdown } from "./birthday-countdown";
 
-const BIRTHDAY_DATE = "2026-10-15"; // 생일 날짜
-const BIRTHDAY_SHOW_FROM = "2026-10-04"; // 이 날부터 카드 노출 (마감 시각 BIRTHDAY_DEADLINE 에 숨김)
 const PHOTO_END_DATE = "2026-10-31";
 
 const BIRTHDAY_URL = "/birthday";
@@ -44,13 +48,18 @@ function safeSetItem(storage: Storage, key: string, value: string) {
 
 function resolveNoticeCards(): NoticeCards | null {
   if (!POPUP_ENABLED) return null;
-  const now = new Date();
+  const now = new Date(clockNow());
   const today = seoulDateKey(now);
   if (safeGetItem(sessionStorage, SESSION_DISMISS_KEY) === "1") return null;
   if (safeGetItem(localStorage, HIDE_UNTIL_KEY) === today) return null;
 
   const cards: NoticeCards = {
-    birthdayPill: birthdayCardPill(now, BIRTHDAY_SHOW_FROM, BIRTHDAY_DATE, BIRTHDAY_DEADLINE),
+    birthdayPill: birthdayCardPill(
+      now,
+      BIRTHDAY_NOTICE_SHOW_FROM,
+      BIRTHDAY_DATE_KEY,
+      BIRTHDAY_DEADLINE
+    ),
     showPhoto: isOnOrBeforeDate(today, PHOTO_END_DATE),
   };
   if (cards.birthdayPill === null && !cards.showPhoto) return null;
@@ -73,7 +82,12 @@ export function Daeni4CutHomePopup() {
   const photoBtnRef = useRef<HTMLButtonElement>(null);
   const [cards, setCards] = useState<NoticeCards | null>(null);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const open = cards !== null;
+  const now = useClock();
+  const birthdayPill =
+    cards?.birthdayPill != null && (now === null || now < BIRTHDAY_DEADLINE.getTime())
+      ? cards.birthdayPill
+      : null;
+  const open = cards !== null && (birthdayPill !== null || cards.showPhoto);
 
   const closeForSession = useCallback(() => {
     safeSetItem(sessionStorage, SESSION_DISMISS_KEY, "1");
@@ -81,7 +95,7 @@ export function Daeni4CutHomePopup() {
   }, []);
 
   const hideForToday = useCallback(() => {
-    safeSetItem(localStorage, HIDE_UNTIL_KEY, seoulDateKey());
+    safeSetItem(localStorage, HIDE_UNTIL_KEY, seoulDateKey(new Date(clockNow())));
     setCards(null);
   }, []);
 
@@ -141,7 +155,7 @@ export function Daeni4CutHomePopup() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, closeForSession]);
 
-  if (!cards) return null;
+  if (!cards || !open) return null;
 
   return createPortal(
     <div
@@ -168,15 +182,21 @@ export function Daeni4CutHomePopup() {
         </h2>
 
         <div className="daeni4cut-popup-list">
-          {cards.birthdayPill !== null ? (
+          {birthdayPill !== null ? (
             <section className="daeni4cut-popup-item">
               <span className="daeni4cut-popup-pill daeni4cut-popup-pill--red">
-                {cards.birthdayPill}
+                {birthdayPill}
               </span>
               <h3 className="daeni4cut-popup-title">봉탄신일이 다가옵니다! 🎂</h3>
               <p className="daeni4cut-popup-desc">
                 다인 선수에게 생일 축하 메시지를 남겨주세요
               </p>
+              <BirthdayCountdown
+                deadline={BIRTHDAY_DEADLINE}
+                label="메시지 마감까지"
+                variant="popup"
+                className="mt-2"
+              />
               <button
                 ref={birthdayBtnRef}
                 type="button"
