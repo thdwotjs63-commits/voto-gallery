@@ -286,22 +286,6 @@
   box-shadow: 0 8px 32px rgba(28, 28, 36, 0.14);
 }
 
-.photo-page__boothBtnPrimary {
-  background: #c8202c;
-}
-
-.photo-page__boothBtnPrimary:hover {
-  filter: brightness(1.05);
-}
-
-.photo-page__boothBtnSecondary {
-  background: #1e3e96;
-}
-
-.photo-page__boothBtnSecondary:hover {
-  filter: brightness(1.06);
-}
-
 .photo-page__boothToast {
   animation: photo-page-booth-toast 2s ease-out forwards;
 }

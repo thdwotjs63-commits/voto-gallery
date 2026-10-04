@@ -100,7 +100,6 @@ type CountdownSeconds = (typeof COUNTDOWN_SECOND_OPTIONS)[number];
 const BOOTH_COUNTDOWN_SECOND_OPTIONS = [3, 5, 10] as const;
 type BoothCountdownSeconds = (typeof BOOTH_COUNTDOWN_SECOND_OPTIONS)[number];
 
-const BOOTH_SHARE_MAIL_TEXT = "현대건설 커피차 다인네컷 📸 daeni.kr";
 const BOOTH_SHARE_UNSUPPORTED =
   "이 브라우저는 공유를 지원하지 않아요. 사파리로 열어주세요";
 
@@ -1085,7 +1084,7 @@ export default function PhotoPage() {
     }
   }, []);
 
-  const handleBoothShare = async (variant: "airdrop" | "mail") => {
+  const handleBoothShare = async () => {
     const file = resultShareFileRef.current;
     if (!file) return;
     if (!canShareResultFile()) {
@@ -1096,7 +1095,6 @@ export default function PhotoPage() {
     try {
       await navigator.share({
         title: "다인네컷",
-        text: variant === "mail" ? BOOTH_SHARE_MAIL_TEXT : undefined,
         files: [file],
       });
     } catch (err) {
@@ -1412,7 +1410,7 @@ export default function PhotoPage() {
     boothQr.status === "ready" ? (
       <div className="flex flex-col items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
         <p className="text-center text-base font-bold text-zinc-900">
-          📱 폰 카메라로 찍으면 바로 받아요
+          사진 다운로드 QR
         </p>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -1892,17 +1890,11 @@ export default function PhotoPage() {
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => void handleBoothShare("airdrop")}
-                  className="photo-page__boothBtnPrimary w-full rounded-xl py-4 text-base font-bold text-white"
+                  onClick={() => void handleBoothShare()}
+                  className="flex w-full flex-col items-center gap-0.5 rounded-xl border border-zinc-300 bg-white py-3 text-base font-bold text-zinc-900 shadow-sm"
                 >
-                  📲 아이폰으로 받기 (AirDrop)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleBoothShare("mail")}
-                  className="photo-page__boothBtnSecondary w-full rounded-xl py-4 text-base font-bold text-white"
-                >
-                  ✉️ 메일로 받기
+                  <span>📲 아이폰(AirDrop) 받기</span>
+                  <span className="text-xs font-medium text-zinc-500">AirDrop ‘모두 검색 가능’으로 변경 필요</span>
                 </button>
                 <div className="grid grid-cols-2 gap-3">
                   <button
@@ -1917,7 +1909,7 @@ export default function PhotoPage() {
                     onClick={handleBoothNextPerson}
                     className="photo-page__boothBtnNext w-full rounded-xl border border-zinc-300 bg-white py-2.5 text-sm font-medium text-zinc-600"
                   >
-                    ➡️ 다음 사람
+                    🔄 다시 찍기
                   </button>
                 </div>
               </div>
