@@ -1,27 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { del, list } from "@vercel/blob";
 import { rejectInvalidBoothRequest } from "@/lib/booth-auth";
-import { boothBlobToken } from "@/lib/booth-blob";
+import { boothBlobDel, boothBlobList } from "@/lib/booth-blob";
 import { boothDateKey, boothDayPrefix } from "@/lib/booth-share";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const SCOPE = "booth/clear";
+
 export async function POST(req: NextRequest) {
-  const denied = rejectInvalidBoothRequest(req, "booth/clear");
+  const denied = rejectInvalidBoothRequest(req, SCOPE);
   if (denied) return denied;
 
   const date = boothDateKey();
-  const token = boothBlobToken();
   let deleted = 0;
   try {
     let cursor: string | undefined;
     do {
-      const page = await list({ prefix: boothDayPrefix(date), cursor, limit: 1000, token });
+      const page = await boothBlobList(SCOPE, { prefix: boothDayPrefix(date), cursor, limit: 1000 });
       if (page.blobs.length > 0) {
-        await del(
-          page.blobs.map((b) => b.url),
-          { token }
+        await boothBlobDel(
+          SCOPE,
+          page.blobs.map((b) => b.url)
         );
         deleted += page.blobs.length;
       }
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     } while (cursor);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[booth/clear] failed: ${message}`);
+    console.error(`[${SCOPE}] failed: ${message}`);
     return NextResponse.json({ error: `clear failed: ${message}`, deleted }, { status: 500 });
   }
 

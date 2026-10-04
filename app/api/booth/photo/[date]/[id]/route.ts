@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
-import { get } from "@vercel/blob";
-import { BOOTH_BLOB_ACCESS, boothBlobToken } from "@/lib/booth-blob";
+import { boothBlobGet } from "@/lib/booth-blob";
 import { boothPhotoBlobPath, isBoothDateKey, isBoothPhotoId } from "@/lib/booth-share";
 
 export const runtime = "nodejs";
@@ -21,10 +20,7 @@ export async function GET(
   if (!isBoothDateKey(date) || !isBoothPhotoId(id)) return notFound();
 
   try {
-    const result = await get(boothPhotoBlobPath(date, id), {
-      access: BOOTH_BLOB_ACCESS,
-      token: boothBlobToken(),
-    });
+    const result = await boothBlobGet("booth/photo", boothPhotoBlobPath(date, id));
     if (!result || result.statusCode !== 200) return notFound();
 
     const headers = new Headers({

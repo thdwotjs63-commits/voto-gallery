@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { BlobNotFoundError, head } from "@vercel/blob";
-import { boothBlobToken } from "@/lib/booth-blob";
+import { BlobNotFoundError } from "@vercel/blob";
+import { boothBlobHead } from "@/lib/booth-blob";
 import {
   boothPhotoApiPath,
   boothPhotoBlobPath,
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 async function boothPhotoExists(date: string, id: string): Promise<boolean> {
   if (!isBoothDateKey(date) || !isBoothPhotoId(id)) return false;
   try {
-    await head(boothPhotoBlobPath(date, id), { token: boothBlobToken() });
+    await boothBlobHead("p", boothPhotoBlobPath(date, id));
     return true;
   } catch (error) {
     if (!(error instanceof BlobNotFoundError)) {
