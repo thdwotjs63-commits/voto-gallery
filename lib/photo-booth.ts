@@ -23,6 +23,25 @@ export function resetBoothSequence() {
   writeBoothSequence(0);
 }
 
+export const BOOTH_KEY_STORAGE_KEY = "voto-photo-booth-key";
+
+export function readBoothKey(): string {
+  try {
+    return localStorage.getItem(BOOTH_KEY_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function writeBoothKey(value: string) {
+  try {
+    if (value) localStorage.setItem(BOOTH_KEY_STORAGE_KEY, value);
+    else localStorage.removeItem(BOOTH_KEY_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** 다음 저장에 쓸 순번 (1부터)을 반환하고 localStorage 를 갱신 */
 export function allocateNextBoothSequence(): number {
   const next = readBoothSequence() + 1;

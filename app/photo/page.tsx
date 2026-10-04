@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FlipHorizontal2, RotateCcw, SwitchCamera } from "lucide-react";
+import QRCode from "qrcode";
 import {
   allocateNextBoothSequence,
   buildBoothCompositeFileName,
@@ -11,10 +12,19 @@ import {
   formatBoothSequenceLabel,
   isPhotoBoothMode,
   listFramesForMode,
+  readBoothKey,
   readBoothSequence,
   resetBoothSequence,
   resolveInitialFrame,
+  writeBoothKey,
 } from "@/lib/photo-booth";
+import {
+  BOOTH_KEY_HEADER,
+  boothDateKey,
+  boothPhotoPagePath,
+  encodeBoothKeyHeader,
+  formatBoothDateLabel,
+} from "@/lib/booth-share";
 import {
   buildFourCutFileName,
   captureFromVideo,
@@ -91,6 +101,22 @@ type BoothCountdownSeconds = (typeof BOOTH_COUNTDOWN_SECOND_OPTIONS)[number];
 const BOOTH_SHARE_MAIL_TEXT = "현대건설 커피차 다인네컷 📸 daeni.kr";
 const BOOTH_SHARE_UNSUPPORTED =
   "이 브라우저는 공유를 지원하지 않아요. 사파리로 열어주세요";
+
+/** Vercel 함수 요청 본문 한도(4.5MB) 아래로 */
+const BOOTH_UPLOAD_SAFE_BYTES = 4 * 1024 * 1024;
+
+type BoothQrState =
+  | { status: "idle" }
+  | { status: "no-key" }
+  | { status: "uploading" }
+  | { status: "ready"; qrDataUrl: string }
+  | { status: "error" };
+
+function canvasToJpeg(canvas: HTMLCanvasElement, quality: number) {
+  return new Promise<Blob | null>((resolve) =>
+    canvas.toBlob((b) => resolve(b), "image/jpeg", quality)
+  );
+}
 
 const FACING_MODE_STORAGE_KEY = "voto-photo-facing-mode";
 
@@ -195,8 +221,18 @@ export default function PhotoPage() {
   const boothCountdownSecondsRef = useRef<BoothCountdownSeconds>(3);
   const boothSaveOriginalsRef = useRef(false);
   const resultShareFileRef = useRef<File | null>(null);
+  const boothQrRunRef = useRef(0);
+  const boothUploadBlobRef = useRef<Blob | null>(null);
 
   const [debugMode, setDebugMode] = useState(false);
+  const [boothKey, setBoothKey] = useState(() =>
+    typeof window !== "undefined" ? readBoothKey() : ""
+  );
+  const boothKeyRef = useRef(boothKey);
+  const [boothQr, setBoothQr] = useState<BoothQrState>({ status: "idle" });
+  const [boothClearConfirmOpen, setBoothClearConfirmOpen] = useState(false);
+  const [boothClearing, setBoothClearing] = useState(false);
+  const [boothClearMessage, setBoothClearMessage] = useState<string | null>(null);
   const [boothMode, setBoothMode] = useState(false);
   const [boothSettingsOpen, setBoothSettingsOpen] = useState(false);
   const [boothCountdownSeconds, setBoothCountdownSeconds] = useState<BoothCountdownSeconds>(3);
@@ -513,17 +549,61 @@ export default function PhotoPage() {
     URL.revokeObjectURL(url);
   }, []);
 
+  /** 새 촬영·다음 사람으로 넘어가면 runId 가 바뀌어 늦게 끝난 업로드 결과는 버림 */
+  const uploadBoothPhoto = useCallback(async (blob: Blob) => {
+    const runId = ++boothQrRunRef.current;
+    boothUploadBlobRef.current = blob;
+    const key = boothKeyRef.current.trim();
+    if (!key) {
+      setBoothQr({ status: "no-key" });
+      return;
+    }
+    setBoothQr({ status: "uploading" });
+    try {
+      const res = await fetch("/api/booth/upload", {
+        method: "POST",
+        headers: {
+          "content-type": "image/jpeg",
+          [BOOTH_KEY_HEADER]: encodeBoothKeyHeader(key),
+        },
+        body: blob,
+      });
+      if (runId !== boothQrRunRef.current) return;
+      if (res.status === 401) {
+        setBoothQr({ status: "no-key" });
+        return;
+      }
+      if (!res.ok) throw new Error(`upload failed: ${res.status}`);
+      const { id, date } = (await res.json()) as { id: string; date: string };
+      const pageUrl = `${window.location.origin}${boothPhotoPagePath(date, id)}`;
+      const qrDataUrl = await QRCode.toDataURL(pageUrl, {
+        width: 640,
+        margin: 2,
+        errorCorrectionLevel: "M",
+      });
+      if (runId !== boothQrRunRef.current) return;
+      setBoothQr({ status: "ready", qrDataUrl });
+    } catch (err) {
+      if (runId !== boothQrRunRef.current) return;
+      console.warn("[photo] booth upload failed", err);
+      setBoothQr({ status: "error" });
+    }
+  }, []);
+
   const runBoothAutoSave = useCallback(
     async (canvas: HTMLCanvasElement) => {
       const frameId = frameDefRef.current.id;
       const seq = allocateNextBoothSequence();
       const fileName = buildBoothCompositeFileName(frameId, seq);
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92)
-      );
+      const blob = await canvasToJpeg(canvas, 0.92);
       if (blob) {
         downloadBlob(blob, fileName);
         resultShareFileRef.current = new File([blob], fileName, { type: "image/jpeg" });
+        const uploadBlob =
+          blob.size > BOOTH_UPLOAD_SAFE_BYTES ? ((await canvasToJpeg(canvas, 0.8)) ?? blob) : blob;
+        void uploadBoothPhoto(uploadBlob);
+      } else {
+        setBoothQr({ status: "error" });
       }
       if (boothSaveOriginalsRef.current) {
         const slots = photoSlotsRef.current;
@@ -541,7 +621,7 @@ export default function PhotoPage() {
       }
       setBoothSavedSeqLabel(formatBoothSequenceLabel(seq));
     },
-    [downloadBlob]
+    [downloadBlob, uploadBoothPhoto]
   );
 
   const finishIfComplete = useCallback(() => {
@@ -558,6 +638,8 @@ export default function PhotoPage() {
     setBoothShareHint(null);
 
     if (boothModeRef.current) {
+      boothQrRunRef.current += 1;
+      setBoothQr({ status: "idle" });
       void runBoothAutoSave(canvas);
     } else {
       stopCamera();
@@ -883,6 +965,9 @@ export default function PhotoPage() {
     setPreviewUrl(null);
     resultShareFileRef.current = null;
     setBoothShareHint(null);
+    boothQrRunRef.current += 1;
+    boothUploadBlobRef.current = null;
+    setBoothQr({ status: "idle" });
     setShotIndex(0);
     shotIndexRef.current = 0;
     setStripExpanded(false);
@@ -896,6 +981,46 @@ export default function PhotoPage() {
   const handleBoothResetSequence = () => {
     resetBoothSequence();
     setBoothSettingsOpen(false);
+  };
+
+  const handleBoothKeyChange = (value: string) => {
+    setBoothKey(value);
+    boothKeyRef.current = value;
+    writeBoothKey(value.trim());
+  };
+
+  const handleBoothQrRetry = () => {
+    const blob = boothUploadBlobRef.current;
+    if (blob) void uploadBoothPhoto(blob);
+  };
+
+  const handleBoothClearToday = async () => {
+    const key = boothKey.trim();
+    if (!key) {
+      setBoothClearMessage("행사 키를 먼저 입력해 주세요");
+      setBoothClearConfirmOpen(false);
+      return;
+    }
+    setBoothClearing(true);
+    try {
+      const res = await fetch("/api/booth/clear", {
+        method: "POST",
+        headers: { [BOOTH_KEY_HEADER]: encodeBoothKeyHeader(key) },
+      });
+      if (res.status === 401) {
+        setBoothClearMessage("행사 키가 맞지 않아요");
+      } else if (!res.ok) {
+        setBoothClearMessage("삭제하지 못했어요. 인터넷 연결을 확인해 주세요");
+      } else {
+        const { deleted } = (await res.json()) as { deleted: number };
+        setBoothClearMessage(`오늘 사진 ${deleted}장을 삭제했어요`);
+      }
+    } catch {
+      setBoothClearMessage("삭제하지 못했어요. 인터넷 연결을 확인해 주세요");
+    } finally {
+      setBoothClearing(false);
+      setBoothClearConfirmOpen(false);
+    }
   };
 
   const canShareResultFile = useCallback(() => {
@@ -1231,11 +1356,61 @@ export default function PhotoPage() {
     </div>
   );
 
+  const boothQrBlock =
+    boothQr.status === "ready" ? (
+      <div className="flex flex-col items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <p className="text-center text-base font-bold text-zinc-900">
+          📱 폰 카메라로 찍으면 바로 받아요
+        </p>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={boothQr.qrDataUrl}
+          alt="사진 받기 QR 코드"
+          width={300}
+          height={300}
+          className="h-[300px] w-[300px] max-w-full bg-white [image-rendering:pixelated]"
+        />
+      </div>
+    ) : boothQr.status === "no-key" ? (
+      <p className="text-center text-xs text-zinc-500">
+        QR 사용 불가 · 설정에서 행사 키 입력
+        {boothKey.trim() ? (
+          <>
+            {" · "}
+            <button type="button" onClick={handleBoothQrRetry} className="underline">
+              다시 시도
+            </button>
+          </>
+        ) : null}
+      </p>
+    ) : boothQr.status === "error" ? (
+      <div className="flex flex-col items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-5">
+        <p className="text-center text-sm font-medium text-zinc-700">인터넷 연결을 확인해 주세요</p>
+        <button
+          type="button"
+          onClick={handleBoothQrRetry}
+          className="photo-page__btn-outline rounded-lg px-5 py-2 text-sm font-semibold"
+        >
+          다시 시도
+        </button>
+      </div>
+    ) : (
+      <div
+        className="flex min-h-[332px] items-center justify-center rounded-2xl border border-zinc-200 bg-white p-4"
+        role="status"
+      >
+        <p className="text-sm font-medium text-zinc-500">QR 만드는 중…</p>
+      </div>
+    );
+
   const boothSettingsPanel = boothMode ? (
     <>
       <button
         type="button"
-        onClick={() => setBoothSettingsOpen((o) => !o)}
+        onClick={() => {
+          setBoothClearMessage(null);
+          setBoothSettingsOpen((o) => !o);
+        }}
         className="photo-page__boothGear fixed z-[70] flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white/95 text-lg shadow-md backdrop-blur-sm"
         style={{
           top: "max(12px, env(safe-area-inset-top))",
@@ -1283,6 +1458,72 @@ export default function PhotoPage() {
           >
             저장 순번 초기화 (다음 {formatBoothSequenceLabel(readBoothSequence() + 1)}번)
           </button>
+          <label className="mt-4 block text-sm">
+            <span>행사 키</span>
+            <input
+              type="password"
+              value={boothKey}
+              onChange={(e) => handleBoothKeyChange(e.target.value)}
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              placeholder="QR로 받기에 필요해요"
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setBoothClearConfirmOpen(true)}
+            className="mt-4 w-full rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600"
+          >
+            오늘 업로드한 사진 모두 삭제
+          </button>
+          {boothClearMessage ? (
+            <p className="mt-2 text-center text-xs text-zinc-600" role="status">
+              {boothClearMessage}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {boothClearConfirmOpen ? (
+        <div
+          className="photo-page__modalBackdrop fixed inset-0 z-[90] flex items-center justify-center p-4"
+          role="presentation"
+          onClick={() => {
+            if (!boothClearing) setBoothClearConfirmOpen(false);
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="오늘 업로드한 사진 삭제"
+            className="photo-page__modalPanel w-full max-w-sm rounded-2xl p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-base font-semibold">오늘 업로드한 사진을 모두 삭제할까요?</p>
+            <p className="photo-page__sub mt-2 text-sm leading-relaxed">
+              {formatBoothDateLabel(boothDateKey())}에 올린 사진이 전부 지워지고, QR로 받은
+              링크도 더 이상 열리지 않아요. 되돌릴 수 없어요.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={boothClearing}
+                onClick={() => setBoothClearConfirmOpen(false)}
+                className="photo-page__btn-outline rounded-lg py-2.5 text-sm font-medium disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={boothClearing}
+                onClick={() => void handleBoothClearToday()}
+                className="photo-page__btn-primary rounded-lg py-2.5 text-sm font-semibold disabled:opacity-60"
+              >
+                {boothClearing ? "삭제 중…" : "삭제"}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
       {boothSavedSeqLabel ? (
@@ -1583,19 +1824,20 @@ export default function PhotoPage() {
 
         {step === "result" && previewUrl ? (
           boothMode ? (
-            <div className="photo-page__boothResult flex min-h-[calc(100dvh-2rem)] flex-col gap-4 pb-8">
-              <div className="flex min-h-0 flex-1 items-center justify-center">
+            <div className="photo-page__boothResult flex min-h-[calc(100dvh-2rem)] flex-col gap-4 pb-8 md:flex-row md:items-center md:justify-center md:gap-10 md:pb-0">
+              <div className="flex min-h-0 flex-1 items-center justify-center md:flex-none">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={previewUrl}
                   alt="인생네컷 결과"
-                  className="photo-page__boothResultImg max-h-[calc(100dvh-12rem)] w-auto max-w-full rounded-lg object-contain"
+                  className="photo-page__boothResultImg max-h-[calc(100dvh-12rem)] w-auto max-w-full rounded-lg object-contain md:max-h-[calc(100dvh-4rem)]"
                 />
               </div>
-              {boothShareHint ? (
-                <p className="text-center text-sm text-red-600">{boothShareHint}</p>
-              ) : null}
-              <div className="flex shrink-0 flex-col gap-3 px-1">
+              <div className="flex w-full shrink-0 flex-col gap-3 px-1 md:w-[22rem]">
+                {boothQrBlock}
+                {boothShareHint ? (
+                  <p className="text-center text-sm text-red-600">{boothShareHint}</p>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => void handleBoothShare("airdrop")}
