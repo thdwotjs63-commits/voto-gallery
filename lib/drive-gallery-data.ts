@@ -49,7 +49,9 @@ function isExcludedFolderName(name: string, excludedNames: Set<string>): boolean
 
 const GOOGLE_DRIVE_API_KEY_ENV_KEY = "NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY";
 const GOOGLE_DRIVE_FOLDER_ID_ENV_KEY = "NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_ID";
-const META_POSITIONAL_TAGS = new Set(["#hero", "#banner"]);
+const META_POSITIONAL_TAGS = new Set(["#hero", "#banner", "#exhibition"]);
+/** 전시 순번 태그 (#exhibition_01 …) — lib/exhibition.ts 와 같은 규칙 */
+const EXHIBITION_ORDER_TAG_RE = /^#exhibition_\d+$/;
 
 function extractHashtags(text: string): string[] {
   const matches = text.match(/#[\p{L}\p{N}_-]+/gu) ?? [];
@@ -89,10 +91,22 @@ function filenamePartToTag(part: string): string | null {
   return normalized || null;
 }
 
+function isMetaPositionalTag(tag: string): boolean {
+  return META_POSITIONAL_TAGS.has(tag) || EXHIBITION_ORDER_TAG_RE.test(tag);
+}
+
 function extractTagsFromFilename(name: string): string[] {
   const nameNoExt = (name ?? "").replace(/\.[^.]+$/, "");
+  const parts = nameNoExt.split("_");
   const tags: string[] = [];
-  for (const part of nameNoExt.split("_")) {
+  for (let i = 0; i < parts.length; i++) {
+    let part = parts[i];
+    // 파일 이름은 "_" 로 나뉘므로 exhibition_01 을 한 태그로 다시 붙인다
+    const next = parts[i + 1]?.trim() ?? "";
+    if (part.trim().toLowerCase() === "exhibition" && /^\d+$/.test(next)) {
+      part = `${part.trim()}_${next}`;
+      i++;
+    }
     const tag = filenamePartToTag(part);
     if (tag && !tags.includes(tag)) tags.push(tag);
   }
@@ -104,10 +118,10 @@ function dedupeNormalizedTags(rawTags: string[]): string[] {
 }
 
 function extractMetaTagsFromFilename(name: string): string[] {
-  return extractTagsFromFilename(name).filter((tag) => META_POSITIONAL_TAGS.has(tag));
+  return extractTagsFromFilename(name).filter(isMetaPositionalTag);
 }
 
-function parseTags(description: string, name: string): string[] {
+export function parseTags(description: string, name: string): string[] {
   const descTags = dedupeNormalizedTags(extractHashtags(description));
   if (descTags.length > 0) {
     const metaFromName = dedupeNormalizedTags(extractMetaTagsFromFilename(name)).filter(
@@ -211,7 +225,7 @@ function assignPositionalTags(tags: string[]): {
 } {
   const withTags = tags
     .slice(3)
-    .filter((tag) => !META_POSITIONAL_TAGS.has(tag) && hasKorean(tag));
+    .filter((tag) => !isMetaPositionalTag(tag) && hasKorean(tag));
   return {
     dateTag: tags[0],
     locationTag: tags[1],
