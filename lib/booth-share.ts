@@ -43,6 +43,20 @@ export function boothPhotoPagePath(dateKey: string, id: string): string {
   return `/p/${dateKey}/${id}`;
 }
 
+export const BOOTH_NETWORK_ERROR_MESSAGE = "인터넷 연결을 확인해 주세요";
+
+/** fetch 는 성공했지만 응답이 실패일 때 결과 화면에 보일 문구 */
+export function boothUploadErrorMessage(status: number, serverError?: string): string {
+  if (status === 401) return "행사 키가 맞지 않아요 (⚙ 설정 확인)";
+  if (status === 413) return "사진 용량이 너무 커요";
+  if (status === 404) return "업로드 주소를 찾을 수 없어요";
+  if (status >= 500) {
+    const detail = (serverError ?? "").trim().slice(0, 80);
+    return detail ? `서버 설정 오류 · ${detail}` : `서버 설정 오류 (${status})`;
+  }
+  return `업로드 실패 (${status})`;
+}
+
 /** fetch 헤더는 ASCII 만 허용돼서 키를 인코딩해 보냄 */
 export function encodeBoothKeyHeader(key: string): string {
   return encodeURIComponent(key.trim());

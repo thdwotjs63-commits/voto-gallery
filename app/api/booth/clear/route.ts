@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { del, list } from "@vercel/blob";
-import { rejectInvalidBoothKey } from "@/lib/booth-auth";
+import { rejectInvalidBoothRequest } from "@/lib/booth-auth";
 import { boothDateKey, boothDayPrefix } from "@/lib/booth-share";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const denied = rejectInvalidBoothKey(req);
+  const denied = rejectInvalidBoothRequest(req, "booth/clear");
   if (denied) return denied;
 
   const date = boothDateKey();
@@ -23,8 +23,9 @@ export async function POST(req: NextRequest) {
       cursor = page.hasMore ? page.cursor : undefined;
     } while (cursor);
   } catch (error) {
-    console.error("[booth/clear] failed", error);
-    return NextResponse.json({ error: "Clear failed", deleted }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[booth/clear] failed: ${message}`);
+    return NextResponse.json({ error: `clear failed: ${message}`, deleted }, { status: 500 });
   }
 
   return NextResponse.json({ date, deleted });

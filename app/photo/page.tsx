@@ -20,8 +20,10 @@ import {
 } from "@/lib/photo-booth";
 import {
   BOOTH_KEY_HEADER,
+  BOOTH_NETWORK_ERROR_MESSAGE,
   boothDateKey,
   boothPhotoPagePath,
+  boothUploadErrorMessage,
   encodeBoothKeyHeader,
   formatBoothDateLabel,
 } from "@/lib/booth-share";
@@ -102,20 +104,48 @@ const BOOTH_SHARE_MAIL_TEXT = "현대건설 커피차 다인네컷 📸 daeni.kr
 const BOOTH_SHARE_UNSUPPORTED =
   "이 브라우저는 공유를 지원하지 않아요. 사파리로 열어주세요";
 
-/** Vercel 함수 요청 본문 한도(4.5MB) 아래로 */
-const BOOTH_UPLOAD_SAFE_BYTES = 4 * 1024 * 1024;
+const BOOTH_UPLOAD_MAX_WIDTH = 1200;
+/** Vercel 함수 요청 본문 한도(4.5MB)보다 여유 있게 */
+const BOOTH_UPLOAD_TARGET_BYTES = 3.5 * 1024 * 1024;
+const BOOTH_UPLOAD_QUALITIES = [0.85, 0.75, 0.65] as const;
 
 type BoothQrState =
   | { status: "idle" }
   | { status: "no-key" }
   | { status: "uploading" }
   | { status: "ready"; qrDataUrl: string }
-  | { status: "error" };
+  | { status: "error"; message: string };
 
 function canvasToJpeg(canvas: HTMLCanvasElement, quality: number) {
   return new Promise<Blob | null>((resolve) =>
     canvas.toBlob((b) => resolve(b), "image/jpeg", quality)
   );
+}
+
+/** 다운로드 저장본과 별개로, 업로드용은 줄이고 용량이 크면 품질을 낮춰 다시 인코딩 */
+async function buildBoothUploadBlob(source: HTMLCanvasElement): Promise<Blob | null> {
+  let canvas = source;
+  if (source.width > BOOTH_UPLOAD_MAX_WIDTH) {
+    const scaled = document.createElement("canvas");
+    scaled.width = BOOTH_UPLOAD_MAX_WIDTH;
+    scaled.height = Math.round((source.height * BOOTH_UPLOAD_MAX_WIDTH) / source.width);
+    const ctx = scaled.getContext("2d");
+    if (ctx) {
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(source, 0, 0, scaled.width, scaled.height);
+      canvas = scaled;
+    }
+  }
+  let blob: Blob | null = null;
+  for (const quality of BOOTH_UPLOAD_QUALITIES) {
+    blob = await canvasToJpeg(canvas, quality);
+    if (!blob) return null;
+    console.log(
+      `[photo] booth upload jpeg ${canvas.width}x${canvas.height} q=${quality} → ${(blob.size / 1024).toFixed(0)}KB`
+    );
+    if (blob.size <= BOOTH_UPLOAD_TARGET_BYTES) break;
+  }
+  return blob;
 }
 
 const FACING_MODE_STORAGE_KEY = "voto-photo-facing-mode";
@@ -559,8 +589,9 @@ export default function PhotoPage() {
       return;
     }
     setBoothQr({ status: "uploading" });
+    let res: Response;
     try {
-      const res = await fetch("/api/booth/upload", {
+      res = await fetch("/api/booth/upload", {
         method: "POST",
         headers: {
           "content-type": "image/jpeg",
@@ -568,14 +599,34 @@ export default function PhotoPage() {
         },
         body: blob,
       });
+    } catch (err) {
       if (runId !== boothQrRunRef.current) return;
-      if (res.status === 401) {
-        setBoothQr({ status: "no-key" });
-        return;
+      console.error("[photo] booth upload request failed", err);
+      setBoothQr({ status: "error", message: BOOTH_NETWORK_ERROR_MESSAGE });
+      return;
+    }
+    const bodyText = await res.text().catch(() => "");
+    if (runId !== boothQrRunRef.current) return;
+    let body: { id?: string; date?: string; error?: string } = {};
+    try {
+      body = JSON.parse(bodyText) as typeof body;
+    } catch {
+      /* HTML 오류 페이지 등 */
+    }
+    if (!res.ok || !body.id || !body.date) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error(`[photo] booth upload failed: ${res.status}`, bodyText);
       }
-      if (!res.ok) throw new Error(`upload failed: ${res.status}`);
-      const { id, date } = (await res.json()) as { id: string; date: string };
-      const pageUrl = `${window.location.origin}${boothPhotoPagePath(date, id)}`;
+      setBoothQr({
+        status: "error",
+        message: res.ok
+          ? `업로드 응답이 이상해요 (${res.status})`
+          : boothUploadErrorMessage(res.status, body.error),
+      });
+      return;
+    }
+    try {
+      const pageUrl = `${window.location.origin}${boothPhotoPagePath(body.date, body.id)}`;
       const qrDataUrl = await QRCode.toDataURL(pageUrl, {
         width: 640,
         margin: 2,
@@ -585,8 +636,8 @@ export default function PhotoPage() {
       setBoothQr({ status: "ready", qrDataUrl });
     } catch (err) {
       if (runId !== boothQrRunRef.current) return;
-      console.warn("[photo] booth upload failed", err);
-      setBoothQr({ status: "error" });
+      console.error("[photo] booth QR render failed", err);
+      setBoothQr({ status: "error", message: "QR을 만들지 못했어요" });
     }
   }, []);
 
@@ -599,12 +650,11 @@ export default function PhotoPage() {
       if (blob) {
         downloadBlob(blob, fileName);
         resultShareFileRef.current = new File([blob], fileName, { type: "image/jpeg" });
-        const uploadBlob =
-          blob.size > BOOTH_UPLOAD_SAFE_BYTES ? ((await canvasToJpeg(canvas, 0.8)) ?? blob) : blob;
-        void uploadBoothPhoto(uploadBlob);
-      } else {
-        setBoothQr({ status: "error" });
       }
+      void buildBoothUploadBlob(canvas).then((uploadBlob) => {
+        if (uploadBlob) void uploadBoothPhoto(uploadBlob);
+        else setBoothQr({ status: "error", message: "업로드용 사진을 만들지 못했어요" });
+      });
       if (boothSaveOriginalsRef.current) {
         const slots = photoSlotsRef.current;
         for (let i = 0; i < 4; i++) {
@@ -1007,16 +1057,18 @@ export default function PhotoPage() {
         method: "POST",
         headers: { [BOOTH_KEY_HEADER]: encodeBoothKeyHeader(key) },
       });
-      if (res.status === 401) {
-        setBoothClearMessage("행사 키가 맞지 않아요");
-      } else if (!res.ok) {
-        setBoothClearMessage("삭제하지 못했어요. 인터넷 연결을 확인해 주세요");
+      const body = (await res.json().catch(() => ({}))) as { deleted?: number; error?: string };
+      if (res.ok) {
+        setBoothClearMessage(`오늘 사진 ${body.deleted ?? 0}장을 삭제했어요`);
       } else {
-        const { deleted } = (await res.json()) as { deleted: number };
-        setBoothClearMessage(`오늘 사진 ${deleted}장을 삭제했어요`);
+        if (process.env.NODE_ENV !== "production") {
+          console.error(`[photo] booth clear failed: ${res.status}`, body);
+        }
+        setBoothClearMessage(`삭제하지 못했어요 · ${boothUploadErrorMessage(res.status, body.error)}`);
       }
-    } catch {
-      setBoothClearMessage("삭제하지 못했어요. 인터넷 연결을 확인해 주세요");
+    } catch (err) {
+      console.error("[photo] booth clear request failed", err);
+      setBoothClearMessage(`삭제하지 못했어요 · ${BOOTH_NETWORK_ERROR_MESSAGE}`);
     } finally {
       setBoothClearing(false);
       setBoothClearConfirmOpen(false);
@@ -1385,7 +1437,7 @@ export default function PhotoPage() {
       </p>
     ) : boothQr.status === "error" ? (
       <div className="flex flex-col items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-5">
-        <p className="text-center text-sm font-medium text-zinc-700">인터넷 연결을 확인해 주세요</p>
+        <p className="break-words text-center text-sm font-medium text-zinc-700">{boothQr.message}</p>
         <button
           type="button"
           onClick={handleBoothQrRetry}
