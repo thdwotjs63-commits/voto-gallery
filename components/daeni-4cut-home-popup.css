@@ -38,6 +38,8 @@
   flex-direction: column;
   align-items: stretch;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  word-break: keep-all;
   border-radius: 20px;
   background: #fff;
   padding: 1.25rem 1.25rem 1rem;
@@ -57,10 +59,33 @@
   transition: none;
 }
 
-.daeni4cut-popup-new {
+.daeni4cut-popup-heading {
+  font-size: 1.0625rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #1c1c24;
+}
+
+.daeni4cut-popup-list {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.daeni4cut-popup-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border: 1px solid #ebe9e3;
+  border-radius: 16px;
+  background: #fbfaf7;
+  padding: 1rem;
+}
+
+.daeni4cut-popup-pill {
   align-self: flex-start;
   border-radius: 9999px;
-  background: #c8202c;
   padding: 0.2rem 0.55rem;
   font-size: 10px;
   font-weight: 800;
@@ -68,50 +93,86 @@
   color: #fff;
 }
 
+.daeni4cut-popup-pill--red {
+  background: #c8202c;
+}
+
+.daeni4cut-popup-pill--navy {
+  background: #1e3e96;
+}
+
 .daeni4cut-popup-title {
-  margin-top: 0.65rem;
-  font-size: 1.125rem;
+  margin-top: 0.55rem;
+  font-size: 1.0625rem;
   font-weight: 700;
   line-height: 1.35;
   color: #1c1c24;
 }
 
-.daeni4cut-popup-preview {
-  margin-top: 0.85rem;
+.daeni4cut-popup-desc {
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: #55524b;
+}
+
+.daeni4cut-popup-photoRow {
+  margin-top: 0.75rem;
   display: flex;
-  height: 280px;
   align-items: center;
-  justify-content: center;
+  gap: 0.875rem;
+}
+
+.daeni4cut-popup-thumb {
+  display: flex;
+  height: 140px;
+  flex-shrink: 0;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #e8e8e4;
 }
 
-@media (min-width: 768px) {
-  .daeni4cut-popup-preview {
-    height: 360px;
-  }
-}
-
-.daeni4cut-popup-previewImg {
+.daeni4cut-popup-thumbImg {
   display: block;
   height: 100%;
   width: auto;
-  max-width: 100%;
-  object-fit: contain;
+}
+
+.daeni4cut-popup-photoBody {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.daeni4cut-popup-photoBody .daeni4cut-popup-desc {
+  margin-top: 0;
+}
+
+.daeni4cut-popup-photoBody .daeni4cut-popup-cta {
+  padding: 0 0.5rem;
+  font-size: 0.875rem;
 }
 
 .daeni4cut-popup-cta {
-  margin-top: 0.85rem;
+  margin-top: 0.75rem;
   min-height: 3rem;
   width: 100%;
   border: none;
   border-radius: 12px;
-  background: #c8202c;
-  font-size: 1rem;
+  padding: 0 0.75rem;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: #fff;
   transition: opacity 0.15s ease;
+}
+
+.daeni4cut-popup-cta--red {
+  background: #c8202c;
+}
+
+.daeni4cut-popup-cta--navy {
+  background: #1e3e96;
 }
 
 .daeni4cut-popup-cta:hover {
