@@ -29,6 +29,7 @@ import {
   useMyBirthdayMessages,
 } from "@/lib/birthday-counts-client";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
+import TranslatableMessage from "./translatable-message";
 
 const YELLOW = "#F7C331";
 const NAVY = "#1E3A9E";
@@ -462,9 +463,7 @@ export default function BirthdayClient() {
                         {formatBirthdayMessageDate(item.created_at)}
                       </time>
                     </div>
-                    <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-[#1E2A55]">
-                      {item.message}
-                    </p>
+                    <TranslatableMessage message={item.message} />
                   </li>
                 ))}
               </ul>
