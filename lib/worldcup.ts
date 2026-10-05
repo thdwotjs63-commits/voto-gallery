@@ -64,6 +64,14 @@ export function currentMatch(t: Tournament): [string, string] | null {
   return a !== undefined && b !== undefined ? [a, b] : null;
 }
 
+/** 같은 라운드의 다음 대결. 라운드 마지막 대결·결승이면 null (다음 라운드 대진은 아직 모름) */
+export function upcomingMatch(t: Tournament): [string, string] | null {
+  if (t.champion !== null) return null;
+  const a = t.entrants[(t.matchIndex + 1) * 2];
+  const b = t.entrants[(t.matchIndex + 1) * 2 + 1];
+  return a !== undefined && b !== undefined ? [a, b] : null;
+}
+
 /** 현재 대결의 승자를 고른다. 부전승은 결과(result)로 나오지 않는다 */
 export function pickWinner(
   t: Tournament,

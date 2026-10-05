@@ -12,15 +12,18 @@ import {
   pickWinner,
   roundLabel,
   shuffle,
+  upcomingMatch,
   type MatchResult,
   type Tournament,
 } from "@/lib/worldcup";
 import { saveCardImage, type SaveCardResult } from "./save-card-image";
 import WorldcupRanking from "./worldcup-ranking";
+import "./exhibition.css";
 
 const PICK_ANIMATION_MS = 380;
-const BATTLE_SIZES = "(max-width: 480px) 100vw, 448px";
-const CARD_FILE_NAME = "다인이_사진월드컵_PICK.png";
+const BATTLE_SIZES = "(max-width: 480px) 50vw, 224px";
+const RESULT_SIZES = "(max-width: 480px) 100vw, 448px";
+const CARD_FILE_NAME = "봉드컵_PICK.png";
 
 async function recordMatch({ winner, loser }: MatchResult): Promise<void> {
   if (!isSupabaseConfigured) return;
@@ -67,13 +70,14 @@ export default function Worldcup({
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   const match = tournament ? currentMatch(tournament) : null;
+  const upcoming = tournament ? upcomingMatch(tournament) : null;
+  const upcomingA = upcoming ? byId.get(upcoming[0]) : undefined;
+  const upcomingB = upcoming ? byId.get(upcoming[1]) : undefined;
 
   useEffect(() => {
-    if (!tournament || tournament.champion !== null) return;
-    const next = (tournament.matchIndex + 1) * 2;
-    preloadPhoto(byId.get(tournament.entrants[next]));
-    preloadPhoto(byId.get(tournament.entrants[next + 1]));
-  }, [tournament, byId]);
+    preloadPhoto(upcomingA);
+    preloadPhoto(upcomingB);
+  }, [upcomingA, upcomingB]);
 
   const scrollToTop = () => {
     sectionRef.current?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
@@ -113,9 +117,9 @@ export default function Worldcup({
 
   if (entrants.length === 0) {
     return (
-      <section className="pt-12">
-        <WorldcupIntro />
-        <p className="mt-6 rounded-3xl bg-white px-6 py-10 text-center font-bold shadow-[0_8px_24px_-14px_rgba(30,58,158,0.3)]">
+      <section className="pt-8" aria-labelledby="worldcup-title">
+        <WorldcupTitle />
+        <p className="mt-8 rounded-3xl bg-white px-6 py-10 text-center font-bold shadow-[0_8px_24px_-14px_rgba(30,58,158,0.3)]">
           월드컵 준비 중입니다
         </p>
       </section>
@@ -125,11 +129,11 @@ export default function Worldcup({
   const champion = tournament?.champion ? byId.get(tournament.champion) : undefined;
 
   return (
-    <section ref={sectionRef} className="scroll-mt-0 pt-6" aria-label="다인이 사진 월드컵">
+    <section ref={sectionRef} className="scroll-mt-0 pt-8" aria-labelledby="worldcup-title">
+      <WorldcupTitle />
       {!tournament && (
-        <div className="pt-6">
-          <WorldcupIntro />
-          <div className="mt-6 flex flex-col items-center gap-2">
+        <div className="pt-8">
+          <div className="flex flex-col items-center gap-2">
             <button
               type="button"
               onClick={start}
@@ -148,6 +152,7 @@ export default function Worldcup({
         <BattleView
           tournament={tournament}
           photos={[byId.get(match[0]), byId.get(match[1])]}
+          nextNames={upcomingA && upcomingB ? [upcomingA.name, upcomingB.name] : null}
           picked={picked}
           onChoose={choose}
           onQuit={() => {
@@ -167,18 +172,15 @@ export default function Worldcup({
   );
 }
 
-function WorldcupIntro() {
+function WorldcupTitle() {
   return (
     <header className="text-center">
-      <h1 className="break-keep text-[2rem] font-extrabold leading-tight tracking-tight">
-        <span className="bg-[linear-gradient(transparent_62%,#F7C331_62%)] px-1">다인이 사진 월드컵 🏐</span>
+      <h1 id="worldcup-title" className="text-[2.75rem] leading-none font-black tracking-tight">
+        <span className="bg-[linear-gradient(transparent_65%,#F7C331_65%)] px-1">봉드컵</span>
       </h1>
-      <p className="mt-3 break-keep text-sm font-semibold opacity-80">둘 중 더 마음에 드는 사진을 골라주세요</p>
-      <div className="mt-6 rounded-3xl border border-[#F7C331]/60 bg-white px-5 py-4 text-left text-sm leading-relaxed break-keep shadow-[0_8px_24px_-14px_rgba(30,58,158,0.3)]">
-        <p className="font-bold">마음에 드는 사진을 많이 많이 골라주세요 💛</p>
-        <p className="mt-1 opacity-80">이 자료는 &apos;다인듀스101&apos;의 참고자료로 쓰입니다.</p>
-        <p className="mt-1 opacity-80">즐감해주세요~</p>
-      </div>
+      <p className="mt-3 break-keep text-base font-bold opacity-80">
+        현대건설배구단이 생각하는 최고의 김다인은?
+      </p>
     </header>
   );
 }
@@ -186,36 +188,46 @@ function WorldcupIntro() {
 function BattleView({
   tournament,
   photos,
+  nextNames,
   picked,
   onChoose,
   onQuit,
 }: {
   tournament: Tournament;
   photos: [ExhibitionPhoto | undefined, ExhibitionPhoto | undefined];
+  /** 같은 라운드의 다음 대결 (없으면 null) */
+  nextNames: [string, string] | null;
   picked: string | null;
   onChoose: (photoId: string) => void;
   onQuit: () => void;
 }) {
   const progress = matchProgress(tournament);
   return (
-    <div className="flex h-[calc(100svh-2.5rem)] max-h-[860px] min-h-[480px] flex-col gap-3">
-      <div className="flex items-center gap-3">
-        <p className="rounded-full bg-[#1E3A9E] px-4 py-1.5 text-sm font-extrabold text-white tabular-nums" aria-live="polite">
-          {progress.label} · {progress.current}/{progress.total}
-        </p>
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#1E3A9E]/10" aria-hidden>
-          <div
-            className="h-full rounded-full bg-[#F7C331] transition-[width] duration-300"
-            style={{ width: `${((progress.current - 1) / progress.total) * 100}%` }}
-          />
+    <div className="flex flex-col gap-5 pt-5">
+      <div className="text-center">
+        <div className="relative">
+          <p className="text-lg font-extrabold tabular-nums" aria-live="polite">
+            {progress.label} · {progress.current}/{progress.total}
+          </p>
+          <button
+            type="button"
+            onClick={onQuit}
+            className="absolute top-1/2 right-0 -translate-y-1/2 text-xs font-semibold opacity-60 underline-offset-4 hover:underline"
+          >
+            처음으로
+          </button>
         </div>
-        <button type="button" onClick={onQuit} className="shrink-0 text-xs font-semibold opacity-60 underline-offset-4 hover:underline">
-          처음으로
-        </button>
+        {nextNames && (
+          <p className="mx-auto mt-3 flex max-w-full w-fit items-center rounded-full bg-[#FFF4D1] px-4 py-1.5 text-xs font-semibold ring-1 ring-[#F7C331]/70">
+            <span className="truncate">
+              다음 대결: {nextNames[0]} vs {nextNames[1]}
+            </span>
+          </p>
+        )}
       </div>
 
-      <div className="relative flex min-h-0 flex-1 flex-col gap-3">
-        {photos.map((photo, index) =>
+      <div className="grid grid-cols-2 gap-3">
+        {photos.map((photo) =>
           photo ? (
             <button
               key={photo.photoId}
@@ -223,30 +235,31 @@ function BattleView({
               onClick={() => onChoose(photo.photoId)}
               disabled={picked !== null}
               data-state={picked === null ? undefined : picked === photo.photoId ? "picked" : "dropped"}
-              aria-label={index === 0 ? "위 사진 고르기" : "아래 사진 고르기"}
-              className="worldcup-choice relative min-h-0 flex-1 overflow-hidden rounded-3xl bg-[#F3EEDF] shadow-[0_12px_28px_-14px_rgba(30,58,158,0.4)] outline-offset-4 disabled:cursor-default"
+              aria-label={`${photo.name} 선택`}
+              className={`worldcup-choice flex min-w-0 flex-col rounded-3xl bg-white p-2 text-left shadow-[0_12px_28px_-14px_rgba(30,58,158,0.4)] outline-offset-4 disabled:cursor-default ${
+                picked === photo.photoId ? "ring-4 ring-[#F7C331]" : ""
+              }`}
             >
-              <Image
-                src={photo.src}
-                alt=""
-                fill
-                sizes={BATTLE_SIZES}
-                quality={60}
-                loading="eager"
-                className="object-cover object-[50%_30%]"
-              />
-              {picked === photo.photoId && (
-                <span className="absolute inset-0 rounded-3xl ring-4 ring-inset ring-[#F7C331]" aria-hidden />
-              )}
+              <span className="relative block aspect-[3/4] w-full overflow-hidden rounded-2xl bg-[#F3EEDF]">
+                <Image
+                  src={photo.src}
+                  alt=""
+                  fill
+                  sizes={BATTLE_SIZES}
+                  quality={60}
+                  loading="eager"
+                  className="object-cover object-[50%_25%]"
+                />
+              </span>
+              <span className="my-2 flex min-h-10 items-center justify-center px-1">
+                <span className="line-clamp-2 text-center text-sm leading-5 font-bold break-keep">{photo.name}</span>
+              </span>
+              <span className="mt-auto flex min-h-11 items-center justify-center rounded-full bg-[#1E3A9E] text-base font-extrabold text-white">
+                선택
+              </span>
             </button>
           ) : null
         )}
-        <span
-          className="pointer-events-none absolute top-1/2 left-1/2 z-10 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-4 border-[#FFFBF0] bg-[#F7C331] text-sm font-black text-[#1E3A9E] shadow-md"
-          aria-hidden
-        >
-          VS
-        </span>
       </div>
     </div>
   );
@@ -292,10 +305,10 @@ function ResultView({
         <div style={{ borderRadius: 18, overflow: "hidden", background: "#F3EEDF" }}>
           <Image
             src={champion.src}
-            alt="나의 우승 사진"
+            alt={`나의 우승 사진: ${champion.name}`}
             width={champion.width || 1200}
             height={champion.height || 1600}
-            sizes={BATTLE_SIZES}
+            sizes={RESULT_SIZES}
             quality={75}
             loading="eager"
             crossOrigin="anonymous"
@@ -303,11 +316,16 @@ function ResultView({
             style={{ display: "block", width: "100%", height: "auto" }}
           />
         </div>
-        <p style={{ margin: "14px 0 2px", textAlign: "center", fontSize: 18, fontWeight: 800 }}>
-          다인이 사진 월드컵 · 나의 PICK 🏐
+        {champion.name && (
+          <p style={{ margin: "14px 0 0", textAlign: "center", fontSize: 22, fontWeight: 800, wordBreak: "keep-all" }}>
+            {champion.name}
+          </p>
+        )}
+        <p style={{ margin: "8px 0 2px", textAlign: "center", fontSize: 15, fontWeight: 700 }}>
+          봉드컵 · 나의 PICK 🏐
         </p>
         <p style={{ margin: 0, textAlign: "center", fontSize: 12, fontWeight: 600, opacity: 0.7 }}>
-          No.3 김다인 · 생일 기념
+          Happy Bong&apos;s Day
         </p>
       </div>
 

@@ -8,6 +8,7 @@ import {
   pickWorldcupEntrants,
   roundCount,
   shuffle,
+  upcomingMatch,
   worldcupSize,
   type MatchResult,
   type Tournament,
@@ -98,6 +99,23 @@ describe("tournament", () => {
       expect(currentMatch(final)).toBeNull();
     }
     expect(createTournament(["solo"]).champion).toBe("solo");
+  });
+
+  it("previews the next match only within the same round", () => {
+    let t = createTournament(ids(8));
+    expect(upcomingMatch(t)).toEqual(["p3", "p4"]);
+    t = pickWinner(t, "p1").tournament;
+    t = pickWinner(t, "p3").tournament;
+    expect(upcomingMatch(t)).toEqual(["p7", "p8"]);
+    t = pickWinner(t, "p5").tournament;
+    // 8강 마지막 대결: 다음 라운드 대진은 아직 모름
+    expect(upcomingMatch(t)).toBeNull();
+    t = pickWinner(t, "p7").tournament;
+    expect(upcomingMatch(t)).toEqual(["p5", "p7"]);
+    t = pickWinner(t, "p1").tournament;
+    t = pickWinner(t, "p5").tournament;
+    // 결승
+    expect(upcomingMatch(t)).toBeNull();
   });
 
   it("ignores a pick that is not in the current match", () => {

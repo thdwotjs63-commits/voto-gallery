@@ -75,9 +75,12 @@ export default function WorldcupRanking({
                   {first ? "👑" : index + 1}
                 </span>
                 <span className={`relative shrink-0 overflow-hidden rounded-xl bg-[#F3EEDF] ${first ? "h-16 w-16" : "h-12 w-12"}`}>
-                  <Image src={photo.src} alt={`${index + 1}위 사진`} fill sizes="64px" quality={60} className="object-cover" />
+                  <Image src={photo.src} alt="" fill sizes="64px" quality={60} className="object-cover" />
                 </span>
-                <span className="ml-auto text-sm font-bold tabular-nums">
+                <span className={`line-clamp-2 min-w-0 flex-1 break-keep font-bold ${first ? "text-base" : "text-sm"}`}>
+                  {photo.name}
+                </span>
+                <span className="shrink-0 text-sm font-bold tabular-nums">
                   {winCount.toLocaleString("ko-KR")}표
                 </span>
               </li>

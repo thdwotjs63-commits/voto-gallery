@@ -1,5 +1,6 @@
 import type { VotoCategoryId } from "@/lib/voto-categories";
 import { VOTO_CATEGORIES } from "@/lib/voto-categories";
+import { WORLDCUP_FOLDER_ID_ENV_KEY } from "@/lib/drive-gallery-data";
 
 export type VotoImage = {
   id: string;
@@ -271,10 +272,12 @@ async function listAllImagesUnderFolder(rootFolderId: string, apiKey: string): P
   const unique = new Map<string, DriveFileRow>();
   const queue: string[] = [rootFolderId];
   const visitedFolders = new Set<string>();
+  const worldcupFolderId = process.env[WORLDCUP_FOLDER_ID_ENV_KEY]?.trim();
 
   while (queue.length > 0) {
     const folderId = queue.shift();
     if (!folderId || visitedFolders.has(folderId)) continue;
+    if (worldcupFolderId && folderId === worldcupFolderId) continue;
     visitedFolders.add(folderId);
 
     const [subfolders, imagesInFolder] = await Promise.all([

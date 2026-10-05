@@ -49,9 +49,7 @@ function isExcludedFolderName(name: string, excludedNames: Set<string>): boolean
 
 const GOOGLE_DRIVE_API_KEY_ENV_KEY = "NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY";
 const GOOGLE_DRIVE_FOLDER_ID_ENV_KEY = "NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_ID";
-const META_POSITIONAL_TAGS = new Set(["#hero", "#banner", "#exhibition"]);
-/** 전시 순번 태그 (#exhibition_01 …) — lib/exhibition.ts 와 같은 규칙 */
-const EXHIBITION_ORDER_TAG_RE = /^#exhibition_\d+$/;
+const META_POSITIONAL_TAGS = new Set(["#hero", "#banner"]);
 
 function extractHashtags(text: string): string[] {
   const matches = text.match(/#[\p{L}\p{N}_-]+/gu) ?? [];
@@ -91,22 +89,10 @@ function filenamePartToTag(part: string): string | null {
   return normalized || null;
 }
 
-function isMetaPositionalTag(tag: string): boolean {
-  return META_POSITIONAL_TAGS.has(tag) || EXHIBITION_ORDER_TAG_RE.test(tag);
-}
-
 function extractTagsFromFilename(name: string): string[] {
   const nameNoExt = (name ?? "").replace(/\.[^.]+$/, "");
-  const parts = nameNoExt.split("_");
   const tags: string[] = [];
-  for (let i = 0; i < parts.length; i++) {
-    let part = parts[i];
-    // 파일 이름은 "_" 로 나뉘므로 exhibition_01 을 한 태그로 다시 붙인다
-    const next = parts[i + 1]?.trim() ?? "";
-    if (part.trim().toLowerCase() === "exhibition" && /^\d+$/.test(next)) {
-      part = `${part.trim()}_${next}`;
-      i++;
-    }
+  for (const part of nameNoExt.split("_")) {
     const tag = filenamePartToTag(part);
     if (tag && !tags.includes(tag)) tags.push(tag);
   }
@@ -118,10 +104,10 @@ function dedupeNormalizedTags(rawTags: string[]): string[] {
 }
 
 function extractMetaTagsFromFilename(name: string): string[] {
-  return extractTagsFromFilename(name).filter(isMetaPositionalTag);
+  return extractTagsFromFilename(name).filter((tag) => META_POSITIONAL_TAGS.has(tag));
 }
 
-export function parseTags(description: string, name: string): string[] {
+function parseTags(description: string, name: string): string[] {
   const descTags = dedupeNormalizedTags(extractHashtags(description));
   if (descTags.length > 0) {
     const metaFromName = dedupeNormalizedTags(extractMetaTagsFromFilename(name)).filter(
@@ -202,6 +188,89 @@ const DRIVE_LIST_EXTRA_PARAMS = {
   includeItemsFromAllDrives: "true",
 } as const;
 
+/** 김다인월드컵(/exhibition) 전용 폴더 — 일반 갤러리·피드에서는 항상 제외 */
+export const WORLDCUP_FOLDER_ID_ENV_KEY = "WORLDCUP_DRIVE_FOLDER_ID";
+
+async function listDriveFiles<T>(apiKey: string, query: string, fields: string): Promise<T[]> {
+  let pageToken: string | undefined;
+  const items: T[] = [];
+
+  do {
+    const params = new URLSearchParams({
+      key: apiKey,
+      pageSize: "1000",
+      q: query,
+      fields: `nextPageToken,files(${fields})`,
+      ...DRIVE_LIST_EXTRA_PARAMS,
+    });
+
+    if (pageToken) {
+      params.set("pageToken", pageToken);
+    }
+
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
+      DRIVE_FETCH_INIT
+    );
+
+    if (!response.ok) {
+      throw new Error(`Google Drive API error: ${response.status}`);
+    }
+
+    const data = (await response.json()) as {
+      nextPageToken?: string;
+      files?: T[];
+    };
+
+    items.push(...(data.files ?? []));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return items;
+}
+
+export type DriveFolderImage = {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+};
+
+/** 한 폴더 바로 안의 이미지 파일만 (하위 폴더·동영상 제외), 파일 이름 오름차순 */
+export async function fetchDriveFolderImages(folderId: string): Promise<DriveFolderImage[]> {
+  const apiKey = process.env[GOOGLE_DRIVE_API_KEY_ENV_KEY]?.trim();
+  const id = folderId.trim();
+  if (!apiKey || !id) {
+    throw new Error(
+      `Missing environment variables: ${[
+        ...(!apiKey ? [GOOGLE_DRIVE_API_KEY_ENV_KEY] : []),
+        ...(!id ? ["folderId"] : []),
+      ].join(", ")}`
+    );
+  }
+
+  const files = await listDriveFiles<{
+    id?: string;
+    name?: string;
+    mimeType?: string;
+    imageMediaMetadata?: { width?: number; height?: number };
+  }>(
+    apiKey,
+    `'${id}' in parents and mimeType contains 'image/' and trashed = false`,
+    "id,name,mimeType,imageMediaMetadata(width,height)"
+  );
+
+  return files
+    .filter((file) => file.id && file.mimeType?.startsWith("image/"))
+    .map((file) => ({
+      id: (file.id ?? "").trim(),
+      name: file.name ?? "",
+      width: file.imageMediaMetadata?.width ?? 1200,
+      height: file.imageMediaMetadata?.height ?? 1800,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+}
+
 type DriveFileRow = {
   id: string;
   name: string;
@@ -225,7 +294,7 @@ function assignPositionalTags(tags: string[]): {
 } {
   const withTags = tags
     .slice(3)
-    .filter((tag) => !isMetaPositionalTag(tag) && hasKorean(tag));
+    .filter((tag) => !META_POSITIONAL_TAGS.has(tag) && hasKorean(tag));
   return {
     dateTag: tags[0],
     locationTag: tags[1],
@@ -311,43 +380,13 @@ export async function fetchDriveGalleryImages(
   }
 
   const driveApiKey = apiKey;
+  const fetchFiles = <T,>(query: string, fields: string) =>
+    listDriveFiles<T>(driveApiKey, query, fields);
 
-  async function fetchFiles<T>(query: string, fields: string): Promise<T[]> {
-    let pageToken: string | undefined;
-    const items: T[] = [];
-
-    do {
-      const params = new URLSearchParams({
-        key: driveApiKey,
-        pageSize: "1000",
-        q: query,
-        fields: `nextPageToken,files(${fields})`,
-        ...DRIVE_LIST_EXTRA_PARAMS,
-      });
-
-      if (pageToken) {
-        params.set("pageToken", pageToken);
-      }
-
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
-        DRIVE_FETCH_INIT
-      );
-
-      if (!response.ok) {
-        throw new Error(`Google Drive API error: ${response.status}`);
-      }
-
-      const data = (await response.json()) as {
-        nextPageToken?: string;
-        files?: T[];
-      };
-
-      items.push(...(data.files ?? []));
-      pageToken = data.nextPageToken;
-    } while (pageToken);
-
-    return items;
+  // 월드컵 전용 폴더는 어떤 경로로 닿더라도 일반 갤러리에 넣지 않는다
+  const worldcupFolderId = process.env[WORLDCUP_FOLDER_ID_ENV_KEY]?.trim();
+  if (worldcupFolderId && worldcupFolderId !== driveFolderId) {
+    excludedFolderIds.add(worldcupFolderId);
   }
 
   let rootFolderName = "";
