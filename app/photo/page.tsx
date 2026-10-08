@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FlipHorizontal2, RotateCcw, SwitchCamera } from "lucide-react";
@@ -49,7 +49,7 @@ import {
 type Step = "frame" | "capture" | "result";
 
 /** public/frames PNG 교체 시 rev만 올리면 썸네일·칸 감지 캐시가 갱신됩니다 */
-const FRAME_PNG_REV = 3;
+const FRAME_PNG_REV = 4;
 
 function frameAssetSrc(path: string) {
   return `${path}?v=${FRAME_PNG_REV}`;
@@ -75,10 +75,29 @@ const OVERLAY_FRAMES: OverlayFrameDef[] = [
     src: frameAssetSrc("/frames/hillstate-national.png"),
   },
   {
-    id: "baeyuna",
-    label: "배유나 선수 커피차 기념",
-    src: frameAssetSrc("/frames/baeyuna.png"),
+    id: "bongchef",
+    label: "봉셰프 네컷",
+    src: frameAssetSrc("/frames/bongchef.png"),
     boothOnly: true,
+  },
+  {
+    id: "hyundai-dongsaeng",
+    label: "현대 동생 네컷 (후배전용)",
+    src: frameAssetSrc("/frames/ds.png"),
+    boothOnly: true,
+  },
+  {
+    id: "hyundai-unnie",
+    label: "현대 언니 네컷 (선배전용)",
+    src: frameAssetSrc("/frames/unnie.png"),
+    boothOnly: true,
+  },
+  {
+    id: "bongchef2",
+    label: "봉셰프 네컷 2",
+    src: frameAssetSrc("/frames/bongchef2.png"),
+    boothOnly: true,
+    hidden: true,
   },
 ];
 
@@ -279,6 +298,8 @@ export default function PhotoPage() {
   const [stripExpanded, setStripExpanded] = useState(false);
   const [step, setStep] = useState<Step>("frame");
   const [frameDef, setFrameDef] = useState<OverlayFrameDef>(DEFAULT_FRAME);
+  /** ?frame= 으로 연 숨김 프레임 — 그 방문에서만 목록 맨 앞에 보여 준다 */
+  const [unlockedHiddenFrame, setUnlockedHiddenFrame] = useState<OverlayFrameDef | null>(null);
   const [layout, setLayout] = useState<FrameLayout | null>(null);
   const [layoutLoading, setLayoutLoading] = useState(false);
   const [cellsInvalid, setCellsInvalid] = useState(false);
@@ -353,7 +374,9 @@ export default function PhotoPage() {
     setBoothMode(booth);
     boothModeRef.current = booth;
 
-    setFrameDef(resolveInitialFrame(OVERLAY_FRAMES, booth, params.get("frame")?.trim()));
+    const initialFrame = resolveInitialFrame(OVERLAY_FRAMES, booth, params.get("frame")?.trim());
+    setFrameDef(initialFrame);
+    setUnlockedHiddenFrame(initialFrame.hidden ? initialFrame : null);
   }, []);
 
   useEffect(() => {
@@ -406,11 +429,28 @@ export default function PhotoPage() {
     void loadLayoutForFrame(frameDef);
   }, [frameDef, loadLayoutForFrame]);
 
+  /** 행사 모드: 1열 행사 프레임(크게) / 2열 팀코리아(작게). 일반 모드는 한 줄 */
+  const frameRows = useMemo(() => {
+    const listed = [
+      ...(unlockedHiddenFrame ? [unlockedHiddenFrame] : []),
+      ...listFramesForMode(OVERLAY_FRAMES, boothMode),
+    ];
+    const eventFrames = listed.filter((f) => f.boothOnly);
+    const regularFrames = listed.filter((f) => !f.boothOnly);
+    if (eventFrames.length === 0 || regularFrames.length === 0) {
+      return [{ key: "all", title: null, compact: false, frames: listed }];
+    }
+    return [
+      { key: "event", title: "행사 프레임", compact: false, frames: eventFrames },
+      { key: "team-korea", title: "팀코리아", compact: true, frames: regularFrames },
+    ];
+  }, [boothMode, unlockedHiddenFrame]);
+
   /** 모바일 가로 스크롤 피커는 목록 앞에 프레임이 끼어들어도 기존 카드에 스냅이 남아 있어서 선택 카드로 맞춰 줌 */
   useEffect(() => {
     if (step !== "frame") return;
-    const picker = framePickerRef.current;
-    const card = picker?.querySelector<HTMLElement>('[aria-selected="true"]');
+    const card = framePickerRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    const picker = card?.closest<HTMLElement>(".photo-page__framePicker");
     if (!picker || !card) return;
     const pickerRect = picker.getBoundingClientRect();
     const cardRect = card.getBoundingClientRect();
@@ -1633,29 +1673,40 @@ export default function PhotoPage() {
         {step === "frame" ? (
           <div className="space-y-4">
             <p className="photo-page__sub text-sm">프레임을 골라주세요.</p>
-            <div ref={framePickerRef} className="photo-page__framePicker" role="listbox" aria-label="프레임 선택">
-              {listFramesForMode(OVERLAY_FRAMES, boothMode).map((f) => {
-                const selected = f.id === frameDef.id;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    role="option"
-                    aria-selected={selected}
-                    onClick={() => handleSelectFrame(f)}
-                    className={`photo-page__frameCard${selected ? " photo-page__frameCard--selected" : ""}`}
+            <div ref={framePickerRef} className="space-y-3">
+              {frameRows.map((row) => (
+                <div key={row.key}>
+                  {row.title ? <p className="photo-page__frameRowTitle">{row.title}</p> : null}
+                  <div
+                    className={`photo-page__framePicker${row.compact ? " photo-page__framePicker--compact" : ""}`}
+                    role="listbox"
+                    aria-label={row.title ?? "프레임 선택"}
                   >
-                    <div className="photo-page__frameThumb">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={f.src} alt="" className="photo-page__frameThumbImg" />
-                    </div>
-                    <p className="photo-page__frameCardLabel">{f.label}</p>
-                    {f.desc ? (
-                      <p className="photo-page__sub photo-page__frameCardDesc">{f.desc}</p>
-                    ) : null}
-                  </button>
-                );
-              })}
+                    {row.frames.map((f) => {
+                      const selected = f.id === frameDef.id;
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          onClick={() => handleSelectFrame(f)}
+                          className={`photo-page__frameCard${selected ? " photo-page__frameCard--selected" : ""}`}
+                        >
+                          <div className="photo-page__frameThumb">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={f.src} alt="" className="photo-page__frameThumbImg" />
+                          </div>
+                          <p className="photo-page__frameCardLabel">{f.label}</p>
+                          {f.desc ? (
+                            <p className="photo-page__sub photo-page__frameCardDesc">{f.desc}</p>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
             {!boothMode ? countdownPicker : null}
             {!boothMode ? (

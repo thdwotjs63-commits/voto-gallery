@@ -158,6 +158,39 @@
   font-size: 11px;
 }
 
+.photo-page__frameRowTitle {
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink-sub);
+}
+
+/* 행사 모드 2열(팀코리아): 1열보다 작게 */
+.photo-page__framePicker--compact {
+  gap: 0.75rem;
+}
+
+.photo-page__framePicker--compact .photo-page__frameCard {
+  width: 128px;
+  padding: 0.5rem 0.5rem 0.625rem;
+  border-width: 2px;
+}
+
+.photo-page__framePicker--compact .photo-page__frameThumb,
+.photo-page__framePicker--compact .photo-page__frameThumbImg {
+  height: 180px;
+}
+
+.photo-page__framePicker--compact .photo-page__frameCardLabel {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.photo-page__framePicker--compact .photo-page__frameCardDesc {
+  font-size: 10px;
+}
+
 .photo-page__standGuide {
   text-align: center;
   font-size: 12px;

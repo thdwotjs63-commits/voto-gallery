@@ -1,5 +1,7 @@
+import path from "node:path";
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { mergeRegionsByVerticalOverlap } from "./photo-four-cut";
+import { detectFrameCellsFromPixels, mergeRegionsByVerticalOverlap } from "./photo-four-cut";
 
 type R = {
   x: number;
@@ -32,4 +34,44 @@ describe("mergeRegionsByVerticalOverlap", () => {
     const merged = mergeRegionsByVerticalOverlap([top, bottom]);
     expect(merged).toHaveLength(2);
   });
+});
+
+describe("frame PNG photo cells", () => {
+  async function cellsOf(file: string) {
+    const { data, info } = await sharp(path.join(process.cwd(), "public/frames", file))
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    return {
+      width: info.width,
+      cells: detectFrameCellsFromPixels(data, info.width, info.height, info.channels),
+    };
+  }
+
+  it("finds the four daein cells", async () => {
+    const { cells } = await cellsOf("daein.png");
+    expect(cells).toEqual([
+      { x: 80, y: 80, w: 1042, h: 782 },
+      { x: 80, y: 898, w: 1042, h: 782 },
+      { x: 80, y: 1720, w: 1042, h: 782 },
+      { x: 80, y: 2538, w: 1042, h: 782 },
+    ]);
+  });
+
+  it.each(["bongchef.png", "bongchef2.png", "ds.png", "unnie.png"])(
+    "%s has the same cells as daein (scaled to its size)",
+    async (file) => {
+      const daein = await cellsOf("daein.png");
+      const frame = await cellsOf(file);
+      const scale = frame.width / daein.width;
+      expect(frame.cells).toHaveLength(4);
+      frame.cells.forEach((cell, i) => {
+        const expected = daein.cells[i];
+        for (const key of ["x", "y", "w", "h"] as const) {
+          expect(Math.abs(cell[key] - expected[key] * scale)).toBeLessThanOrEqual(1);
+        }
+      });
+    },
+    20_000
+  );
 });

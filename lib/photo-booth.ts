@@ -83,24 +83,31 @@ export function isPhotoBoothMode(searchParams: URLSearchParams): boolean {
   return searchParams.get("booth") === "1";
 }
 
-type BoothVisibleFrame = { id: string; boothOnly?: boolean };
+type BoothVisibleFrame = { id: string; boothOnly?: boolean; hidden?: boolean };
 
-/** 일반 모드: boothOnly 제외 / 행사 모드: boothOnly 를 맨 앞에 */
+/** 일반 모드: boothOnly 제외 / 행사 모드: boothOnly 를 맨 앞에. hidden 은 항상 제외 */
 export function listFramesForMode<T extends BoothVisibleFrame>(
   frames: readonly T[],
   booth: boolean
 ): T[] {
-  const regular = frames.filter((f) => !f.boothOnly);
+  const listed = frames.filter((f) => !f.hidden);
+  const regular = listed.filter((f) => !f.boothOnly);
   if (!booth) return regular;
-  return [...frames.filter((f) => f.boothOnly), ...regular];
+  return [...listed.filter((f) => f.boothOnly), ...regular];
 }
 
-/** 현재 모드에서 보이지 않는 프레임 id 는 무시하고 목록 첫 프레임으로 */
+/**
+ * 현재 모드에서 보이지 않는 프레임 id 는 무시하고 목록 첫 프레임으로.
+ * hidden 프레임은 목록에 없지만 id 를 정확히 지정하면 연다 (boothOnly 면 행사 모드에서만).
+ */
 export function resolveInitialFrame<T extends BoothVisibleFrame>(
   frames: readonly T[],
   booth: boolean,
   requestedId?: string | null
 ): T {
   const visible = listFramesForMode(frames, booth);
-  return visible.find((f) => f.id === requestedId) ?? visible[0];
+  const hidden = frames.find(
+    (f) => f.hidden && f.id === requestedId && (booth || !f.boothOnly)
+  );
+  return visible.find((f) => f.id === requestedId) ?? hidden ?? visible[0];
 }

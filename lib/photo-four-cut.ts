@@ -8,6 +8,8 @@ export type OverlayFrameDef = {
   src: string;
   /** 행사 모드(?booth=1)에서만 노출 */
   boothOnly?: boolean;
+  /** 어느 모드의 선택 목록에도 안 보임. ?frame=<id> 로 직접 열 때만 사용 */
+  hidden?: boolean;
 };
 
 /** 칸 안 선수(불투명) 픽셀 분포 → 촬영 위치 안내 문구 */
@@ -287,7 +289,7 @@ function mergeRegionBounds(a: RawRegion, b: RawRegion): RawRegion {
 
 /** 세로 범위가 크게 겹치는 투명 덩어리를 한 칸으로 합침 (분리된 사진 구멍) */
 export function mergeRegionsByVerticalOverlap(regions: RawRegion[]): RawRegion[] {
-  let list = regions.map((r) => ({ ...r }));
+  const list = regions.map((r) => ({ ...r }));
   let changed = true;
   while (changed) {
     changed = false;
@@ -360,12 +362,26 @@ export function detectFrameCellsFromImage(img: HTMLImageElement): FrameCellRect[
   if (!ctx) return [];
 
   ctx.drawImage(img, 0, 0);
-  const imageData = ctx.getImageData(0, 0, frameWidth, frameHeight);
-  const { data } = imageData;
+  const { data } = ctx.getImageData(0, 0, frameWidth, frameHeight);
+  return detectFrameCellsFromPixels(data, frameWidth, frameHeight, 4, true);
+}
+
+/** RGBA(또는 채널 수 지정) 픽셀에서 투명 구멍 4칸 찾기 — DOM 없이 테스트 가능 */
+export function detectFrameCellsFromPixels(
+  data: ArrayLike<number>,
+  frameWidth: number,
+  frameHeight: number,
+  channels = 4,
+  log = false
+): FrameCellRect[] {
   const totalPixels = frameWidth * frameHeight;
   const visited = new Uint8Array(totalPixels);
+  const logSummary: typeof logRegionSummary = (...args) => {
+    if (log) logRegionSummary(...args);
+  };
 
-  const isHole = (x: number, y: number) => data[(y * frameWidth + x) * 4 + 3] < ALPHA_HOLE;
+  const isHole = (x: number, y: number) =>
+    data[(y * frameWidth + x) * channels + channels - 1] < ALPHA_HOLE;
 
   const allRegions: RawRegion[] = [];
   const stackX: number[] = [];
@@ -428,13 +444,13 @@ export function detectFrameCellsFromImage(img: HTMLImageElement): FrameCellRect[
     }
   }
 
-  logRegionSummary("all transparent blobs (before filter)", frameWidth, frameHeight, allRegions);
+  logSummary("all transparent blobs (before filter)", frameWidth, frameHeight, allRegions);
 
   const minInteriorArea = totalPixels * MIN_INTERIOR_BLOB_FRAME_FRACTION;
   const interior = allRegions.filter(
     (r) => !r.touchesEdge && r.area >= minInteriorArea
   );
-  logRegionSummary(
+  logSummary(
     `interior blobs (area >= ${MIN_INTERIOR_BLOB_FRAME_FRACTION * 100}% of frame, before merge)`,
     frameWidth,
     frameHeight,
@@ -442,19 +458,21 @@ export function detectFrameCellsFromImage(img: HTMLImageElement): FrameCellRect[
   );
 
   const mergedInterior = mergeRegionsByVerticalOverlap(interior);
-  logRegionSummary("after merging vertically overlapping blobs", frameWidth, frameHeight, mergedInterior);
+  logSummary("after merging vertically overlapping blobs", frameWidth, frameHeight, mergedInterior);
 
   const topFour = [...mergedInterior].sort((a, b) => b.area - a.area).slice(0, 4);
   const cells = topFour
     .sort((a, b) => a.y - b.y || a.x - b.x)
     .map(({ x, y, w, h }) => ({ x, y, w, h }));
 
-  console.log("[photo-four-cut] selected photo cells (top 4 by area, ordered top→bottom)", {
-    frameSize: { width: frameWidth, height: frameHeight },
-    alphaThreshold: ALPHA_HOLE,
-    minInteriorArea,
-    cells: cells.map((c, i) => ({ number: i + 1, ...c })),
-  });
+  if (log) {
+    console.log("[photo-four-cut] selected photo cells (top 4 by area, ordered top→bottom)", {
+      frameSize: { width: frameWidth, height: frameHeight },
+      alphaThreshold: ALPHA_HOLE,
+      minInteriorArea,
+      cells: cells.map((c, i) => ({ number: i + 1, ...c })),
+    });
+  }
 
   if (cells.length < 4) {
     console.warn(
