@@ -118,6 +118,8 @@ type CountdownSeconds = (typeof COUNTDOWN_SECOND_OPTIONS)[number];
 
 const BOOTH_COUNTDOWN_SECOND_OPTIONS = [3, 5, 10] as const;
 type BoothCountdownSeconds = (typeof BOOTH_COUNTDOWN_SECOND_OPTIONS)[number];
+/** 행사에서 3초는 너무 빠르다는 의견이 있어 5초부터 */
+const BOOTH_DEFAULT_COUNTDOWN_SECONDS: BoothCountdownSeconds = 5;
 
 const BOOTH_SHARE_UNSUPPORTED =
   "이 브라우저는 공유를 지원하지 않아요. 사파리로 열어주세요";
@@ -266,7 +268,7 @@ export default function PhotoPage() {
   const cameraSwitchPendingRef = useRef(false);
   const boothModeRef = useRef(false);
   const frameDefRef = useRef(DEFAULT_FRAME);
-  const boothCountdownSecondsRef = useRef<BoothCountdownSeconds>(3);
+  const boothCountdownSecondsRef = useRef<BoothCountdownSeconds>(BOOTH_DEFAULT_COUNTDOWN_SECONDS);
   const boothSaveOriginalsRef = useRef(false);
   const resultShareFileRef = useRef<File | null>(null);
   const boothQrRunRef = useRef(0);
@@ -283,7 +285,9 @@ export default function PhotoPage() {
   const [boothClearMessage, setBoothClearMessage] = useState<string | null>(null);
   const [boothMode, setBoothMode] = useState(false);
   const [boothSettingsOpen, setBoothSettingsOpen] = useState(false);
-  const [boothCountdownSeconds, setBoothCountdownSeconds] = useState<BoothCountdownSeconds>(3);
+  const [boothCountdownSeconds, setBoothCountdownSeconds] = useState<BoothCountdownSeconds>(
+    BOOTH_DEFAULT_COUNTDOWN_SECONDS
+  );
   const [boothSaveOriginals, setBoothSaveOriginals] = useState(false);
   const [boothSavedSeqLabel, setBoothSavedSeqLabel] = useState<string | null>(null);
   const [boothShareHint, setBoothShareHint] = useState<string | null>(null);
@@ -1863,9 +1867,9 @@ export default function PhotoPage() {
               <div className="hidden lg:block" aria-hidden />
             </div>
 
-            {!boothMode && !cameraError && !captureBlocked ? (
+            {!cameraError && !captureBlocked ? (
               <div className="mx-auto mt-3 w-full max-w-md shrink-0 px-0 max-lg:px-2">
-                {countdownPicker}
+                {boothMode ? boothCountdownPicker : countdownPicker}
               </div>
             ) : null}
 
