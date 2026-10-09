@@ -17,7 +17,7 @@ import { BirthdayParticipants } from "./birthday-participants";
 const PHOTO_END_DATE = "2026-10-31";
 
 const BIRTHDAY_URL = "/birthday";
-const PHOTO_URL = "/photo?frame=daein-2";
+const PHOTO_URL = "/photo";
 
 const POPUP_ENABLED = true;
 const POPUP_ID = "home-notice-birthday-4cut";
@@ -214,13 +214,16 @@ export function Daeni4CutHomePopup() {
             <section className="daeni4cut-popup-item">
               <span className="daeni4cut-popup-pill daeni4cut-popup-pill--navy">NEW</span>
               <h3 className="daeni4cut-popup-title">
-                다인네컷 아시안게임 버전 프레임 출시!
+                다인이 생일 기념 봉셰프 네컷 출시! 🎂
               </h3>
+              <p className="daeni4cut-popup-desc">
+                봉셰프의 다이닝룸에서 생일 기념 네컷을 남겨보세요
+              </p>
               <div className="daeni4cut-popup-photoRow">
                 <div className="daeni4cut-popup-thumb">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src="/frames/daein-2.png"
+                    src="/frames/bongchef.png?v=4"
                     alt=""
                     className="daeni4cut-popup-thumbImg"
                   />

@@ -10,6 +10,7 @@ import {
   buildBoothCompositeFileName,
   buildBoothOriginalFileName,
   formatBoothSequenceLabel,
+  isBoothEventFrame,
   isPhotoBoothMode,
   listFramesForMode,
   readBoothKey,
@@ -57,6 +58,13 @@ function frameAssetSrc(path: string) {
 
 const OVERLAY_FRAMES: OverlayFrameDef[] = [
   {
+    id: "bongchef",
+    label: "봉셰프 네컷",
+    desc: "2026 생일기념",
+    src: frameAssetSrc("/frames/bongchef.png"),
+    boothFeatured: true,
+  },
+  {
     id: "daein",
     label: "팀코리아 김다인",
     desc: "2026 아시안게임",
@@ -73,12 +81,6 @@ const OVERLAY_FRAMES: OverlayFrameDef[] = [
     label: "팀코리아 현대건설",
     desc: "2026 아시안게임",
     src: frameAssetSrc("/frames/hillstate-national.png"),
-  },
-  {
-    id: "bongchef",
-    label: "봉셰프 네컷",
-    src: frameAssetSrc("/frames/bongchef.png"),
-    boothOnly: true,
   },
   {
     id: "hyundai-dongsaeng",
@@ -439,8 +441,8 @@ export default function PhotoPage() {
       ...(unlockedHiddenFrame ? [unlockedHiddenFrame] : []),
       ...listFramesForMode(OVERLAY_FRAMES, boothMode),
     ];
-    const eventFrames = listed.filter((f) => f.boothOnly);
-    const regularFrames = listed.filter((f) => !f.boothOnly);
+    const eventFrames = boothMode ? listed.filter(isBoothEventFrame) : [];
+    const regularFrames = boothMode ? listed.filter((f) => !isBoothEventFrame(f)) : listed;
     if (eventFrames.length === 0 || regularFrames.length === 0) {
       return [{ key: "all", title: null, compact: false, frames: listed }];
     }

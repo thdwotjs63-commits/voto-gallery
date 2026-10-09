@@ -8,6 +8,8 @@ export type OverlayFrameDef = {
   src: string;
   /** 행사 모드(?booth=1)에서만 노출 */
   boothOnly?: boolean;
+  /** 일반 모드에도 보이지만, 행사 모드에선 boothOnly 프레임과 함께 행사 프레임 줄(맨 앞)에 놓임 */
+  boothFeatured?: boolean;
   /** 어느 모드의 선택 목록에도 안 보임. ?frame=<id> 로 직접 열 때만 사용 */
   hidden?: boolean;
 };

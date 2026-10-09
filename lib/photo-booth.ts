@@ -83,17 +83,21 @@ export function isPhotoBoothMode(searchParams: URLSearchParams): boolean {
   return searchParams.get("booth") === "1";
 }
 
-type BoothVisibleFrame = { id: string; boothOnly?: boolean; hidden?: boolean };
+type BoothVisibleFrame = { id: string; boothOnly?: boolean; boothFeatured?: boolean; hidden?: boolean };
 
-/** 일반 모드: boothOnly 제외 / 행사 모드: boothOnly 를 맨 앞에. hidden 은 항상 제외 */
+/** 행사 모드에서 행사 프레임 줄에 놓일 프레임 */
+export function isBoothEventFrame(frame: BoothVisibleFrame): boolean {
+  return Boolean(frame.boothOnly || frame.boothFeatured);
+}
+
+/** 일반 모드: boothOnly 제외 / 행사 모드: 행사 프레임(boothOnly·boothFeatured)을 맨 앞에. hidden 은 항상 제외 */
 export function listFramesForMode<T extends BoothVisibleFrame>(
   frames: readonly T[],
   booth: boolean
 ): T[] {
   const listed = frames.filter((f) => !f.hidden);
-  const regular = listed.filter((f) => !f.boothOnly);
-  if (!booth) return regular;
-  return [...listed.filter((f) => f.boothOnly), ...regular];
+  if (!booth) return listed.filter((f) => !f.boothOnly);
+  return [...listed.filter(isBoothEventFrame), ...listed.filter((f) => !isBoothEventFrame(f))];
 }
 
 /**

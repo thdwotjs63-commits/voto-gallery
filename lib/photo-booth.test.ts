@@ -3,6 +3,7 @@ import {
   buildBoothCompositeFileName,
   buildBoothOriginalFileName,
   formatBoothSequenceLabel,
+  isBoothEventFrame,
   listFramesForMode,
   resolveInitialFrame,
 } from "./photo-booth";
@@ -79,5 +80,26 @@ describe("photo-booth frame visibility", () => {
     expect(ids(listFramesForMode(withEventSecret, true))).toEqual(["event", "daein", "daein-2"]);
     expect(resolveInitialFrame(withEventSecret, true, "event-secret").id).toBe("event-secret");
     expect(resolveInitialFrame(withEventSecret, false, "event-secret").id).toBe("daein");
+  });
+
+  describe("boothFeatured", () => {
+    const withFeatured = [
+      { id: "daein" },
+      { id: "featured", boothFeatured: true },
+      { id: "event", boothOnly: true },
+    ];
+
+    it("is listed in regular mode in its original order", () => {
+      expect(ids(listFramesForMode(withFeatured, false))).toEqual(["daein", "featured"]);
+      expect(resolveInitialFrame(withFeatured, false).id).toBe("daein");
+      expect(resolveInitialFrame(withFeatured, false, "featured").id).toBe("featured");
+    });
+
+    it("joins the event frames at the front in booth mode", () => {
+      expect(ids(listFramesForMode(withFeatured, true))).toEqual(["featured", "event", "daein"]);
+      expect(resolveInitialFrame(withFeatured, true).id).toBe("featured");
+      expect(isBoothEventFrame(withFeatured[1])).toBe(true);
+      expect(isBoothEventFrame(withFeatured[0])).toBe(false);
+    });
   });
 });
