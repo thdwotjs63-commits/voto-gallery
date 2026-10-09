@@ -51,10 +51,10 @@ export default async function ExhibitionPage() {
 
         <footer className="mt-14 flex flex-col items-center gap-4">
           <Link
-            href="/records"
-            className="inline-flex min-h-12 items-center rounded-full bg-[#1E3A9E] px-7 text-base font-bold text-white shadow-[0_10px_24px_-10px_rgba(30,58,158,0.6)] transition-transform active:scale-[0.98]"
+            href="/birthday"
+            className="inline-flex min-h-14 w-full max-w-[360px] items-center justify-center rounded-full border-2 border-[#1E3A9E] bg-[#F7C331] px-7 text-center text-lg font-extrabold break-keep text-[#1E3A9E] shadow-[0_12px_28px_-12px_rgba(30,58,158,0.55)] transition-transform active:scale-[0.98]"
           >
-            다인이 기록 보러가기 →
+            💌 다인이에게 생일 축하 메시지 남기기
           </Link>
           <Link href="/" className="text-sm font-semibold opacity-70 underline-offset-4 hover:underline">
             ← 홈으로

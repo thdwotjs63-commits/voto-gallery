@@ -127,3 +127,14 @@ export function buildWorldcupRanking<T extends { photoId: string }>(
   }
   return ranking;
 }
+
+/** 폴링 결과가 직전과 같으면(순서·득표 모두) 화면을 다시 그리지 않으려고 비교 */
+export function isSameRanking<T extends { photoId: string }>(
+  a: readonly RankingEntry<T>[],
+  b: readonly RankingEntry<T>[]
+): boolean {
+  return (
+    a.length === b.length &&
+    a.every((entry, i) => entry.photo.photoId === b[i].photo.photoId && entry.winCount === b[i].winCount)
+  );
+}

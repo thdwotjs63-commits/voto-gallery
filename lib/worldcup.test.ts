@@ -3,6 +3,7 @@ import {
   buildWorldcupRanking,
   createTournament,
   currentMatch,
+  isSameRanking,
   matchProgress,
   pickWinner,
   pickWorldcupEntrants,
@@ -153,5 +154,17 @@ describe("buildWorldcupRanking", () => {
       { photo: { photoId: "p1" }, winCount: 3 },
     ]);
     expect(buildWorldcupRanking(null, photos)).toEqual([]);
+  });
+});
+
+describe("isSameRanking", () => {
+  const p = (photoId: string, winCount: number) => ({ photo: { photoId }, winCount });
+
+  it("is true only when order and counts both match", () => {
+    expect(isSameRanking([p("a", 3), p("b", 1)], [p("a", 3), p("b", 1)])).toBe(true);
+    expect(isSameRanking([], [])).toBe(true);
+    expect(isSameRanking([p("a", 3), p("b", 1)], [p("a", 4), p("b", 1)])).toBe(false);
+    expect(isSameRanking([p("a", 3), p("b", 3)], [p("b", 3), p("a", 3)])).toBe(false);
+    expect(isSameRanking([p("a", 3)], [p("a", 3), p("b", 1)])).toBe(false);
   });
 });
