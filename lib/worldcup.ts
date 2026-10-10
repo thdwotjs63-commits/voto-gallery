@@ -41,6 +41,23 @@ export type Tournament = {
 
 export type MatchResult = { winner: string; loser: string };
 
+/** 집계 그룹 — worldcup_stats.voter_group. 선수·관계자용과 팬용은 따로 센다 */
+export type VoterGroup = "player" | "fan";
+export const DEFAULT_VOTER_GROUP: VoterGroup = "player";
+
+export const WORLDCUP_QUESTION: Record<VoterGroup, string> = {
+  player: "현대건설배구단이 생각하는 최고의 김다인은?",
+  fan: "팬들이 생각하는 최고의 김다인은?",
+};
+
+/** record_worldcup_match RPC 인자. 그룹을 안 주면 player */
+export function worldcupMatchParams(
+  { winner, loser }: MatchResult,
+  group: VoterGroup = DEFAULT_VOTER_GROUP
+): { winner: string; loser: string; grp: VoterGroup } {
+  return { winner, loser, grp: group };
+}
+
 /** 이번 라운드 대결이 다 끝났으면 부전승을 올리고 다음 라운드로 넘긴다 */
 function settle(t: Tournament): Tournament {
   let state = t;

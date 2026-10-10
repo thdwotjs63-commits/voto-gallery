@@ -8,13 +8,17 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
 import {
   createTournament,
   currentMatch,
+  DEFAULT_VOTER_GROUP,
   matchProgress,
   pickWinner,
   roundLabel,
   shuffle,
   upcomingMatch,
+  WORLDCUP_QUESTION,
+  worldcupMatchParams,
   type MatchResult,
   type Tournament,
+  type VoterGroup,
 } from "@/lib/worldcup";
 import { saveCardImage, type SaveCardResult } from "./save-card-image";
 import WorldcupRanking from "./worldcup-ranking";
@@ -25,10 +29,10 @@ const BATTLE_SIZES = "(max-width: 480px) 50vw, 224px";
 const RESULT_SIZES = "(max-width: 480px) 100vw, 448px";
 const CARD_FILE_NAME = "봉드컵_PICK.png";
 
-async function recordMatch({ winner, loser }: MatchResult): Promise<void> {
+async function recordMatch(result: MatchResult, group: VoterGroup): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
-    const { error } = await supabase.rpc("record_worldcup_match", { winner, loser });
+    const { error } = await supabase.rpc("record_worldcup_match", worldcupMatchParams(result, group));
     if (error) console.error("[worldcup] record failed", error);
   } catch (error) {
     console.error("[worldcup] record failed", error);
@@ -51,11 +55,14 @@ function preloadPhoto(photo: ExhibitionPhoto | undefined) {
 export default function Worldcup({
   entrants,
   photos,
+  group = DEFAULT_VOTER_GROUP,
 }: {
   /** 순번 앞에서 고른 4·8·16·32장 (4장 미만이면 빈 배열) */
   entrants: ExhibitionPhoto[];
   /** 랭킹 매칭용 전체 전시 사진 */
   photos: ExhibitionPhoto[];
+  /** 대결 기록·랭킹 집계 그룹 */
+  group?: VoterGroup;
 }) {
   const sectionRef = useRef<HTMLElement>(null);
   const [tournament, setTournament] = useState<Tournament | null>(null);
@@ -97,7 +104,7 @@ export default function Worldcup({
     if (!tournament || picked) return;
     const { tournament: next, result } = pickWinner(tournament, photoId);
     if (!result) return;
-    records.current.push(recordMatch(result));
+    records.current.push(recordMatch(result, group));
 
     const advance = () => {
       setPicked(null);
@@ -118,7 +125,7 @@ export default function Worldcup({
   if (entrants.length === 0) {
     return (
       <section className="pt-8" aria-labelledby="worldcup-title">
-        <WorldcupTitle />
+        <WorldcupTitle group={group} />
         <p className="mt-8 rounded-3xl bg-white px-6 py-10 text-center font-bold shadow-[0_8px_24px_-14px_rgba(30,58,158,0.3)]">
           월드컵 준비 중입니다
         </p>
@@ -130,7 +137,7 @@ export default function Worldcup({
 
   return (
     <section ref={sectionRef} className="scroll-mt-0 pt-8" aria-labelledby="worldcup-title">
-      <WorldcupTitle />
+      <WorldcupTitle group={group} />
       {!tournament && (
         <div className="pt-8">
           <div className="flex flex-col items-center gap-2">
@@ -165,22 +172,20 @@ export default function Worldcup({
 
       {champion && rankingWait && (
         <ResultView key={game} champion={champion} onRestart={start}>
-          <WorldcupRanking photos={photos} waitFor={rankingWait} />
+          <WorldcupRanking photos={photos} group={group} waitFor={rankingWait} />
         </ResultView>
       )}
     </section>
   );
 }
 
-function WorldcupTitle() {
+function WorldcupTitle({ group }: { group: VoterGroup }) {
   return (
     <header className="text-center">
       <h1 id="worldcup-title" className="text-[2.75rem] leading-none font-black tracking-tight">
         <span className="bg-[linear-gradient(transparent_65%,#F7C331_65%)] px-1">봉드컵</span>
       </h1>
-      <p className="mt-3 break-keep text-base font-bold opacity-80">
-        현대건설배구단이 생각하는 최고의 김다인은?
-      </p>
+      <p className="mt-3 break-keep text-base font-bold opacity-80">{WORLDCUP_QUESTION[group]}</p>
     </header>
   );
 }

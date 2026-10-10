@@ -4,7 +4,13 @@ import Image from "next/image";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ExhibitionPhoto } from "@/lib/exhibition";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-client";
-import { buildWorldcupRanking, isSameRanking, type RankingEntry } from "@/lib/worldcup";
+import {
+  buildWorldcupRanking,
+  DEFAULT_VOTER_GROUP,
+  isSameRanking,
+  type RankingEntry,
+  type VoterGroup,
+} from "@/lib/worldcup";
 
 const DEFAULT_POLL_MS = 10_000;
 /** 폴더에서 빠진 사진이 섞여 있어도 5개를 채우도록 넉넉히 읽는다 */
@@ -66,11 +72,15 @@ const STYLES: Record<
   },
 };
 
-async function fetchRanking(photos: ExhibitionPhoto[]): Promise<RankingEntry<ExhibitionPhoto>[] | null> {
+async function fetchRanking(
+  photos: ExhibitionPhoto[],
+  group: VoterGroup
+): Promise<RankingEntry<ExhibitionPhoto>[] | null> {
   if (!isSupabaseConfigured) return null;
   const { data, error } = await supabase
     .from("worldcup_stats")
     .select("photo_id, win_count")
+    .eq("voter_group", group)
     .order("win_count", { ascending: false })
     .limit(FETCH_LIMIT);
   if (error) return null;
@@ -84,11 +94,14 @@ async function fetchRanking(photos: ExhibitionPhoto[]): Promise<RankingEntry<Exh
  */
 export default function WorldcupRanking({
   photos,
+  group = DEFAULT_VOTER_GROUP,
   waitFor,
   pollMs = DEFAULT_POLL_MS,
   size = "default",
 }: {
   photos: ExhibitionPhoto[];
+  /** 이 그룹(worldcup_stats.voter_group) 표만 집계 */
+  group?: VoterGroup;
   waitFor?: Promise<unknown>;
   /** 0 이면 한 번만 조회 */
   pollMs?: number;
@@ -110,7 +123,7 @@ export default function WorldcupRanking({
     const refresh = async () => {
       if (inFlight) return;
       inFlight = true;
-      const entries = await fetchRanking(photos).catch(() => null);
+      const entries = await fetchRanking(photos, group).catch(() => null);
       inFlight = false;
       if (cancelled) return;
       setState((prev) => {
@@ -154,7 +167,7 @@ export default function WorldcupRanking({
       stopPolling();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [photos, waitFor, pollMs]);
+  }, [photos, group, waitFor, pollMs]);
 
   /** 순위가 바뀐 줄은 이전 자리에서 미끄러지듯, 득표가 바뀐 숫자는 살짝 튀게 */
   useLayoutEffect(() => {

@@ -10,6 +10,7 @@ import {
   roundCount,
   shuffle,
   upcomingMatch,
+  worldcupMatchParams,
   worldcupSize,
   type MatchResult,
   type Tournament,
@@ -154,6 +155,19 @@ describe("buildWorldcupRanking", () => {
       { photo: { photoId: "p1" }, winCount: 3 },
     ]);
     expect(buildWorldcupRanking(null, photos)).toEqual([]);
+  });
+});
+
+describe("worldcupMatchParams", () => {
+  const result = { winner: "p1", loser: "p2" };
+
+  it("sends the voter group as grp", () => {
+    expect(worldcupMatchParams(result, "fan")).toEqual({ winner: "p1", loser: "p2", grp: "fan" });
+    expect(worldcupMatchParams(result, "player")).toEqual({ winner: "p1", loser: "p2", grp: "player" });
+  });
+
+  it("falls back to player when no group is given", () => {
+    expect(worldcupMatchParams(result).grp).toBe("player");
   });
 });
 
