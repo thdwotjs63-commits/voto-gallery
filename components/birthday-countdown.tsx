@@ -25,11 +25,11 @@ const STYLES: Record<
   { label: string; urgentTag: string; time: string; urgentTime: string }
 > = {
   banner: {
-    label: "text-[14px] font-semibold text-white/90 sm:text-[15px]",
-    urgentTag: "text-[14px] font-extrabold text-white sm:text-[15px]",
-    time: "min-w-[6.4em] text-[30px] font-extrabold leading-none text-white sm:text-[34px]",
+    label: "text-[14px] font-semibold text-[#00287A]/70 sm:text-[15px]",
+    urgentTag: "text-[14px] font-extrabold text-[#C8202C] sm:text-[15px]",
+    time: "min-w-[6.4em] text-[22px] font-extrabold leading-none text-[#00287A] sm:text-[26px]",
     urgentTime:
-      "rounded-lg bg-white px-2 py-1 text-[30px] font-extrabold leading-none text-[#C8202C] sm:text-[34px]",
+      "rounded-lg bg-[#C8202C] px-2 py-1 text-[22px] font-extrabold leading-none text-white sm:text-[26px]",
   },
   popup: {
     label: "text-[13px] font-semibold text-[#55524b]",

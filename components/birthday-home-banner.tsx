@@ -13,7 +13,7 @@ import { BirthdayParticipants } from "./birthday-participants";
 
 const BIRTHDAY_URL = "/birthday";
 const BANNER_SURFACE =
-  "rounded-2xl bg-[linear-gradient(135deg,#E2343F_0%,#C8202C_55%,#A11620_100%)] text-white shadow-[0_12px_28px_rgba(120,10,20,0.35)]";
+  "rounded-2xl border border-white/60 bg-white/70 text-[#00287A] shadow-[0_8px_24px_rgba(0,40,122,0.12)] backdrop-blur-md supports-[backdrop-filter]:bg-white/60";
 
 /** 홈 첫 화면 생일 배너 — 노출 기간 밖이거나 마운트 전에는 아무것도 그리지 않는다 */
 export function BirthdayHomeBanner({ className = "" }: { className?: string }) {
@@ -45,20 +45,20 @@ export function BirthdayHomeBanner({ className = "" }: { className?: string }) {
     <div className={className}>
       <Link
         href={BIRTHDAY_URL}
-        className={`group mx-auto flex max-w-[1100px] flex-col gap-3.5 break-keep p-5 transition active:scale-[0.99] sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:px-7 sm:py-6 ${BANNER_SURFACE}`}
+        className={`group mx-auto flex max-w-[1100px] flex-col gap-2.5 break-keep px-4 py-3.5 transition active:scale-[0.99] sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-6 sm:py-4 ${BANNER_SURFACE}`}
       >
         <div className="min-w-0">
-          <p className="text-[19px] font-extrabold leading-tight sm:text-[24px]">
+          <p className="text-[16px] font-extrabold leading-tight sm:text-[19px]">
             🎂 봉탄신일이 다가옵니다!
           </p>
-          <p className="mt-1.5 text-[14px] leading-snug text-white/90 sm:text-[16px]">
+          <p className="mt-1 text-[13px] leading-snug text-[#00287A]/70 sm:text-[14px]">
             다인 선수에게 생일 축하 메시지를 남겨주세요
           </p>
-          <BirthdayParticipants className="mt-1.5 text-[13px] font-bold text-white sm:text-[14px]" />
+          <BirthdayParticipants className="mt-1.5 text-[13px] font-bold text-[#00287A] sm:text-[14px]" />
         </div>
-        <div className="flex shrink-0 flex-col gap-3 sm:items-end">
+        <div className="flex shrink-0 flex-col gap-2 sm:items-end">
           <BirthdayCountdown deadline={BIRTHDAY_DEADLINE} label="메시지 마감까지" variant="banner" />
-          <span className="inline-flex min-h-12 items-center justify-center rounded-xl bg-white px-5 text-[15px] font-bold text-[#C8202C] transition group-hover:bg-white/90 sm:min-h-11">
+          <span className="inline-flex min-h-10 items-center justify-center rounded-lg bg-[#00287A] px-4 text-[13px] font-bold text-white transition group-hover:bg-[#00287A]/90 sm:min-h-10 sm:text-[14px]">
             💌 생일 메시지 쓰러 가기
           </span>
         </div>

@@ -2302,7 +2302,7 @@ export default function Home() {
             fill
             priority
             unoptimized
-            className="object-cover object-[center_28%] sm:object-center"
+            className="object-cover object-[center_30%]"
             sizes="100vw"
           />
         </div>
