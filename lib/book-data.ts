@@ -61,6 +61,21 @@ export async function saveHiddenMessageIds(scope: string, ids: string[]): Promis
   return unique;
 }
 
+/** 데모용 외국어 메시지 — 번역 API 를 부르지 않게 번역을 미리 넣어 둔다 */
+const DEMO_FOREIGN: Pick<BookMessage, "message" | "translation" | "sourceLang">[] = [
+  {
+    message: "Selamat ulang tahun kak Dain! Semoga selalu sehat dan bahagia, sukses terus musim ini 💛",
+    translation: "다인 언니 생일 축하해요! 늘 건강하고 행복하길, 이번 시즌도 계속 잘되길 바라요 💛",
+    sourceLang: "id",
+  },
+  {
+    message: "Happy birthday captain! Your sets always make my day. Love from Jakarta 🇮🇩",
+    translation: "생일 축하해요 캡틴! 당신의 토스는 언제나 제 하루를 밝혀줘요. 자카르타에서 사랑을 담아 🇮🇩",
+    sourceLang: "en",
+  },
+  { message: "Happy birthday Dain, stay healthy!", sourceLang: "en" },
+];
+
 /** 개발 환경 레이아웃 확인용 가짜 메시지 (?demo=N) */
 export function buildDemoMessages(count: number): BookMessage[] {
   const samples = [
@@ -70,10 +85,14 @@ export function buildDemoMessages(count: number): BookMessage[] {
     "HAPPY BIRTHDAY 🎂\n\n늘 고마워요\n늘 응원해요\n늘 사랑해요",
   ];
   const start = Date.parse("2026-10-04T03:00:00Z");
-  return Array.from({ length: count }, (_, i) => ({
-    id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
-    nickname: `팬${i + 1}`,
-    message: i % 7 === 6 ? "가나다라마바사 ".repeat(60).trim().slice(0, 500) : samples[i % samples.length],
-    created_at: new Date(start + i * 37 * 60 * 1000).toISOString(),
-  }));
+  return Array.from({ length: count }, (_, i) => {
+    const base = {
+      id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
+      nickname: `팬${i + 1}`,
+      created_at: new Date(start + i * 37 * 60 * 1000).toISOString(),
+    };
+    if (i % 5 === 4) return { ...base, ...DEMO_FOREIGN[Math.floor(i / 5) % DEMO_FOREIGN.length] };
+    const message = i % 7 === 6 ? "가나다라마바사 ".repeat(60).trim().slice(0, 500) : samples[i % samples.length];
+    return { ...base, message };
+  });
 }

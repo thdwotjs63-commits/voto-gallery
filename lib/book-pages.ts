@@ -1,18 +1,30 @@
 /** 생일 메시지북 페이지 구성 — 클라이언트/서버 공용 (순수 함수) */
 
+import { isMostlyKorean, type SourceLanguage } from "./translate";
+
 export type BookMessage = {
   id: string;
   nickname: string;
   message: string;
   created_at: string;
+  /** 외국어 메시지의 한국어 번역 (서버에서 미리 붙임, 실패하면 없음) */
+  translation?: string;
+  sourceLang?: SourceLanguage;
 };
 
 export type BookPage =
   | { kind: "cover" }
   | { kind: "letter" }
   | { kind: "messages"; items: BookMessage[] }
+  | { kind: "foreign-intro" }
+  | { kind: "foreign"; items: BookMessage[] }
   | { kind: "empty" }
   | { kind: "end"; count: number };
+
+/** 한국어가 아닌 메시지 → 책 뒤 "해외 팬들의 메시지" 섹션 */
+export function isForeignBookMessage(message: string): boolean {
+  return !isMostlyKorean(message);
+}
 
 /** 이보다 짧은 메시지 두 개는 한 페이지에 함께 싣는다 */
 const PAIR_ITEM_MAX_WEIGHT = 220;
@@ -28,18 +40,28 @@ export function isLongBookMessage(message: string): boolean {
   return bookMessageWeight(message) > PAIR_ITEM_MAX_WEIGHT;
 }
 
+/** 번역이 붙은 메시지는 원문 아래 번역까지 실리니 둘을 합친 길이로 본다 */
+export function bookItemWeight(item: BookMessage): number {
+  return bookMessageWeight(item.message) + (item.translation ? bookMessageWeight(item.translation) : 0);
+}
+
+export function isLongBookItem(item: BookMessage): boolean {
+  return bookItemWeight(item) > PAIR_ITEM_MAX_WEIGHT;
+}
+
 export function paginateBookMessages(messages: readonly BookMessage[]): BookMessage[][] {
   const pages: BookMessage[][] = [];
   let i = 0;
   while (i < messages.length) {
     const first = messages[i];
     const second = messages[i + 1];
-    const firstWeight = bookMessageWeight(first.message);
+    const firstWeight = bookItemWeight(first);
+    const secondWeight = second ? bookItemWeight(second) : 0;
     if (
       second &&
       firstWeight <= PAIR_ITEM_MAX_WEIGHT &&
-      bookMessageWeight(second.message) <= PAIR_ITEM_MAX_WEIGHT &&
-      firstWeight + bookMessageWeight(second.message) <= PAIR_TOTAL_MAX_WEIGHT
+      secondWeight <= PAIR_ITEM_MAX_WEIGHT &&
+      firstWeight + secondWeight <= PAIR_TOTAL_MAX_WEIGHT
     ) {
       pages.push([first, second]);
       i += 2;
@@ -62,11 +84,20 @@ export function selectVisibleBookMessages(
     .map(({ id, nickname, message, created_at }) => ({ id, nickname, message, created_at }));
 }
 
+/** 표지 → 편지 → 한국어 메시지 → (있으면) 해외 팬 구분 페이지 + 외국어 메시지 → 끝 */
 export function buildBookPages(messages: readonly BookMessage[]): BookPage[] {
-  const body: BookPage[] =
-    messages.length === 0
-      ? [{ kind: "empty" }]
-      : paginateBookMessages(messages).map((items) => ({ kind: "messages", items }));
+  if (messages.length === 0) {
+    return [{ kind: "cover" }, { kind: "letter" }, { kind: "empty" }, { kind: "end", count: 0 }];
+  }
+  const korean = messages.filter((m) => !isForeignBookMessage(m.message));
+  const foreign = messages.filter((m) => isForeignBookMessage(m.message));
+  const body: BookPage[] = paginateBookMessages(korean).map((items) => ({ kind: "messages", items }));
+  if (foreign.length > 0) {
+    body.push(
+      { kind: "foreign-intro" },
+      ...paginateBookMessages(foreign).map((items): BookPage => ({ kind: "foreign", items }))
+    );
+  }
   return [{ kind: "cover" }, { kind: "letter" }, ...body, { kind: "end", count: messages.length }];
 }
 

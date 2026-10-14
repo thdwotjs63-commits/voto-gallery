@@ -58,6 +58,31 @@ describe("buildBookPages", () => {
     expect(pages.at(-1)).toEqual({ kind: "end", count: 1 });
   });
 
+  it("moves foreign messages behind a foreign-intro page", () => {
+    const pages = buildBookPages([
+      msg("생일 축하해요"),
+      msg("Selamat ulang tahun kak Dain"),
+      msg("다인 선수 최고"),
+      msg("Happy birthday captain"),
+    ]);
+    expect(pages.map((p) => p.kind)).toEqual(["cover", "letter", "messages", "foreign-intro", "foreign", "end"]);
+    const korean = pages.flatMap((p) => (p.kind === "messages" ? p.items : []));
+    const foreign = pages.flatMap((p) => (p.kind === "foreign" ? p.items : []));
+    expect(korean.map((m) => m.message)).toEqual(["생일 축하해요", "다인 선수 최고"]);
+    expect(foreign.map((m) => m.message)).toEqual(["Selamat ulang tahun kak Dain", "Happy birthday captain"]);
+    expect(pages.at(-1)).toEqual({ kind: "end", count: 4 });
+  });
+
+  it("has no foreign section when every message is Korean", () => {
+    expect(buildBookPages([msg("축하해요")]).map((p) => p.kind)).not.toContain("foreign-intro");
+  });
+
+  it("counts the translation when pairing foreign messages", () => {
+    const withTranslation = { ...msg("Happy birthday ".repeat(10).trim()), translation: "생일 축하해요 ".repeat(20).trim() };
+    const pages = buildBookPages([withTranslation, msg("Love you")]);
+    expect(pages.filter((p) => p.kind === "foreign").map((p) => (p.kind === "foreign" ? p.items.length : 0))).toEqual([1, 1]);
+  });
+
   it("handles 100 messages", () => {
     const list = Array.from({ length: 100 }, (_, i) => msg(i % 3 === 0 ? "가".repeat(260) : "축하해요"));
     const pages = buildBookPages(list);
@@ -69,7 +94,7 @@ describe("buildBookPages", () => {
 
 describe("selectVisibleBookMessages", () => {
   it("drops hidden messages and the end page count follows", () => {
-    const list = [msg("a"), msg("b"), msg("c")];
+    const list = [msg("가"), msg("나"), msg("다")];
     const visible = selectVisibleBookMessages(list, [list[1].id]);
     expect(visible.map((m) => m.id)).toEqual([list[0].id, list[2].id]);
     expect(buildBookPages(visible).at(-1)).toEqual({ kind: "end", count: 2 });

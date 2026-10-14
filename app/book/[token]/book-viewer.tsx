@@ -10,7 +10,14 @@ import {
   type PointerEvent,
 } from "react";
 import { BOOK_DATE_LABEL, BOOK_EDITOR_LETTER, BOOK_TITLE_LINES } from "@/lib/book-content";
-import { formatBookDate, isLongBookMessage, type BookMessage, type BookPage } from "@/lib/book-pages";
+import {
+  formatBookDate,
+  isLongBookItem,
+  isLongBookMessage,
+  type BookMessage,
+  type BookPage,
+} from "@/lib/book-pages";
+import type { SourceLanguage } from "@/lib/translate";
 
 const SWIPE_MIN_PX = 48;
 const FIT_MIN = 0.75;
@@ -142,13 +149,9 @@ function BookPageContent({ page }: { page: BookPage }) {
     case "cover":
       return (
         <div className="book-cover">
-          <span className="book-brush book-brush--red-1" aria-hidden />
-          <span className="book-brush book-brush--red-2" aria-hidden />
-          <span className="book-brush book-brush--red-3" aria-hidden />
-          <span className="book-brush book-brush--navy-1" aria-hidden />
-          <span className="book-brush book-brush--navy-2" aria-hidden />
-          <span className="book-brush book-brush--navy-3" aria-hidden />
-          <p className="book-cover-eyebrow">DAENI.KR · BIRTHDAY BOOK</p>
+          <span className="book-cover-photo" aria-hidden />
+          <span className="book-cover-veil" aria-hidden />
+          <p className="book-cover-eyebrow">BIRTHDAY MESSAGE BOOK</p>
           <h1 className="book-cover-title">
             {BOOK_TITLE_LINES.map((line) => (
               <span key={line}>{line}</span>
@@ -167,7 +170,6 @@ function BookPageContent({ page }: { page: BookPage }) {
               <p key={i}>{p}</p>
             ))}
           </div>
-          <p className="book-letter-sign">{BOOK_EDITOR_LETTER.signature}</p>
         </div>
       );
     case "messages":
@@ -175,6 +177,28 @@ function BookPageContent({ page }: { page: BookPage }) {
         <div className="book-sheet book-messages">
           {page.items.map((item) => (
             <BookMessageCard key={item.id} item={item} />
+          ))}
+        </div>
+      );
+    case "foreign-intro":
+      return (
+        <div className="book-sheet book-center book-foreign-intro">
+          <p className="book-foreign-intro-emoji" aria-hidden>
+            🌏
+          </p>
+          <h2 className="book-foreign-intro-title">해외 팬들의 메시지</h2>
+          <p className="book-foreign-intro-desc">
+            다른 나라 팬들이 보내준 축하예요.
+            <br />
+            원문과 번역을 함께 담았어요.
+          </p>
+        </div>
+      );
+    case "foreign":
+      return (
+        <div className="book-sheet book-messages">
+          {page.items.map((item) => (
+            <ForeignMessageCard key={item.id} item={item} />
           ))}
         </div>
       );
@@ -208,6 +232,32 @@ function BookMessageCard({ item }: { item: BookMessage }) {
         <span>From.</span> {item.nickname}
       </p>
       <p className="book-message-text">{item.message}</p>
+      <p className="book-message-date">{formatBookDate(item.created_at)}</p>
+    </article>
+  );
+}
+
+const LANGUAGE_LABEL: Record<SourceLanguage, string> = {
+  id: "인도네시아어",
+  en: "영어",
+  ja: "일본어",
+};
+
+function ForeignMessageCard({ item }: { item: BookMessage }) {
+  const language = item.sourceLang ? LANGUAGE_LABEL[item.sourceLang] : "외국어";
+  return (
+    <article className={`book-message${isLongBookItem(item) ? " book-message--long" : ""}`}>
+      <p className="book-message-from">
+        <span>From.</span> {item.nickname}
+      </p>
+      <p className="book-message-text">{item.message}</p>
+      <p className="book-message-lang">({language})</p>
+      {item.translation ? (
+        <div className="book-message-translation" lang="ko">
+          <span className="book-translation-badge">번역</span>
+          <p>{item.translation}</p>
+        </div>
+      ) : null}
       <p className="book-message-date">{formatBookDate(item.created_at)}</p>
     </article>
   );

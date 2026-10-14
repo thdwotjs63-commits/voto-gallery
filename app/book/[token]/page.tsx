@@ -11,6 +11,8 @@ import {
   selectVisibleBookMessages,
   type BookMessage,
 } from "@/lib/book-pages";
+import { attachBookTranslations } from "@/lib/book-translations";
+import { BookGate } from "./book-gate";
 import { BookViewer } from "./book-viewer";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +64,16 @@ async function loadVisibleMessages(): Promise<BookMessage[]> {
   return selectVisibleBookMessages(messages, hiddenIds);
 }
 
+/** 외국어 메시지에 번역을 미리 붙인다. 번역이 통째로 실패해도 원문으로 책은 연다 */
+async function withTranslations(messages: BookMessage[]): Promise<BookMessage[]> {
+  try {
+    return await attachBookTranslations(messages);
+  } catch (error) {
+    console.error("[book] translation failed", error);
+    return messages;
+  }
+}
+
 export default async function BookPage({ params, searchParams }: Props) {
   const { token } = await params;
   if (!isValidBookToken(token)) notFound();
@@ -69,7 +81,8 @@ export default async function BookPage({ params, searchParams }: Props) {
   const demoCount = readDemoCount((await searchParams).demo);
   let messages: BookMessage[];
   try {
-    messages = demoCount === null ? await loadVisibleMessages() : buildDemoMessages(demoCount);
+    messages =
+      demoCount === null ? await withTranslations(await loadVisibleMessages()) : buildDemoMessages(demoCount);
   } catch (error) {
     console.error("[book] failed to load messages", error);
     return (
@@ -81,5 +94,9 @@ export default async function BookPage({ params, searchParams }: Props) {
     );
   }
 
-  return <BookViewer pages={buildBookPages(messages)} />;
+  return (
+    <BookGate>
+      <BookViewer pages={buildBookPages(messages)} />
+    </BookGate>
+  );
 }

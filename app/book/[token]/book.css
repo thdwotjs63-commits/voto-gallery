@@ -103,92 +103,67 @@
   }
 }
 
-/* 표지 */
+/* 표지 — 셰프 다인 사진이 흰 안개처럼 비치는 모노톤. 쌓임: 사진 → 흰 막 → 글씨 */
 .book-cover {
   position: relative;
+  isolation: isolate;
   display: flex;
   flex: 1;
   flex-direction: column;
-  justify-content: center;
   overflow: hidden;
-  padding: 40px 30px;
+  padding: 40px 30px 44px;
   background: #fbfaf7;
 }
 
-.book-brush {
+.book-cover-photo,
+.book-cover-veil {
   position: absolute;
-  border-radius: 999px;
-  transform: rotate(-28deg);
+  inset: 0;
+  pointer-events: none;
 }
 
-.book-brush--red-1 {
-  top: -6%;
-  left: -30%;
-  width: 95%;
-  height: 64px;
-  background: var(--book-red);
+.book-cover-photo {
+  z-index: 0;
+  background: url("/hero.jpg") center 28% / cover no-repeat;
+  filter: grayscale(0.15) saturate(0.85);
 }
 
-.book-brush--red-2 {
-  top: 7%;
-  left: -38%;
-  width: 80%;
-  height: 26px;
-  background: var(--book-red);
-  opacity: 0.8;
+/* 위(eyebrow)·아래(제목) 글씨 자리는 더 희게, 얼굴이 있는 가운데는 사진이 조금 더 보이게 */
+.book-cover-veil {
+  z-index: 1;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.86) 0%,
+    rgba(255, 255, 255, 0.6) 22%,
+    rgba(255, 255, 255, 0.52) 42%,
+    rgba(255, 255, 255, 0.78) 62%,
+    rgba(255, 255, 255, 0.9) 100%
+  );
 }
 
-.book-brush--red-3 {
-  top: 13%;
-  left: -20%;
-  width: 48%;
-  height: 10px;
-  background: var(--book-red);
-  opacity: 0.55;
-}
-
-.book-brush--navy-1 {
-  right: -30%;
-  bottom: -5%;
-  width: 95%;
-  height: 70px;
-  background: var(--book-navy);
-}
-
-.book-brush--navy-2 {
-  right: -36%;
-  bottom: 8%;
-  width: 78%;
-  height: 26px;
-  background: var(--book-navy);
-  opacity: 0.8;
-}
-
-.book-brush--navy-3 {
-  right: -18%;
-  bottom: 15%;
-  width: 46%;
-  height: 10px;
-  background: var(--book-navy);
-  opacity: 0.55;
+.book-cover-eyebrow,
+.book-cover-title,
+.book-cover-date,
+.book-cover-number {
+  position: relative;
+  z-index: 2;
 }
 
 .book-cover-eyebrow {
-  position: relative;
   font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.24em;
-  color: var(--book-red);
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  color: #6b6b72;
 }
 
 .book-cover-title {
-  position: relative;
-  margin-top: 14px;
-  font-size: clamp(40px, 12.5vw, 58px);
-  font-weight: 900;
-  line-height: 1.08;
-  letter-spacing: -0.02em;
-  color: var(--book-navy);
+  margin-top: auto;
+  font-size: clamp(24px, 7vw, 30px);
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--book-ink);
+  text-shadow: 0 1px 12px rgba(255, 255, 255, 0.6);
   word-break: keep-all;
 }
 
@@ -196,27 +171,22 @@
   display: block;
 }
 
-.book-cover-title span:nth-child(3) {
-  color: var(--book-red);
-}
-
 .book-cover-date {
-  position: relative;
-  margin-top: 22px;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  color: #55524b;
+  margin-top: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  color: #4a4a52;
 }
 
 .book-cover-number {
   position: absolute;
-  top: 24px;
-  right: 26px;
-  font-size: 22px;
+  right: 30px;
+  bottom: 40px;
+  font-size: 20px;
   font-style: italic;
-  font-weight: 900;
-  color: var(--book-navy);
+  font-weight: 800;
+  color: #4a4a52;
 }
 
 /* 본문 공통 */
@@ -257,15 +227,6 @@
   gap: calc(14px * var(--book-fit, 1));
   font-size: calc(15.5px * var(--book-fit, 1));
   line-height: 1.85;
-}
-
-.book-letter-sign {
-  margin-top: auto;
-  padding-top: 24px;
-  text-align: right;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--book-navy);
 }
 
 .book-messages > :first-child {
@@ -341,6 +302,80 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   color: var(--book-red);
+}
+
+/* 해외 팬들의 메시지 */
+.book-foreign-intro-emoji {
+  font-size: 56px;
+  line-height: 1;
+}
+
+.book-foreign-intro-title {
+  margin-top: 20px;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: var(--book-navy);
+}
+
+.book-foreign-intro-title::after {
+  content: "";
+  display: block;
+  width: 36px;
+  height: 3px;
+  margin: 16px auto 0;
+  border-radius: 999px;
+  background: var(--book-red);
+}
+
+.book-foreign-intro-desc {
+  margin-top: 16px;
+  font-size: 14.5px;
+  line-height: 1.75;
+  color: #55524b;
+}
+
+.book-message-lang {
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: calc(8px * var(--book-fit, 1));
+  border-radius: 999px;
+  background: #e8edfa;
+  padding: 2px 9px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--book-navy);
+}
+
+.book-message-translation {
+  margin-top: calc(10px * var(--book-fit, 1));
+  border-radius: 12px;
+  background: #fff9e8;
+  padding: calc(12px * var(--book-fit, 1)) 14px;
+  box-shadow: inset 3px 0 0 #f7c331;
+}
+
+.book-message-translation p {
+  margin-top: 6px;
+  white-space: pre-wrap;
+  font-size: calc(14.5px * var(--book-fit, 1));
+  line-height: 1.7;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.book-message--long .book-message-translation p {
+  font-size: calc(13.5px * var(--book-fit, 1));
+}
+
+.book-translation-badge {
+  display: inline-block;
+  border-radius: 999px;
+  background: #f7c331;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--book-navy);
 }
 
 .book-print {
