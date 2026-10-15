@@ -5,15 +5,20 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent,
 } from "react";
 import { BOOK_DATE_LABEL, BOOK_EDITOR_LETTER, BOOK_TITLE_LINES } from "@/lib/book-content";
 import {
+  findMessagePagesByNickname,
   formatBookDate,
   isLongBookItem,
   isLongBookMessage,
+  parseBookPageInput,
   type BookMessage,
   type BookPage,
 } from "@/lib/book-pages";
@@ -31,6 +36,13 @@ function fitSheet(sheet: HTMLElement) {
     fit = Math.max(FIT_MIN, fit - FIT_STEP);
     sheet.style.setProperty("--book-fit", fit.toFixed(2));
   }
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+  );
 }
 
 type Direction = "next" | "prev" | null;
@@ -58,25 +70,35 @@ export function BookViewer({ pages }: { pages: BookPage[] }) {
     return () => window.removeEventListener("resize", fitActivePage);
   }, [fitActivePage]);
 
-  const go = useCallback(
-    (delta: 1 | -1) => {
-      const next = Math.min(Math.max(index + delta, 0), total - 1);
+  const jumpTo = useCallback(
+    (target: number) => {
+      const next = Math.min(Math.max(target, 0), total - 1);
       if (next === index) return;
-      setDirection(delta === 1 ? "next" : "prev");
+      setDirection(next > index ? "next" : "prev");
       setIndex(next);
     },
     [index, total]
   );
 
+  const go = useCallback((delta: 1 | -1) => jumpTo(index + delta), [index, jumpTo]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.altKey || event.ctrlKey || event.metaKey || isTypingTarget(event.target)) return;
       if (event.key === "ArrowRight") go(1);
       else if (event.key === "ArrowLeft") go(-1);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [go]);
+
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchToggleRef = useRef<HTMLButtonElement>(null);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    searchToggleRef.current?.focus({ preventScroll: true });
+  }, []);
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (!event.isPrimary) return;
@@ -127,9 +149,7 @@ export function BookViewer({ pages }: { pages: BookPage[] }) {
         >
           ‹
         </button>
-        <p className="book-counter" aria-live="polite">
-          {index + 1} / {total}
-        </p>
+        <PageNumberField index={index} total={total} onJump={jumpTo} />
         <button
           type="button"
           className="book-arrow"
@@ -139,8 +159,190 @@ export function BookViewer({ pages }: { pages: BookPage[] }) {
         >
           ›
         </button>
+        <button
+          ref={searchToggleRef}
+          type="button"
+          className="book-search-toggle"
+          onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
+          aria-label="닉네임으로 메시지 찾기"
+          aria-expanded={searchOpen}
+          aria-controls="book-search"
+        >
+          <SearchIcon />
+        </button>
       </nav>
+
+      <p className="book-visually-hidden" aria-live="polite">
+        {index + 1} / {total} 페이지
+      </p>
+
+      {searchOpen ? (
+        <NicknameSearch
+          pages={pages}
+          currentIndex={index}
+          onPick={(pageIndex) => {
+            jumpTo(pageIndex);
+            closeSearch();
+          }}
+          onClose={closeSearch}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/** 하단 "현재 / 전체" 의 현재 숫자 — 직접 쳐서 엔터·포커스 아웃 하면 그 페이지로 */
+function PageNumberField({
+  index,
+  total,
+  onJump,
+}: {
+  index: number;
+  total: number;
+  onJump: (pageIndex: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const cancelRef = useRef(false);
+
+  const handleBlur = () => {
+    const cancelled = cancelRef.current;
+    cancelRef.current = false;
+    setDraft(null);
+    if (cancelled || draft === null) return;
+    const target = parseBookPageInput(draft, total);
+    if (target !== null) onJump(target);
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    inputRef.current?.blur();
+  };
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.currentTarget.blur();
+    } else if (event.key === "Escape") {
+      cancelRef.current = true;
+      event.currentTarget.blur();
+    }
+  };
+
+  return (
+    <form className="book-counter" onSubmit={handleSubmit}>
+      <input
+        ref={inputRef}
+        className="book-counter-input"
+        style={{ width: `calc(${String(total).length}ch + 14px)` }}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        enterKeyHint="go"
+        autoComplete="off"
+        aria-label={`페이지 번호 (1–${total})`}
+        value={draft ?? String(index + 1)}
+        onFocus={(event) => {
+          const input = event.currentTarget;
+          setDraft(String(index + 1));
+          requestAnimationFrame(() => input.select());
+        }}
+        onChange={(event) => setDraft(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+      />
+      <span className="book-counter-total" aria-hidden>
+        / {total}
+      </span>
+    </form>
+  );
+}
+
+function NicknameSearch({
+  pages,
+  currentIndex,
+  onPick,
+  onClose,
+}: {
+  pages: BookPage[];
+  currentIndex: number;
+  onPick: (pageIndex: number) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const hits = useMemo(() => findMessagePagesByNickname(pages, query), [pages, query]);
+  const hasQuery = query.trim().length > 0;
+
+  return (
+    <div className="book-search-layer">
+      <button type="button" className="book-search-scrim" onClick={onClose} aria-label="검색 닫기" tabIndex={-1} />
+      <div
+        id="book-search"
+        className="book-search"
+        role="dialog"
+        aria-label="닉네임으로 메시지 찾기"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onClose();
+        }}
+      >
+        <form className="book-search-bar" role="search" onSubmit={(event) => event.preventDefault()}>
+          <SearchIcon />
+          <input
+            className="book-search-input"
+            type="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            autoFocus
+            placeholder="닉네임으로 찾기"
+            aria-label="닉네임 검색어"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <button type="button" className="book-search-close" onClick={onClose}>
+            닫기
+          </button>
+        </form>
+
+        {hasQuery ? (
+          hits.length > 0 ? (
+            <>
+              <p className="book-search-count">{hits.length}개 찾았어요</p>
+              <ul className="book-search-results">
+                {hits.map((hit) => (
+                  <li key={`${hit.pageIndex}-${hit.nickname}`}>
+                    <button
+                      type="button"
+                      className="book-search-result"
+                      aria-current={hit.pageIndex === currentIndex ? "page" : undefined}
+                      onClick={() => onPick(hit.pageIndex)}
+                    >
+                      <span className="book-search-name">{hit.nickname}</span>
+                      <span className="book-search-page">· {hit.pageIndex + 1}페이지</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="book-search-empty">검색 결과가 없어요</p>
+          )
+        ) : (
+          <p className="book-search-hint">닉네임 일부만 써도 찾아드려요</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg className="book-search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="M16 16l4.5 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
   );
 }
 

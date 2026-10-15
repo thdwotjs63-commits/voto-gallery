@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBookPages,
+  findMessagePagesByNickname,
   formatBookDate,
   isBookMessageId,
   paginateBookMessages,
+  parseBookPageInput,
   selectVisibleBookMessages,
   type BookMessage,
+  type BookPage,
 } from "./book-pages";
 
 let seq = 0;
@@ -108,6 +111,70 @@ describe("selectVisibleBookMessages", () => {
   it("strips extra fields such as is_public", () => {
     const [row] = selectVisibleBookMessages([{ ...msg("a"), is_public: false } as BookMessage], []);
     expect(Object.keys(row).sort()).toEqual(["created_at", "id", "message", "nickname"]);
+  });
+});
+
+describe("parseBookPageInput", () => {
+  it("turns a 1-based page number into an index", () => {
+    expect(parseBookPageInput("1", 10)).toBe(0);
+    expect(parseBookPageInput("7", 10)).toBe(6);
+  });
+
+  it("clamps out-of-range numbers to the nearest page", () => {
+    expect(parseBookPageInput("0", 10)).toBe(0);
+    expect(parseBookPageInput("999", 10)).toBe(9);
+  });
+
+  it("ignores stray characters and rejects input without digits", () => {
+    expect(parseBookPageInput(" 3쪽 ", 10)).toBe(2);
+    expect(parseBookPageInput("-4", 10)).toBe(3);
+    expect(parseBookPageInput("", 10)).toBeNull();
+    expect(parseBookPageInput("abc", 10)).toBeNull();
+  });
+
+  it("returns null for an empty book", () => {
+    expect(parseBookPageInput("1", 0)).toBeNull();
+  });
+});
+
+describe("findMessagePagesByNickname", () => {
+  function named(nickname: string, message = "생일 축하해요"): BookMessage {
+    return { ...msg(message), nickname };
+  }
+
+  const pages: BookPage[] = [
+    { kind: "cover" },
+    { kind: "letter" },
+    { kind: "messages", items: [named("배구 사랑"), named("다인팬")] },
+    { kind: "messages", items: [named("Dain Lover")] },
+    { kind: "foreign-intro" },
+    { kind: "foreign", items: [named("dainlover_id", "Selamat ulang tahun")] },
+    { kind: "messages", items: [named("다인팬"), named("다인팬")] },
+    { kind: "end", count: 6 },
+  ];
+
+  it("finds partial matches ignoring case and spaces, in page order", () => {
+    expect(findMessagePagesByNickname(pages, "DAIN lover")).toEqual([
+      { nickname: "Dain Lover", pageIndex: 3 },
+      { nickname: "dainlover_id", pageIndex: 5 },
+    ]);
+    expect(findMessagePagesByNickname(pages, "배구사랑")).toEqual([{ nickname: "배구 사랑", pageIndex: 2 }]);
+  });
+
+  it("lists every page of a repeated nickname but once per page", () => {
+    expect(findMessagePagesByNickname(pages, "다인")).toEqual([
+      { nickname: "다인팬", pageIndex: 2 },
+      { nickname: "다인팬", pageIndex: 6 },
+    ]);
+  });
+
+  it("returns nothing for a blank or unmatched query", () => {
+    expect(findMessagePagesByNickname(pages, "   ")).toEqual([]);
+    expect(findMessagePagesByNickname(pages, "없는닉네임")).toEqual([]);
+  });
+
+  it("matches Korean typed in decomposed form", () => {
+    expect(findMessagePagesByNickname(pages, "다인팬".normalize("NFD"))).toHaveLength(2);
   });
 });
 

@@ -101,6 +101,38 @@ export function buildBookPages(messages: readonly BookMessage[]): BookPage[] {
   return [{ kind: "cover" }, { kind: "letter" }, ...body, { kind: "end", count: messages.length }];
 }
 
+/** 사용자가 친 페이지 번호(1부터) → 범위 안으로 보정한 페이지 인덱스. 숫자가 없으면 null */
+export function parseBookPageInput(raw: string, total: number): number | null {
+  if (total <= 0) return null;
+  const digits = raw.replace(/[^0-9]/g, "");
+  if (!digits) return null;
+  const pageNumber = Number(digits);
+  return Math.min(Math.max(pageNumber, 1), total) - 1;
+}
+
+function normalizeNickname(value: string): string {
+  return value.normalize("NFC").replace(/\s+/g, "").toLowerCase();
+}
+
+export type BookNicknameHit = { nickname: string; pageIndex: number };
+
+/** 닉네임 일부(대소문자·공백 무시)로 메시지가 실린 페이지를 책 순서대로 찾는다. 같은 페이지의 같은 닉네임은 한 번만 */
+export function findMessagePagesByNickname(pages: readonly BookPage[], query: string): BookNicknameHit[] {
+  const needle = normalizeNickname(query);
+  if (!needle) return [];
+  const hits: BookNicknameHit[] = [];
+  pages.forEach((page, pageIndex) => {
+    if (page.kind !== "messages" && page.kind !== "foreign") return;
+    const seen = new Set<string>();
+    for (const item of page.items) {
+      if (seen.has(item.nickname) || !normalizeNickname(item.nickname).includes(needle)) continue;
+      seen.add(item.nickname);
+      hits.push({ nickname: item.nickname, pageIndex });
+    }
+  });
+  return hits;
+}
+
 const BOOK_DATE_FORMAT = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Seoul",
   year: "numeric",
