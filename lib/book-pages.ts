@@ -13,7 +13,7 @@ export type BookMessage = {
 };
 
 export type BookPage =
-  | { kind: "cover" }
+  | { kind: "cover"; count: number }
   | { kind: "letter" }
   | { kind: "messages"; items: BookMessage[] }
   | { kind: "foreign-intro" }
@@ -87,7 +87,7 @@ export function selectVisibleBookMessages(
 /** 표지 → 편지 → 한국어 메시지 → (있으면) 해외 팬 구분 페이지 + 외국어 메시지 → 끝 */
 export function buildBookPages(messages: readonly BookMessage[]): BookPage[] {
   if (messages.length === 0) {
-    return [{ kind: "cover" }, { kind: "letter" }, { kind: "empty" }, { kind: "end", count: 0 }];
+    return [{ kind: "cover", count: 0 }, { kind: "letter" }, { kind: "empty" }, { kind: "end", count: 0 }];
   }
   const korean = messages.filter((m) => !isForeignBookMessage(m.message));
   const foreign = messages.filter((m) => isForeignBookMessage(m.message));
@@ -98,7 +98,12 @@ export function buildBookPages(messages: readonly BookMessage[]): BookPage[] {
       ...paginateBookMessages(foreign).map((items): BookPage => ({ kind: "foreign", items }))
     );
   }
-  return [{ kind: "cover" }, { kind: "letter" }, ...body, { kind: "end", count: messages.length }];
+  return [
+    { kind: "cover", count: messages.length },
+    { kind: "letter" },
+    ...body,
+    { kind: "end", count: messages.length },
+  ];
 }
 
 /** 사용자가 친 페이지 번호(1부터) → 범위 안으로 보정한 페이지 인덱스. 숫자가 없으면 null */

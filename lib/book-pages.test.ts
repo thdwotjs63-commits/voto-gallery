@@ -58,6 +58,7 @@ describe("buildBookPages", () => {
   it("wraps message pages with cover, letter and end", () => {
     const pages = buildBookPages([msg("하나")]);
     expect(pages.map((p) => p.kind)).toEqual(["cover", "letter", "messages", "end"]);
+    expect(pages[0]).toEqual({ kind: "cover", count: 1 });
     expect(pages.at(-1)).toEqual({ kind: "end", count: 1 });
   });
 
@@ -143,7 +144,7 @@ describe("findMessagePagesByNickname", () => {
   }
 
   const pages: BookPage[] = [
-    { kind: "cover" },
+    { kind: "cover", count: 6 },
     { kind: "letter" },
     { kind: "messages", items: [named("배구 사랑"), named("다인팬")] },
     { kind: "messages", items: [named("Dain Lover")] },

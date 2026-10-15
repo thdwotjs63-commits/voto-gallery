@@ -361,6 +361,7 @@ function BookPageContent({ page }: { page: BookPage }) {
           </h1>
           <p className="book-cover-date">{BOOK_DATE_LABEL}</p>
           <p className="book-cover-number">#3</p>
+          {page.count > 0 ? <p className="book-cover-count">{page.count}명이 참여해 주었어요</p> : null}
         </div>
       );
     case "letter":
