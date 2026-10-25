@@ -1,4 +1,4 @@
-/** 2025-26 V리그 개막 D-day — 홈 배너용 순수 헬퍼 */
+/** 2026-27 V리그 개막 D-day — 홈 배너용 순수 헬퍼 */
 
 /** 개막일 (한국 날짜 YYYY-MM-DD) */
 export const SEASON_OPENING_DATE_KEY = "2026-10-31";
@@ -28,5 +28,5 @@ export function seasonOpeningDaysLeft(
 
 export function seasonOpeningBannerLabel(daysLeft: number): string {
   if (daysLeft === 0) return "🏐 오늘 V-리그 개막!";
-  return `🏐 2025-26 V-리그 개막 D-${daysLeft}`;
+  return `🏐 2026-27 V-리그 개막 D-${daysLeft}`;
 }

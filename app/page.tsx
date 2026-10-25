@@ -2362,14 +2362,17 @@ export default function Home() {
           }`}
           style={{ transform: `translate3d(0, ${heroTextTranslate}px, 0)` }}
         >
-          <p className="text-[11px] font-bold tracking-[0.32em] text-[#3B82F6] sm:text-[12px]">
+          <p
+            className="text-[11px] font-extrabold tracking-[0.32em] text-white sm:text-[12px]"
+            style={{ textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}
+          >
             NO.3 · SETTER
           </p>
           <h1
             className="mt-2 text-[42px] font-black italic leading-none tracking-tight text-white sm:text-[56px]"
             style={{ fontStretch: "condensed" }}
           >
-            KIM DA-IN
+            KIM DAIN
           </h1>
           <p className="mt-2 text-[13px] font-medium tracking-[0.08em] text-white/80 sm:text-[14px]">
             현대건설 힐스테이트

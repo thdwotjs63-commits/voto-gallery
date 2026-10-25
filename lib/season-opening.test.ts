@@ -23,7 +23,7 @@ describe("seasonOpeningDaysLeft", () => {
 
 describe("seasonOpeningBannerLabel", () => {
   it("uses D-n before opening and a special label on the day", () => {
-    expect(seasonOpeningBannerLabel(6)).toBe("🏐 2025-26 V-리그 개막 D-6");
+    expect(seasonOpeningBannerLabel(6)).toBe("🏐 2026-27 V-리그 개막 D-6");
     expect(seasonOpeningBannerLabel(0)).toBe("🏐 오늘 V-리그 개막!");
   });
 });

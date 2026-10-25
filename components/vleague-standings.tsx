@@ -40,12 +40,12 @@ export function VLeagueStandings({
   return (
     <section
       className={`mx-auto max-w-[1100px] overflow-hidden rounded-2xl border border-[#00287A]/15 bg-white shadow-[0_8px_24px_rgba(0,40,122,0.08)] ${className}`}
-      aria-label="2025-26 V-리그 순위"
+      aria-label="2026-27 V-리그 순위"
     >
       <div className="flex items-start justify-between gap-3 bg-[#00287A] px-4 py-3">
         <div className="min-w-0">
           <h2 className="text-[13px] font-bold tracking-wide text-white sm:text-[14px]">
-            2025-26 V-리그 순위
+            2026-27 V-리그 순위
           </h2>
           <p className="mt-0.5 text-[11px] text-white/70">
             경기 결과가 반영되면 자동 갱신돼요
