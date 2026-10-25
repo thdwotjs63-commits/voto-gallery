@@ -6,9 +6,9 @@ describe("getTeamShort", () => {
     expect(getTeamShort("현대건설")).toEqual({ short: "현", color: "#F7C331" });
     expect(getTeamShort("흥국생명")).toEqual({ short: "흥", color: "#E6007E" });
     expect(getTeamShort("정관장 레드스파크스")).toEqual({ short: "정", color: "#D7152B" });
-    expect(getTeamShort("GS칼텍스")).toEqual({ short: "GS", color: "#418FA5" });
+    expect(getTeamShort("GS칼텍스")).toEqual({ short: "름", color: "#418FA5" });
     expect(getTeamShort("한국도로공사")).toEqual({ short: "도", color: "#283585" });
-    expect(getTeamShort("IBK기업은행")).toEqual({ short: "IBK", color: "#4090D2" });
+    expect(getTeamShort("IBK기업은행")).toEqual({ short: "통", color: "#4090D2" });
     expect(getTeamShort("SOOP SOOPers")).toEqual({ short: "숲", color: "#0A5FBF" });
   });
 

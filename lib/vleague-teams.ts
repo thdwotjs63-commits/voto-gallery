@@ -10,9 +10,9 @@ export const VLEAGUE_TEAMS: readonly VLeagueTeam[] = [
   { match: "현대건설", short: "현", color: "#F7C331" },
   { match: "흥국생명", short: "흥", color: "#E6007E" },
   { match: "정관장", short: "정", color: "#D7152B" },
-  { match: "GS칼텍스", short: "GS", color: "#418FA5" },
+  { match: "GS칼텍스", short: "름", color: "#418FA5" },
   { match: "도로공사", short: "도", color: "#283585" },
-  { match: "IBK", short: "IBK", color: "#4090D2" },
+  { match: "IBK", short: "통", color: "#4090D2" },
   { match: "SOOP", short: "숲", color: "#0A5FBF" },
 ] as const;
 

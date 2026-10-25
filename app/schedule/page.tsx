@@ -86,24 +86,28 @@ function TeamShortChip({ teamName }: { teamName: string }) {
   const { short, color } = getTeamShort(teamName);
   return (
     <span
-      className="inline-flex max-w-[2.75rem] shrink-0 truncate rounded-[3px] px-0.5 py-px text-[9px] font-bold leading-none sm:max-w-none sm:px-1 sm:text-[10px]"
+      className="inline-flex size-3 shrink-0 items-center justify-center rounded-[2px] text-[8px] font-bold leading-none"
       style={{ background: color, color: chipTextColor(color) }}
+      title={teamName}
     >
       {short}
     </span>
   );
 }
 
+/** 모바일 달력 전용: 한글 한 글자 칩 + 작은 vs. 왕관은 위에 두어 가로 폭을 확보 */
 function CalendarMatchShort({ m }: { m: Match }) {
   const showCrown = isHyundaiHomeMatch(m);
   return (
-    <div className="flex min-w-0 items-center gap-0.5 truncate">
+    <div className="flex w-full min-w-0 flex-col items-start gap-px overflow-hidden">
       {showCrown ? (
-        <Crown className="h-2.5 w-2.5 shrink-0 text-amber-500 sm:h-3 sm:w-3" aria-hidden />
+        <Crown className="h-2 w-2 shrink-0 text-amber-500" aria-hidden />
       ) : null}
-      <TeamShortChip teamName={m.teamA} />
-      <span className="shrink-0 text-[8px] font-medium text-zinc-400 sm:text-[9px]">vs</span>
-      <TeamShortChip teamName={m.teamB} />
+      <div className="flex max-w-full items-center gap-px">
+        <TeamShortChip teamName={m.teamA} />
+        <span className="shrink-0 text-[6px] font-medium leading-none text-zinc-400">vs</span>
+        <TeamShortChip teamName={m.teamB} />
+      </div>
     </div>
   );
 }
