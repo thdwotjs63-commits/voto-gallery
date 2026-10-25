@@ -35,7 +35,7 @@ import {
   Twitter,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { BirthdayHomeBanner } from "@/components/birthday-home-banner";
+import { SeasonOpeningBanner } from "@/components/season-opening-banner";
 import { Daeni4CutHomePopup } from "@/components/daeni-4cut-home-popup";
 import { GalleryChangelog } from "@/components/gallery-changelog";
 import { SiteNav } from "@/components/site-nav";
@@ -58,13 +58,13 @@ import {
   resolveGalleryFolderForDateKey,
 } from "@/lib/gallery-date-link";
 import {
+  getHyundaiStreak,
   getNextDaeinMatch,
-  getTeamKoreaRecord,
-  getTeamKoreaMedals,
+  getWeeklyMatches,
   type Match as ScheduleMatch,
 } from "@/lib/schedule-data";
-import { TeamKoreaBadge } from "@/components/team-korea-badge";
-import { MedalRecordList } from "@/components/medal-record";
+import { computeVLeagueStandings } from "@/lib/standings";
+import { VLeagueStandings } from "@/components/vleague-standings";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 import { SITE_URL, buildPublicPageUrl } from "@/lib/seo-metadata";
 import { getLatestSetSuccessCountTotal, isSeasonRecord } from "@/lib/records-data";
@@ -79,8 +79,6 @@ const VOTO_GALLERY_DRIVE_FOLDER_URL =
 /** 홈 배너 — 국제대회 랭킹 계산기 (당분간 false) */
 const SHOW_RANKING_CALCULATOR_BANNER = false;
 
-/** 홈 — 팀코리아 승패·메달 성과 블록 (다시 켤 때 true) */
-const SHOW_HOME_TEAM_KOREA_RECORD = false;
 const FILTER_PILL_BASE =
   "min-h-11 shrink-0 rounded-full border border-[#00287A] px-3.5 py-2 text-xs font-medium transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:opacity-90";
 const FILTER_PILL_ACTIVE = "bg-[#00287A] text-white";
@@ -104,6 +102,24 @@ function formatMatchDate(d: string) {
   const dt = new Date(d + "T00:00:00");
   const days = ["일", "월", "화", "수", "목", "금", "토"];
   return `${dt.getMonth() + 1}월 ${dt.getDate()}일 (${days[dt.getDay()]})`;
+}
+
+function formatMatchWeekdayShort(d: string) {
+  const dt = new Date(`${d}T12:00:00+09:00`);
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))} (${days[dt.getUTCDay()]})`;
+}
+
+function hyundaiMatchLabel(m: ScheduleMatch): string {
+  if ((m.teamA ?? "").includes("현대건설")) return `현대건설 vs ${m.teamB}`;
+  if ((m.teamB ?? "").includes("현대건설")) return `현대건설 vs ${m.teamA}`;
+  return `${m.teamA} vs ${m.teamB}`;
+}
+
+function matchHasFinalScore(m: ScheduleMatch): boolean {
+  const a = Number(m.scoreA);
+  const b = Number(m.scoreB);
+  return Number.isFinite(a) && Number.isFinite(b) && !(a === 0 && b === 0);
 }
 
 declare global {
@@ -1846,13 +1862,18 @@ export default function Home() {
     [scheduleMatches]
   );
 
-  const teamKoreaRecord = useMemo(
-    () => getTeamKoreaRecord(scheduleMatches),
+  const hyundaiStreak = useMemo(
+    () => getHyundaiStreak(scheduleMatches),
     [scheduleMatches]
   );
 
-  const medals = useMemo(
-    () => getTeamKoreaMedals(scheduleMatches),
+  const weeklyMatches = useMemo(
+    () => getWeeklyMatches(scheduleMatches),
+    [scheduleMatches]
+  );
+
+  const vleagueStandings = useMemo(
+    () => computeVLeagueStandings(scheduleMatches),
     [scheduleMatches]
   );
 
@@ -2309,7 +2330,7 @@ export default function Home() {
 
         <div className="absolute inset-0 bg-black/55" />
 
-        <BirthdayHomeBanner className="relative z-10 shrink-0 px-4 pt-4 sm:px-8 sm:pt-6" />
+        <SeasonOpeningBanner className="relative z-10 shrink-0 px-4 pt-4 sm:px-8 sm:pt-6" />
 
         <div
           className={`relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center text-white transition-all duration-1000 ${
@@ -2330,6 +2351,9 @@ export default function Home() {
           <p className="mt-1 text-[11px] tracking-[0.2em] text-zinc-200 sm:text-xs">
             Hyundai Hillstate Volleyball Team
           </p>
+          <span className="mt-2 inline-flex items-center rounded-full border border-white/30 bg-white/10 px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.28em] text-white/85 sm:text-[11px]">
+            2025-26 SEASON
+          </span>
           {heroSetSuccessCount != null ? (
             <Link
               href="/records"
@@ -2414,12 +2438,13 @@ export default function Home() {
       </section>
 
       <div className="mb-6 mt-8 space-y-3 px-5 sm:mt-10 sm:px-8">
-        {SHOW_HOME_TEAM_KOREA_RECORD ? (
-          <>
-            <TeamKoreaBadge record={teamKoreaRecord} />
-            <MedalRecordList medals={medals} />
-          </>
+        {hyundaiStreak?.streakActive && hyundaiStreak.streak >= 2 ? (
+          <div className="mx-auto flex w-fit max-w-[1100px] items-center justify-center gap-2 rounded-full bg-[#1E3A9E] px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(30,58,158,0.22)]">
+            <span aria-hidden>🔥</span>
+            <span>현대건설 {hyundaiStreak.streak}연승 중!</span>
+          </div>
         ) : null}
+
         {nextMatch ? (
           <div
             onClick={() => router.push("/schedule")}
@@ -2469,6 +2494,102 @@ export default function Home() {
             </div>
           </div>
         ) : null}
+
+        <section
+          className="mx-auto max-w-[1100px] overflow-hidden rounded-2xl border border-[#00287A]/15 bg-white shadow-[0_8px_24px_rgba(0,40,122,0.08)]"
+          aria-label="이번주·다음주 현대건설 경기"
+        >
+          {(
+            [
+              { key: "this", title: "이번주 경기", matches: weeklyMatches.thisWeek },
+              { key: "next", title: "다음주 경기", matches: weeklyMatches.nextWeek },
+            ] as const
+          ).map((week, weekIndex) => (
+            <div
+              key={week.key}
+              className={weekIndex === 0 ? "border-b border-[#00287A]/10" : ""}
+            >
+              <div className="flex items-center justify-between gap-3 bg-[#00287A] px-4 py-2.5">
+                <h2 className="text-[13px] font-bold tracking-wide text-white sm:text-[14px]">
+                  {week.title}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => router.push("/schedule")}
+                  className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white/90 transition hover:bg-white/25"
+                >
+                  전체 일정
+                  <ArrowRight className="h-3 w-3" aria-hidden />
+                </button>
+              </div>
+              {week.matches.length === 0 ? (
+                <p className="px-4 py-4 text-[13px] text-[#00287A]/55">
+                  예정된 경기가 없어요
+                </p>
+              ) : (
+                <ul className="divide-y divide-[#00287A]/08">
+                  {week.matches.map((m) => {
+                    const scored = matchHasFinalScore(m);
+                    return (
+                      <li key={`${m.date}-${m.startTime}-${m.teamA}-${m.teamB}`}>
+                        <button
+                          type="button"
+                          onClick={() => router.push("/schedule")}
+                          className="flex w-full items-start justify-between gap-3 px-4 py-3.5 text-left transition hover:bg-[#F4F7FC]"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[12px] font-semibold tabular-nums text-[#00287A]">
+                                {formatMatchWeekdayShort(m.date)}
+                              </span>
+                              {m.startTime ? (
+                                <span className="text-[12px] tabular-nums text-[#00287A]/70">
+                                  {m.startTime}
+                                </span>
+                              ) : null}
+                              {m.homeAway === "홈" || m.homeAway === "원정" ? (
+                                <span
+                                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                                    m.homeAway === "홈"
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-[#E8EEF8] text-[#00287A]"
+                                  }`}
+                                >
+                                  {m.homeAway}
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 truncate text-[14px] font-semibold text-[#0C2444] sm:text-[15px]">
+                              {hyundaiMatchLabel(m)}
+                            </p>
+                            <p className="mt-0.5 truncate text-[11px] text-[#00287A]/60">
+                              {[m.venue, m.tournament].filter(Boolean).join(" · ")}
+                            </p>
+                          </div>
+                          {scored ? (
+                            <span className="shrink-0 rounded-lg bg-[#00287A] px-2.5 py-1.5 text-[13px] font-bold tabular-nums text-white">
+                              {m.scoreA}:{m.scoreB}
+                            </span>
+                          ) : (
+                            <span className="shrink-0 self-center text-[11px] font-medium text-[#00287A]/40">
+                              예정
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          ))}
+        </section>
+
+        <VLeagueStandings
+          standings={vleagueStandings}
+          maxRows={5}
+          showScheduleLink
+        />
 
         <div
           onClick={() => router.push("/saju")}

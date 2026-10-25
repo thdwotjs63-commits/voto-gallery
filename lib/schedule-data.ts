@@ -119,6 +119,126 @@ export function getTeamKoreaRecord(rows: Match[]): TeamKoreaRecord | null {
   return { wins, losses, streak, streakActive };
 }
 
+/** 한국 시간 YYYY-MM-DD */
+function seoulDateKey(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+/** YYYY-MM-DD 를 한국 달력 날짜로 해석한 뒤 요일(일=0 … 토=6) */
+function seoulWeekday(dateKey: string): number {
+  return new Date(`${dateKey}T12:00:00+09:00`).getUTCDay();
+}
+
+/** YYYY-MM-DD + n일 (한국 달력 기준) */
+function addSeoulDays(dateKey: string, days: number): string {
+  const ms = Date.parse(`${dateKey}T12:00:00+09:00`) + days * 24 * 60 * 60 * 1000;
+  return seoulDateKey(new Date(ms));
+}
+
+function hasFinalScore(row: Match): boolean {
+  const a = Number(row.scoreA);
+  const b = Number(row.scoreB);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  if (a === 0 && b === 0) return false;
+  return true;
+}
+
+export function isHyundaiConstructionMatch(row: Match): boolean {
+  return (
+    row.dain ||
+    (row.teamA ?? "").includes("현대건설") ||
+    (row.teamB ?? "").includes("현대건설")
+  );
+}
+
+function hyundaiIsTeamA(row: Match): boolean {
+  return (row.teamA ?? "").includes("현대건설");
+}
+
+function sortMatchesByDateTime(a: Match, b: Match): number {
+  return a.date === b.date
+    ? (a.startTime ?? "").localeCompare(b.startTime ?? "")
+    : a.date.localeCompare(b.date);
+}
+
+export type HyundaiStreak = {
+  /** 최근 경기부터 이어진 연승 수 */
+  streak: number;
+  /** true면 직전 경기 승(연승 중), false면 직전 경기 패 */
+  streakActive: boolean;
+};
+
+/**
+ * 현대건설이 참가한 완료 경기만 모아 최근부터의 연승을 센다.
+ * today 가 있으면 그 날(한국) 이후 경기는 제외한다.
+ */
+export function getHyundaiStreak(rows: Match[], today?: Date): HyundaiStreak | null {
+  const todayKey = today ? seoulDateKey(today) : null;
+  const games = rows.filter((r) => {
+    if (!r.date) return false;
+    if (todayKey && r.date > todayKey) return false;
+    if (!(r.teamA ?? "").includes("현대건설") && !(r.teamB ?? "").includes("현대건설")) {
+      return false;
+    }
+    return hasFinalScore(r);
+  });
+
+  if (games.length === 0) return null;
+
+  games.sort(sortMatchesByDateTime);
+
+  const results = games.map((r) => {
+    const a = Number(r.scoreA);
+    const b = Number(r.scoreB);
+    const isA = hyundaiIsTeamA(r);
+    const myScore = isA ? a : b;
+    const oppScore = isA ? b : a;
+    return myScore > oppScore;
+  });
+
+  let streak = 0;
+  for (let i = results.length - 1; i >= 0; i--) {
+    if (results[i]) streak++;
+    else break;
+  }
+
+  return { streak, streakActive: results[results.length - 1] === true };
+}
+
+export type WeeklyMatches = {
+  thisWeek: Match[];
+  nextWeek: Match[];
+};
+
+/**
+ * 이번주(오늘~이번주 일요일) / 다음주(다음주 월~일)의 현대건설 경기.
+ * 주 경계는 한국 시간, 월요일 시작 ~ 일요일 끝.
+ */
+export function getWeeklyMatches(rows: Match[], today: Date = new Date()): WeeklyMatches {
+  const todayKey = seoulDateKey(today);
+  const weekday = seoulWeekday(todayKey); // 일=0 … 토=6
+  const daysUntilSunday = weekday === 0 ? 0 : 7 - weekday;
+  const thisSunday = addSeoulDays(todayKey, daysUntilSunday);
+  const nextMonday = addSeoulDays(thisSunday, 1);
+  const nextSunday = addSeoulDays(nextMonday, 6);
+
+  const hyundai = rows.filter((r) => r.date && isHyundaiConstructionMatch(r));
+
+  const thisWeek = hyundai
+    .filter((r) => r.date >= todayKey && r.date <= thisSunday)
+    .sort(sortMatchesByDateTime);
+  const nextWeek = hyundai
+    .filter((r) => r.date >= nextMonday && r.date <= nextSunday)
+    .sort(sortMatchesByDateTime);
+
+  return { thisWeek, nextWeek };
+}
+
 export type MedalRecord = {
   tournament: string;
   medal: "gold" | "silver" | "bronze";

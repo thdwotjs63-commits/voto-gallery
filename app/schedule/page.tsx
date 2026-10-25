@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus, ExternalLink, Calculator, Crown } from "lucide-react";
 import { groupByDate, buildTournamentICS, buildAllScheduleICS, getTeamKoreaRecord, getTeamKoreaMedals, type Match, type DaySchedule } from "@/lib/schedule-data";
+import { computeVLeagueStandings } from "@/lib/standings";
 import { getHoliday, getDayType } from "@/lib/holidays";
 import { SiteNav } from "@/components/site-nav";
 import { PageShareButton } from "@/components/page-share-button";
 import { TeamKoreaBadge } from "@/components/team-korea-badge";
 import { MedalRecordList } from "@/components/medal-record";
+import { VLeagueStandings } from "@/components/vleague-standings";
 
 const CATEGORY_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   "브이리그": { bg: "#E6F1FB", text: "#0C447C", label: "브이리그" },
@@ -232,6 +234,9 @@ export default function SchedulePage() {
 
   const teamKoreaRecord = useMemo(() => getTeamKoreaRecord(matches), [matches]);
   const medals = useMemo(() => getTeamKoreaMedals(matches), [matches]);
+  const vleagueStandings = useMemo(() => computeVLeagueStandings(matches), [matches]);
+  /** 팀코리아 성과는 2026년 9월까지 달력에서만 노출 */
+  const showTeamKoreaAchievements = monthPrefix <= "2026-09";
 
   const downloadICS = (ics: string, filename: string) => {
     const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
@@ -268,9 +273,15 @@ export default function SchedulePage() {
         </div>
       </header>
 
-      <div className="px-4 sm:px-8">
-        <TeamKoreaBadge record={teamKoreaRecord} />
-        <MedalRecordList medals={medals} />
+      {showTeamKoreaAchievements ? (
+        <div className="px-4 sm:px-8">
+          <TeamKoreaBadge record={teamKoreaRecord} />
+          <MedalRecordList medals={medals} />
+        </div>
+      ) : null}
+
+      <div className="mx-auto max-w-[1100px] px-4 pb-4 sm:px-8">
+        <VLeagueStandings standings={vleagueStandings} />
       </div>
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20 sm:px-8 sm:pb-0">
