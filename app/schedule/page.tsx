@@ -60,6 +60,19 @@ function isHyundaiHomeMatch(m: Match): boolean {
   return m.homeAway === "홈";
 }
 
+/** 브이리그 경기들의 round가 모두 같으면 그 값, 없거나 섞이면 null */
+function calendarDayRoundLabel(matches: readonly Match[]): string | null {
+  const rounds = [
+    ...new Set(
+      matches
+        .filter((m) => (m.category ?? "").trim() === "브이리그")
+        .map((m) => (m.round ?? "").trim())
+        .filter(Boolean)
+    ),
+  ];
+  return rounds.length === 1 ? rounds[0]! : null;
+}
+
 function matchBlockStyle(category: string, matches: Match[]) {
   const base = catStyle(category);
   if (matches.some(isHyundaiMatch)) {
@@ -432,6 +445,7 @@ export default function SchedulePage() {
                 const visibleMatches = dayMatches.slice(0, 2);
                 const extraCount = Math.max(0, dayMatches.length - 2);
                 const hasHyundai = day?.groups.some((g) => g.matches.some(isHyundaiMatch)) ?? false;
+                const roundLabel = calendarDayRoundLabel(dayMatches);
                 return (
                   <button
                     key={key}
@@ -440,9 +454,16 @@ export default function SchedulePage() {
                     title={holiday ?? undefined}
                     className={`min-h-[3.75rem] rounded-md border p-0.5 text-left align-top text-xs text-zinc-900 sm:min-h-[100px] sm:p-1.5 ${hasHyundai ? "bg-amber-50" : "bg-white"} ${isSelected ? "border-[1.5px] border-[#00287A]" : hasHyundai ? "border-amber-200" : "border-zinc-200"} ${day ? `cursor-pointer ${hasHyundai ? "hover:bg-amber-100/80" : "hover:bg-zinc-50"}` : "cursor-default"}`}
                   >
-                    <span className={`block text-[10px] font-medium sm:text-[11px] ${calendarDateClass(key, inMonth)}`}>
-                      {date.getDate()}
-                    </span>
+                    <div className="flex items-start justify-between gap-0.5">
+                      <span className={`text-[10px] font-medium leading-none sm:text-[11px] ${calendarDateClass(key, inMonth)}`}>
+                        {date.getDate()}
+                      </span>
+                      {roundLabel ? (
+                        <span className="shrink-0 text-[9px] font-medium leading-none text-zinc-400 sm:text-[10px]">
+                          {roundLabel}
+                        </span>
+                      ) : null}
+                    </div>
                     {holiday ? (
                       <span className="mt-0.5 hidden truncate text-[7px] leading-tight text-red-400 sm:block">
                         {holiday}
