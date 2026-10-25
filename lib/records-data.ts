@@ -213,6 +213,11 @@ export function isPlayedRecord(r: PlayerRecord): boolean {
   return !isDidNotPlay(r);
 }
 
+/** 출전한 경기 수 (미출전 제외). 통산이면 시즌 시트를 모두 합쳐 넘긴다. */
+export function getPlayedGamesCount(records: readonly PlayerRecord[]): number {
+  return records.filter(isPlayedRecord).length;
+}
+
 export function averagePercent(values: string[]): string {
   const nums = values.map(parsePercent).filter((v): v is number => v !== null);
   if (!nums.length) return "-";

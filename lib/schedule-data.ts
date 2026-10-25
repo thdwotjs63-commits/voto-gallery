@@ -33,11 +33,13 @@ export type NextMatch = {
   date: string;
   startTime: string;
   tournament: string;
+  round: string;
   teamA: string;
   teamB: string;
   venue: string;
   scoreA: string;
   scoreB: string;
+  homeAway: string;
 };
 
 export function getNextDaeinMatch(rows: Match[], today = new Date()): NextMatch | null {
@@ -54,11 +56,13 @@ export function getNextDaeinMatch(rows: Match[], today = new Date()): NextMatch 
     date: m.date,
     startTime: m.startTime ?? "",
     tournament: m.tournament ?? "",
+    round: m.round ?? "",
     teamA: m.teamA ?? "",
     teamB: m.teamB ?? "",
     venue: m.venue ?? "",
     scoreA: m.scoreA ?? "",
     scoreB: m.scoreB ?? "",
+    homeAway: m.homeAway ?? "",
   };
 }
 

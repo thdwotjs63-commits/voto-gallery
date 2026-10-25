@@ -16,11 +16,6 @@ import Link from "next/link";
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Autoplay, EffectFade, Pagination } from "swiper/modules";
-import "swiper/css";
-import "swiper/css/effect-fade";
-import "swiper/css/pagination";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
@@ -63,11 +58,15 @@ import {
   getWeeklyMatches,
   type Match as ScheduleMatch,
 } from "@/lib/schedule-data";
-import { computeVLeagueStandings } from "@/lib/standings";
-import { VLeagueStandings } from "@/components/vleague-standings";
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 import { SITE_URL, buildPublicPageUrl } from "@/lib/seo-metadata";
-import { getLatestSetSuccessCountTotal, isSeasonRecord } from "@/lib/records-data";
+import {
+  getLatestSetSuccessCountTotal,
+  getPlayedGamesCount,
+  isSeasonRecord,
+  type PlayerRecord,
+} from "@/lib/records-data";
+import { CAREER_TOTAL } from "@/lib/season-summary";
 
 /** 트윗 작성창에 넣을 갤러리 제목 */
 const GALLERY_SHARE_TITLE = "voto gallery — Captured Moments of Kim Da-in";
@@ -110,7 +109,7 @@ function formatMatchWeekdayShort(d: string) {
   return `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))} (${days[dt.getUTCDay()]})`;
 }
 
-function hyundaiMatchLabel(m: ScheduleMatch): string {
+function hyundaiMatchLabel(m: { teamA: string; teamB: string }): string {
   if ((m.teamA ?? "").includes("현대건설")) return `현대건설 vs ${m.teamB}`;
   if ((m.teamB ?? "").includes("현대건설")) return `현대건설 vs ${m.teamA}`;
   return `${m.teamA} vs ${m.teamB}`;
@@ -619,6 +618,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [heroSetSuccessCount, setHeroSetSuccessCount] = useState<number | null>(null);
+  const [heroGamesCount, setHeroGamesCount] = useState<number | null>(null);
   const [scheduleMatches, setScheduleMatches] = useState<ScheduleMatch[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [photoDetailModalImage, setPhotoDetailModalImage] = useState<DriveImage | null>(
@@ -631,7 +631,6 @@ export default function Home() {
   const [sortOrder, setSortOrder] = useState<"latest" | "oldest" | "popular">(
     "latest"
   );
-  const [activeBestIndex, setActiveBestIndex] = useState(0);
   const [showStickyHeader, setShowStickyHeader] = useState(false);
   const [guestbookEntries, setGuestbookEntries] = useState<GuestbookEntry[]>([]);
   const [guestNickname, setGuestNickname] = useState("");
@@ -747,8 +746,18 @@ export default function Home() {
       .then((data) => {
         if (!mounted) return;
         const sheets = Array.isArray(data?.sheets) ? data.sheets : [];
-        const records = (sheets[0]?.records ?? []).filter(isSeasonRecord);
-        setHeroSetSuccessCount(getLatestSetSuccessCountTotal(records));
+        const latestSheetRecords = ((sheets[0]?.records ?? []) as PlayerRecord[]).filter(
+          isSeasonRecord
+        );
+        setHeroSetSuccessCount(getLatestSetSuccessCountTotal(latestSheetRecords));
+        const careerRecords = sheets
+          .flatMap((sheet: { records?: PlayerRecord[] }) =>
+            Array.isArray(sheet?.records) ? sheet.records : []
+          )
+          .filter(isSeasonRecord);
+        const games = getPlayedGamesCount(careerRecords);
+        // 시즌 시트가 일부만 있을 수 있어, 집계가 비면 통산 요약(CAREER_TOTAL)으로 보완
+        setHeroGamesCount(games > 0 ? games : CAREER_TOTAL.games > 0 ? CAREER_TOTAL.games : null);
       })
       .catch(() => {});
     return () => {
@@ -1849,8 +1858,22 @@ export default function Home() {
       if (likeDiff !== 0) return likeDiff;
       return a.id.localeCompare(b.id);
     };
-    return [...images].sort(byLikes).slice(0, 3);
+    return [...images].sort(byLikes).slice(0, 6);
   }, [images, likesByPhoto]);
+
+  const heroStatItems = useMemo(() => {
+    const items: { value: number; label: string; href?: string }[] = [];
+    if (heroSetSuccessCount != null) {
+      items.push({ value: heroSetSuccessCount, label: "SET SUCCESS", href: "/records" });
+    }
+    if (heroGamesCount != null) {
+      items.push({ value: heroGamesCount, label: "GAMES", href: "/records" });
+    }
+    if (!loading && !error && images.length > 0) {
+      items.push({ value: images.length, label: "PHOTOS" });
+    }
+    return items;
+  }, [heroSetSuccessCount, heroGamesCount, loading, error, images.length]);
 
   const heroImage = useMemo(
     () => images.find((image) => image.tags.includes("#hero")) ?? images[0],
@@ -1869,11 +1892,6 @@ export default function Home() {
 
   const weeklyMatches = useMemo(
     () => getWeeklyMatches(scheduleMatches),
-    [scheduleMatches]
-  );
-
-  const vleagueStandings = useMemo(
-    () => computeVLeagueStandings(scheduleMatches),
     [scheduleMatches]
   );
 
@@ -2323,45 +2341,75 @@ export default function Home() {
             fill
             priority
             unoptimized
-            className="object-cover object-[center_30%]"
+            className="object-cover object-[center_25%]"
             sizes="100vw"
           />
         </div>
 
-        <div className="absolute inset-0 bg-black/55" />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.35) 45%, rgba(0,0,0,0.8) 100%)",
+          }}
+        />
 
         <SeasonOpeningBanner className="relative z-10 shrink-0 px-4 pt-4 sm:px-8 sm:pt-6" />
 
         <div
-          className={`relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center text-white transition-all duration-1000 ${
+          className={`relative z-10 flex min-h-0 flex-1 flex-col items-center justify-end px-6 pb-16 text-center text-white transition-all duration-1000 sm:pb-20 ${
             heroVisible ? "opacity-100" : "opacity-0"
           }`}
           style={{ transform: `translate3d(0, ${heroTextTranslate}px, 0)` }}
         >
-          <p className="mt-1 text-[15px] font-bold tracking-[0.18em] text-zinc-100 sm:text-[19px]">
-            No.3 Kim Dain{" "}
-            <Link
-              href="/voto"
-              aria-label="대한민국"
-              className="inline text-inherit no-underline cursor-default hover:text-inherit focus-visible:outline-none"
-            >
-              <span aria-hidden>🇰🇷</span>
-            </Link>
+          <p className="text-[11px] font-bold tracking-[0.32em] text-[#3B82F6] sm:text-[12px]">
+            NO.3 · SETTER
           </p>
-          <p className="mt-1 text-[11px] tracking-[0.2em] text-zinc-200 sm:text-xs">
-            Hyundai Hillstate Volleyball Team
+          <h1
+            className="mt-2 text-[42px] font-black italic leading-none tracking-tight text-white sm:text-[56px]"
+            style={{ fontStretch: "condensed" }}
+          >
+            KIM DA-IN
+          </h1>
+          <p className="mt-2 text-[13px] font-medium tracking-[0.08em] text-white/80 sm:text-[14px]">
+            현대건설 힐스테이트
           </p>
-          <span className="mt-2 inline-flex items-center rounded-full border border-white/30 bg-white/10 px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.28em] text-white/85 sm:text-[11px]">
-            2025-26 SEASON
-          </span>
-          {heroSetSuccessCount != null ? (
-            <Link
-              href="/records"
-              aria-label="경기 기록 보기"
-              className="mt-2 inline-flex items-center rounded-full bg-white px-3.5 py-1 text-[11px] font-semibold tabular-nums tracking-wide text-zinc-900 shadow-[0_4px_12px_rgba(0,0,0,0.18)] transition hover:bg-zinc-50 active:scale-95 sm:text-xs"
-            >
-              set + {heroSetSuccessCount.toLocaleString("ko-KR")}
-            </Link>
+
+          {heroStatItems.length > 0 ? (
+            <div className="mt-5 flex items-stretch justify-center gap-0 divide-x divide-white/20">
+              {heroStatItems.map((stat) => {
+                const inner = (
+                  <>
+                    <span
+                      className="text-[22px] font-black italic tabular-nums leading-none tracking-tight text-white sm:text-[26px]"
+                      style={{ fontStretch: "condensed" }}
+                    >
+                      {stat.value.toLocaleString("ko-KR")}
+                    </span>
+                    <span className="mt-1.5 text-[9px] font-semibold tracking-[0.18em] text-white/55 sm:text-[10px]">
+                      {stat.label}
+                    </span>
+                  </>
+                );
+                return stat.href ? (
+                  <Link
+                    key={stat.label}
+                    href={stat.href}
+                    aria-label={`${stat.label} ${stat.value.toLocaleString("ko-KR")}`}
+                    className="flex min-w-[88px] flex-col items-center px-4 py-1 transition hover:opacity-90 sm:min-w-[100px] sm:px-5"
+                  >
+                    {inner}
+                  </Link>
+                ) : (
+                  <div
+                    key={stat.label}
+                    className="flex min-w-[88px] flex-col items-center px-4 py-1 sm:min-w-[100px] sm:px-5"
+                  >
+                    {inner}
+                  </div>
+                );
+              })}
+            </div>
           ) : null}
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
@@ -2456,39 +2504,47 @@ export default function Home() {
             }}
             role="button"
             tabIndex={0}
-            className="relative mx-auto h-[120px] max-w-[1100px] cursor-pointer overflow-hidden rounded-2xl bg-[#1a3a6b]"
+            className="relative mx-auto max-w-[1100px] cursor-pointer overflow-hidden rounded-2xl border border-[#3B82F6]/25 bg-gradient-to-br from-[#13257A] to-[#0A1550] p-4 shadow-[0_12px_32px_rgba(10,21,80,0.35)] sm:p-5"
           >
-            <img
-              src="/banner.jpg"
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover"
-              loading="eager"
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(to top, rgba(0,18,50,0.85) 0%, rgba(0,18,50,0.2) 60%, transparent 100%)",
-              }}
-            />
-            <div className="absolute inset-x-4 bottom-3 flex items-end justify-between gap-3">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -right-2 top-1/2 -translate-y-1/2 select-none text-[88px] font-black italic leading-none tracking-tighter text-[#3B82F6]/20 sm:text-[110px]"
+              style={{ fontStretch: "condensed" }}
+            >
+              VS
+            </span>
+            <div className="relative z-10 flex items-end justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[10px] font-medium tracking-wide text-white/80">
-                  다가오는 일정
+                <p className="text-[11px] font-bold tracking-[0.16em] text-[#3B82F6]">
+                  {[nextMatch.tournament, nextMatch.round].filter(Boolean).join(" ") ||
+                    "다가오는 일정"}
                 </p>
-                <p className="mt-0.5 truncate text-[18px] font-semibold text-white sm:text-[20px]">
-                  {nextMatch.teamA} vs {nextMatch.teamB}
+                <p
+                  className="mt-1.5 truncate text-[20px] font-black italic leading-tight tracking-tight text-white sm:text-[24px]"
+                  style={{ fontStretch: "condensed" }}
+                >
+                  {hyundaiMatchLabel(nextMatch)}
                 </p>
-                <p className="mt-0.5 text-[11px] text-white/90">
-                  {formatMatchDate(nextMatch.date)}
-                  {nextMatch.startTime && ` · ${nextMatch.startTime}`}
-                  {nextMatch.venue && ` · ${nextMatch.venue}`}
-                </p>
-                <p className="mt-0.5 truncate text-[10px] text-white/70">
-                  {nextMatch.tournament}
-                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-white/80">
+                  <span>
+                    {formatMatchDate(nextMatch.date)}
+                    {nextMatch.startTime ? ` · ${nextMatch.startTime}` : ""}
+                    {nextMatch.venue ? ` · ${nextMatch.venue}` : ""}
+                  </span>
+                  {nextMatch.homeAway === "홈" || nextMatch.homeAway === "원정" ? (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        nextMatch.homeAway === "홈"
+                          ? "bg-amber-400/90 text-[#0A1550]"
+                          : "bg-white/15 text-white"
+                      }`}
+                    >
+                      {nextMatch.homeAway}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-              <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-[#0C2444]">
+              <span className="relative z-10 flex shrink-0 items-center gap-1 rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-[#0A1550]">
                 일정 <ArrowRight className="h-3 w-3" aria-hidden />
               </span>
             </div>
@@ -2496,136 +2552,108 @@ export default function Home() {
         ) : null}
 
         <section
-          className="mx-auto max-w-[1100px] overflow-hidden rounded-2xl border border-[#00287A]/15 bg-white shadow-[0_8px_24px_rgba(0,40,122,0.08)]"
+          className="mx-auto grid max-w-[1100px] gap-3 sm:grid-cols-2"
           aria-label="이번주·다음주 현대건설 경기"
         >
           {(
             [
-              { key: "this", title: "이번주 경기", matches: weeklyMatches.thisWeek },
-              { key: "next", title: "다음주 경기", matches: weeklyMatches.nextWeek },
+              { key: "this", title: "이번주", matches: weeklyMatches.thisWeek },
+              { key: "next", title: "다음주", matches: weeklyMatches.nextWeek },
             ] as const
-          ).map((week, weekIndex) => (
+          ).map((week) => (
             <div
               key={week.key}
-              className={weekIndex === 0 ? "border-b border-[#00287A]/10" : ""}
+              className="overflow-hidden rounded-2xl border border-[#3B82F6]/20 bg-gradient-to-b from-[#13257A] to-[#0A1550] shadow-[0_10px_28px_rgba(10,21,80,0.28)]"
             >
-              <div className="flex items-center justify-between gap-3 bg-[#00287A] px-4 py-2.5">
-                <h2 className="text-[13px] font-bold tracking-wide text-white sm:text-[14px]">
-                  {week.title}
-                </h2>
+              <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-[#0A1550]/80 px-3.5 py-2.5">
+                <h2 className="text-[13px] font-bold tracking-wide text-white">{week.title}</h2>
                 <button
                   type="button"
                   onClick={() => router.push("/schedule")}
-                  className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white/90 transition hover:bg-white/25"
+                  className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-1 text-[10px] font-semibold text-white/80 transition hover:bg-white/20"
                 >
-                  전체 일정
+                  일정
                   <ArrowRight className="h-3 w-3" aria-hidden />
                 </button>
               </div>
               {week.matches.length === 0 ? (
-                <p className="px-4 py-4 text-[13px] text-[#00287A]/55">
-                  예정된 경기가 없어요
+                <p className="flex min-h-[88px] items-center justify-center px-4 py-5 text-center text-[13px] text-white/35">
+                  예정 경기 없음
                 </p>
               ) : (
-                <ul className="divide-y divide-[#00287A]/08">
-                  {week.matches.map((m) => {
-                    const scored = matchHasFinalScore(m);
-                    return (
-                      <li key={`${m.date}-${m.startTime}-${m.teamA}-${m.teamB}`}>
-                        <button
-                          type="button"
-                          onClick={() => router.push("/schedule")}
-                          className="flex w-full items-start justify-between gap-3 px-4 py-3.5 text-left transition hover:bg-[#F4F7FC]"
-                        >
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="text-[12px] font-semibold tabular-nums text-[#00287A]">
-                                {formatMatchWeekdayShort(m.date)}
-                              </span>
-                              {m.startTime ? (
-                                <span className="text-[12px] tabular-nums text-[#00287A]/70">
-                                  {m.startTime}
-                                </span>
-                              ) : null}
-                              {m.homeAway === "홈" || m.homeAway === "원정" ? (
-                                <span
-                                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                                    m.homeAway === "홈"
-                                      ? "bg-amber-100 text-amber-800"
-                                      : "bg-[#E8EEF8] text-[#00287A]"
-                                  }`}
-                                >
-                                  {m.homeAway}
-                                </span>
-                              ) : null}
-                            </div>
-                            <p className="mt-1 truncate text-[14px] font-semibold text-[#0C2444] sm:text-[15px]">
-                              {hyundaiMatchLabel(m)}
-                            </p>
-                            <p className="mt-0.5 truncate text-[11px] text-[#00287A]/60">
-                              {[m.venue, m.tournament].filter(Boolean).join(" · ")}
-                            </p>
-                          </div>
-                          {scored ? (
-                            <span className="shrink-0 rounded-lg bg-[#00287A] px-2.5 py-1.5 text-[13px] font-bold tabular-nums text-white">
-                              {m.scoreA}:{m.scoreB}
-                            </span>
-                          ) : (
-                            <span className="shrink-0 self-center text-[11px] font-medium text-[#00287A]/40">
-                              예정
-                            </span>
-                          )}
-                        </button>
-                      </li>
-                    );
-                  })}
+                <ul className="divide-y divide-white/10">
+                  {week.matches.map((m) => (
+                    <li key={`${m.date}-${m.startTime}-${m.teamA}-${m.teamB}`}>
+                      <button
+                        type="button"
+                        onClick={() => router.push("/schedule")}
+                        className="flex w-full items-center justify-between gap-2 px-3.5 py-3 text-left transition hover:bg-white/5"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-bold tabular-nums text-white">
+                            {formatMatchWeekdayShort(m.date)}
+                            {m.startTime ? (
+                              <span className="ml-1.5 font-medium text-white/55">{m.startTime}</span>
+                            ) : null}
+                          </p>
+                          <p className="mt-0.5 truncate text-[13px] font-semibold text-white/90">
+                            {hyundaiMatchLabel(m)}
+                          </p>
+                        </div>
+                        {m.homeAway === "홈" || m.homeAway === "원정" ? (
+                          <span
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              m.homeAway === "홈"
+                                ? "bg-amber-400/90 text-[#0A1550]"
+                                : "bg-white/15 text-white/85"
+                            }`}
+                          >
+                            {m.homeAway}
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>
           ))}
         </section>
 
-        <VLeagueStandings
-          standings={vleagueStandings}
-          maxRows={5}
-          showScheduleLink
-        />
+        <div className="mx-auto grid max-w-[1100px] grid-cols-2 gap-3">
+          <div
+            onClick={() => router.push("/saju")}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                router.push("/saju");
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            className="flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-[#D9C48A]/45 bg-[#131110] px-3 py-3"
+          >
+            <p className="truncate text-center text-[13px] font-medium text-[#E9E3D6]">
+              다인이와 궁합테스트
+            </p>
+          </div>
 
-        <div
-          onClick={() => router.push("/saju")}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              router.push("/saju");
-            }
-          }}
-          role="button"
-          tabIndex={0}
-          className="mx-auto flex max-w-[1100px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#D9C48A]/45 bg-[#131110] px-4 py-3"
-        >
-          <p className="min-w-0 truncate text-[13px] font-medium text-[#E9E3D6]">
-            🏐 다인이와 궁합테스트 — 사주로 보는 나와 다인이의 케미 →
-          </p>
-        </div>
-
-        <div
-          onClick={() => router.push("/photo")}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              router.push("/photo");
-            }
-          }}
-          role="button"
-          tabIndex={0}
-          className="mx-auto flex min-h-11 max-w-[1100px] cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#C8202C]/45 bg-[#1a1214] px-4 py-3"
-        >
-          <p className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-[#E9E3D6]">
-            📸 다인네컷 찍기 — 2026 아이치·나고야 아시안게임 프레임 →
-          </p>
-          <span className="shrink-0 rounded-full bg-[#C8202C] px-2.5 py-1 text-[10px] font-bold tracking-wide text-white">
-            NEW!
-          </span>
+          <div
+            onClick={() => router.push("/photo")}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                router.push("/photo");
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            className="flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-[#C8202C]/45 bg-[#1a1214] px-3 py-3"
+          >
+            <p className="truncate text-center text-[13px] font-medium text-[#E9E3D6]">
+              다인네컷 찍기
+            </p>
+          </div>
         </div>
 
         {SHOW_RANKING_CALCULATOR_BANNER ? (
@@ -2675,65 +2703,35 @@ export default function Home() {
               <h2 className="mb-4 text-sm font-medium tracking-wide text-zinc-800">
                 🏆 Best Picks
               </h2>
-              <div className="relative mx-auto w-full max-w-[980px] overflow-hidden rounded-md bg-black">
-                <Swiper
-                  modules={[Autoplay, EffectFade, Pagination]}
-                  effect="fade"
-                  fadeEffect={{ crossFade: true }}
-                  loop={bestPicks.length > 1}
-                  speed={1200}
-                  autoplay={
-                    bestPicks.length > 1
-                      ? { delay: 5000, disableOnInteraction: false }
-                      : false
-                  }
-                  pagination={{ clickable: true }}
-                  onSlideChange={(swiper) => setActiveBestIndex(swiper.realIndex)}
-                  className="aspect-[3/4] sm:aspect-[4/5] lg:aspect-[5/6]"
-                >
-                  {bestPicks.map((image, index) => (
-                    <SwiperSlide key={`best-${image.id}`}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setLightboxIndex(images.findIndex((img) => img.id === image.id))
-                        }
-                        className="relative block h-full w-full"
-                      >
-                        <Image
-                          src={driveLh3FullDisplayUrl(image.id)}
-                          alt={buildMatchPhotoAltFromFilename(image.name)}
-                          fill
-                          aria-hidden
-                          unoptimized
-                          className={`object-cover object-top blur-xl transition-transform duration-[5000ms] ${
-                            activeBestIndex === index
-                              ? "scale-[1.06]"
-                              : "scale-100"
-                          }`}
-                          sizes="(max-width: 640px) 100vw, (max-width: 1200px) 90vw, 980px"
-                        />
-                        <div className="absolute inset-0 bg-black/45" />
-                        <div className="absolute inset-0">
-                          <Image
-                            src={driveLh3FullDisplayUrl(image.id)}
-                            alt={buildMatchPhotoAltFromFilename(image.name)}
-                            fill
-                            unoptimized
-                            className="object-contain object-top"
-                            sizes="(max-width: 640px) 100vw, (max-width: 1200px) 90vw, 980px"
-                          />
-                        </div>
-                        <div className="absolute left-3 top-3 rounded-full bg-black/65 px-2.5 py-1 text-[11px] text-white">
-                          BEST {index + 1}
-                        </div>
-                        <div className="absolute bottom-3 right-3 rounded-full bg-black/65 px-2.5 py-1 text-[11px] text-white">
-                          ♥ {likesByPhoto[image.id] ?? 0}
-                        </div>
-                      </button>
-                    </SwiperSlide>
-                  ))}
-                </Swiper>
+              <div className="mx-auto grid w-full max-w-[980px] grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
+                {bestPicks.map((image, index) => (
+                  <button
+                    key={`best-${image.id}`}
+                    type="button"
+                    onClick={() =>
+                      setLightboxIndex(images.findIndex((img) => img.id === image.id))
+                    }
+                    className="group relative aspect-square overflow-hidden rounded-xl bg-zinc-900 shadow-[0_8px_20px_rgba(0,0,0,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(0,40,122,0.18)]"
+                  >
+                    <Image
+                      src={driveLh3FullDisplayUrl(image.id)}
+                      alt={buildMatchPhotoAltFromFilename(image.name)}
+                      fill
+                      unoptimized
+                      className="object-cover object-center transition duration-500 group-hover:scale-[1.04]"
+                      sizes="(max-width: 640px) 50vw, (max-width: 1200px) 30vw, 320px"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />
+                    {index < 3 ? (
+                      <span className="absolute left-2 top-2 rounded-full bg-[#1E3A9E]/90 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white backdrop-blur-sm sm:text-[11px]">
+                        BEST {index + 1}
+                      </span>
+                    ) : null}
+                    <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm">
+                      ♥ {likesByPhoto[image.id] ?? 0}
+                    </span>
+                  </button>
+                ))}
               </div>
             </section>
 
