@@ -11,6 +11,7 @@ import { PageShareButton } from "@/components/page-share-button";
 import { TeamKoreaBadge } from "@/components/team-korea-badge";
 import { MedalRecordList } from "@/components/medal-record";
 import { VLeagueStandings } from "@/components/vleague-standings";
+import { chipTextColor, getTeamShort } from "@/lib/vleague-teams";
 
 const CATEGORY_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   "브이리그": { bg: "#E6F1FB", text: "#0C447C", label: "브이리그" },
@@ -79,6 +80,32 @@ function needsIosSafariTip(): boolean {
     /(KAKAOTALK|Instagram|FBAN|FBAV|Line\/|Twitter|DaumApps|NAVER)/i.test(ua);
   const isSafari = /Safari/.test(ua) && !isOtherBrowser && !isInAppBrowser;
   return !isSafari;
+}
+
+function TeamShortChip({ teamName }: { teamName: string }) {
+  const { short, color } = getTeamShort(teamName);
+  return (
+    <span
+      className="inline-flex max-w-[2.75rem] shrink-0 truncate rounded-[3px] px-0.5 py-px text-[9px] font-bold leading-none sm:max-w-none sm:px-1 sm:text-[10px]"
+      style={{ background: color, color: chipTextColor(color) }}
+    >
+      {short}
+    </span>
+  );
+}
+
+function CalendarMatchShort({ m }: { m: Match }) {
+  const showCrown = isHyundaiHomeMatch(m);
+  return (
+    <div className="flex min-w-0 items-center gap-0.5 truncate">
+      {showCrown ? (
+        <Crown className="h-2.5 w-2.5 shrink-0 text-amber-500 sm:h-3 sm:w-3" aria-hidden />
+      ) : null}
+      <TeamShortChip teamName={m.teamA} />
+      <span className="shrink-0 text-[8px] font-medium text-zinc-400 sm:text-[9px]">vs</span>
+      <TeamShortChip teamName={m.teamB} />
+    </div>
+  );
 }
 
 function MatchLine({ m, inheritColor = false, showCrown = false }: { m: Match; inheritColor?: boolean; showCrown?: boolean }) {
@@ -237,6 +264,8 @@ export default function SchedulePage() {
   const vleagueStandings = useMemo(() => computeVLeagueStandings(matches), [matches]);
   /** 팀코리아 성과는 2026년 9월까지 달력에서만 노출 */
   const showTeamKoreaAchievements = monthPrefix <= "2026-09";
+  /** 2026-27 V리그 순위는 시즌 기간(2026-11 ~ 2027-04) 달력에서만 노출 */
+  const showVleagueStandings = monthPrefix >= "2026-11" && monthPrefix <= "2027-04";
 
   const downloadICS = (ics: string, filename: string) => {
     const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
@@ -280,9 +309,11 @@ export default function SchedulePage() {
         </div>
       ) : null}
 
-      <div className="mx-auto max-w-[1100px] px-4 pb-4 sm:px-8">
-        <VLeagueStandings standings={vleagueStandings} />
-      </div>
+      {showVleagueStandings ? (
+        <div className="mx-auto max-w-[1100px] px-4 pb-4 sm:px-8">
+          <VLeagueStandings standings={vleagueStandings} />
+        </div>
+      ) : null}
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20 sm:px-8 sm:pb-0">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -393,6 +424,9 @@ export default function SchedulePage() {
                 const day = dayMap.get(key);
                 const isSelected = selectedDate === key;
                 const holiday = inMonth ? getHoliday(key) : null;
+                const dayMatches = day?.groups.flatMap((g) => g.matches) ?? [];
+                const visibleMatches = dayMatches.slice(0, 2);
+                const extraCount = Math.max(0, dayMatches.length - 2);
                 const hasHyundai = day?.groups.some((g) => g.matches.some(isHyundaiMatch)) ?? false;
                 return (
                   <button
@@ -400,7 +434,7 @@ export default function SchedulePage() {
                     type="button"
                     onClick={() => day && setSelectedDate(isSelected ? null : key)}
                     title={holiday ?? undefined}
-                    className={`min-h-[4.5rem] rounded-md border p-1 text-left align-top text-xs text-zinc-900 sm:min-h-[100px] sm:p-1.5 ${hasHyundai ? "bg-amber-50" : "bg-white"} ${isSelected ? "border-[1.5px] border-[#00287A]" : hasHyundai ? "border-amber-200" : "border-zinc-200"} ${day ? `cursor-pointer ${hasHyundai ? "hover:bg-amber-100/80" : "hover:bg-zinc-50"}` : "cursor-default"}`}
+                    className={`min-h-[3.75rem] rounded-md border p-0.5 text-left align-top text-xs text-zinc-900 sm:min-h-[100px] sm:p-1.5 ${hasHyundai ? "bg-amber-50" : "bg-white"} ${isSelected ? "border-[1.5px] border-[#00287A]" : hasHyundai ? "border-amber-200" : "border-zinc-200"} ${day ? `cursor-pointer ${hasHyundai ? "hover:bg-amber-100/80" : "hover:bg-zinc-50"}` : "cursor-default"}`}
                   >
                     <span className={`block text-[10px] font-medium sm:text-[11px] ${calendarDateClass(key, inMonth)}`}>
                       {date.getDate()}
@@ -410,18 +444,36 @@ export default function SchedulePage() {
                         {holiday}
                       </span>
                     ) : null}
+                    {/* 모바일: 짧은 팀칩 */}
+                    {visibleMatches.length > 0 ? (
+                      <div className="mt-0.5 flex flex-col gap-0.5 sm:hidden">
+                        {visibleMatches.map((m, j) => (
+                          <CalendarMatchShort key={j} m={m} />
+                        ))}
+                        {extraCount > 0 ? (
+                          <span className="truncate text-[9px] font-semibold text-zinc-500">
+                            +{extraCount}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {/* 데스크톱: 기존 대회명 + 상세 */}
                     {day?.groups.map((g, i) => {
                       const s = matchBlockStyle(g.category, g.matches);
                       const hasHome = g.matches.some(isHyundaiHomeMatch);
                       return (
-                        <div key={i} className="mt-0.5 rounded px-0.5 py-0.5 text-[8px] leading-snug sm:mt-1 sm:px-1 sm:py-1 sm:text-[9px]" style={{ background: s.bg, color: s.text }}>
-                          <div className="line-clamp-2 font-medium leading-tight sm:line-clamp-none">
+                        <div
+                          key={i}
+                          className="mt-1 hidden rounded px-1 py-1 text-[9px] leading-snug sm:block"
+                          style={{ background: s.bg, color: s.text }}
+                        >
+                          <div className="font-medium leading-tight">
                             {hasHome ? (
                               <Crown className="mr-0.5 inline h-3 w-3 text-amber-400" aria-hidden />
                             ) : null}
                             {g.tournament}
                           </div>
-                          <div className="mt-0.5 hidden flex-col gap-0.5 sm:flex">
+                          <div className="mt-0.5 flex flex-col gap-0.5">
                             {g.matches.map((m, j) => (
                               <div key={j} className="leading-tight">
                                 <MatchLine m={m} inheritColor showCrown />
