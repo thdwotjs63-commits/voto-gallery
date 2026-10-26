@@ -12,6 +12,7 @@ import { TeamKoreaBadge } from "@/components/team-korea-badge";
 import { MedalRecordList } from "@/components/medal-record";
 import { VLeagueStandings } from "@/components/vleague-standings";
 import { chipTextColor, getTeamShort } from "@/lib/vleague-teams";
+import { getCountryDisplay, isKoreaTeamName } from "@/lib/country-flags";
 
 const CATEGORY_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   "브이리그": { bg: "#E6F1FB", text: "#0C447C", label: "브이리그" },
@@ -108,18 +109,61 @@ function TeamShortChip({ teamName }: { teamName: string }) {
   );
 }
 
-/** 모바일 달력 전용: 한글 한 글자 칩 + 작은 vs. 왕관은 위에 두어 가로 폭을 확보 */
+function CountryFlagMark({ teamName }: { teamName: string }) {
+  const { flag, short } = getCountryDisplay(teamName);
+  const korea = isKoreaTeamName(teamName);
+  if (flag) {
+    return (
+      <span
+        title={teamName}
+        className={`inline-flex shrink-0 items-center justify-center text-[11px] leading-none ${
+          korea ? "rounded-sm bg-blue-50 ring-1 ring-blue-200/80" : ""
+        }`}
+        aria-label={teamName}
+      >
+        {flag}
+      </span>
+    );
+  }
+  return (
+    <span
+      title={teamName}
+      className="inline-flex shrink-0 rounded-[2px] bg-zinc-200 px-0.5 text-[7px] font-bold leading-none text-zinc-700"
+    >
+      {short}
+    </span>
+  );
+}
+
+/** 모바일 달력 전용: V리그=한글 칩, 국제경기=국기. 왕관은 위에 두어 가로 폭을 확보 */
 function CalendarMatchShort({ m }: { m: Match }) {
   const showCrown = isHyundaiHomeMatch(m);
+  const isIntl = (m.category ?? "").trim() === "국제경기";
+  const koreaMatch = isIntl && (isKoreaTeamName(m.teamA) || isKoreaTeamName(m.teamB));
+
   return (
-    <div className="flex w-full min-w-0 flex-col items-start gap-px overflow-hidden">
+    <div
+      className={`flex w-full min-w-0 flex-col items-start gap-px overflow-hidden ${
+        koreaMatch ? "rounded-sm bg-blue-50/70 px-px py-px" : ""
+      }`}
+    >
       {showCrown ? (
         <Crown className="h-2 w-2 shrink-0 text-amber-500" aria-hidden />
       ) : null}
       <div className="flex max-w-full items-center gap-px">
-        <TeamShortChip teamName={m.teamA} />
-        <span className="shrink-0 text-[6px] font-medium leading-none text-zinc-400">vs</span>
-        <TeamShortChip teamName={m.teamB} />
+        {isIntl ? (
+          <>
+            <CountryFlagMark teamName={m.teamA} />
+            <span className="shrink-0 text-[6px] font-medium leading-none text-zinc-400">vs</span>
+            <CountryFlagMark teamName={m.teamB} />
+          </>
+        ) : (
+          <>
+            <TeamShortChip teamName={m.teamA} />
+            <span className="shrink-0 text-[6px] font-medium leading-none text-zinc-400">vs</span>
+            <TeamShortChip teamName={m.teamB} />
+          </>
+        )}
       </div>
     </div>
   );
