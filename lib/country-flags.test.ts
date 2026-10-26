@@ -29,9 +29,10 @@ describe("getCountryFlag", () => {
 });
 
 describe("getCountryDisplay", () => {
-  it("provides short fallback", () => {
+  it("provides short fallback without question mark", () => {
     expect(getCountryDisplay("세르비아")).toEqual({ flag: null, short: "세르" });
     expect(getCountryDisplay("일본")).toEqual({ flag: "🇯🇵", short: "일본" });
+    expect(getCountryDisplay("")).toEqual({ flag: null, short: "미정" });
   });
 });
 

@@ -40,6 +40,7 @@ export function getTeamShort(teamName: string): TeamShort {
       return { short: team.short, color: team.color };
     }
   }
-  const fallback = name.slice(0, 2) || "?";
+  const compact = name.replace(/\s+/g, "");
+  const fallback = compact.slice(0, 2) || "미정";
   return { short: fallback, color: "#8A8A8A" };
 }

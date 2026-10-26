@@ -11,8 +11,11 @@ import { PageShareButton } from "@/components/page-share-button";
 import { TeamKoreaBadge } from "@/components/team-korea-badge";
 import { MedalRecordList } from "@/components/medal-record";
 import { VLeagueStandings } from "@/components/vleague-standings";
-import { chipTextColor, getTeamShort } from "@/lib/vleague-teams";
-import { getCountryDisplay, isKoreaTeamName } from "@/lib/country-flags";
+import { chipTextColor } from "@/lib/vleague-teams";
+import {
+  resolveCalendarTeamMark,
+  type CalendarTeamMark,
+} from "@/lib/calendar-team-mark";
 
 const CATEGORY_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   "브이리그": { bg: "#E6F1FB", text: "#0C447C", label: "브이리그" },
@@ -96,50 +99,48 @@ function needsIosSafariTip(): boolean {
   return !isSafari;
 }
 
-function TeamShortChip({ teamName }: { teamName: string }) {
-  const { short, color } = getTeamShort(teamName);
-  return (
-    <span
-      className="inline-flex size-3 shrink-0 items-center justify-center rounded-[2px] text-[8px] font-bold leading-none"
-      style={{ background: color, color: chipTextColor(color) }}
-      title={teamName}
-    >
-      {short}
-    </span>
-  );
-}
-
-function CountryFlagMark({ teamName }: { teamName: string }) {
-  const { flag, short } = getCountryDisplay(teamName);
-  const korea = isKoreaTeamName(teamName);
-  if (flag) {
+function CalendarTeamMarkView({ mark }: { mark: CalendarTeamMark }) {
+  if (mark.kind === "flag") {
     return (
       <span
-        title={teamName}
+        title={mark.title}
+        aria-label={mark.title}
         className={`inline-flex shrink-0 items-center justify-center text-[11px] leading-none ${
-          korea ? "rounded-sm bg-blue-50 ring-1 ring-blue-200/80" : ""
+          mark.korea ? "rounded-sm bg-blue-50 ring-1 ring-blue-200/80" : ""
         }`}
-        aria-label={teamName}
       >
-        {flag}
+        {mark.flag}
+      </span>
+    );
+  }
+  if (mark.kind === "club") {
+    return (
+      <span
+        title={mark.title}
+        className="inline-flex size-3 shrink-0 items-center justify-center rounded-[2px] text-[8px] font-bold leading-none"
+        style={{ background: mark.color, color: chipTextColor(mark.color) }}
+      >
+        {mark.short}
       </span>
     );
   }
   return (
     <span
-      title={teamName}
-      className="inline-flex shrink-0 rounded-[2px] bg-zinc-200 px-0.5 text-[7px] font-bold leading-none text-zinc-700"
+      title={mark.title || mark.short}
+      className="inline-flex max-w-[2rem] shrink-0 truncate rounded-[2px] bg-zinc-200 px-0.5 text-[7px] font-bold leading-none text-zinc-700"
     >
-      {short}
+      {mark.short}
     </span>
   );
 }
 
-/** 모바일 달력 전용: V리그=한글 칩, 국제경기=국기. 왕관은 위에 두어 가로 폭을 확보 */
+/** 모바일 달력 전용: 국기 → V리그 칩 → 팀명 2글자. 왕관은 위에 두어 가로 폭을 확보 */
 function CalendarMatchShort({ m }: { m: Match }) {
   const showCrown = isHyundaiHomeMatch(m);
-  const isIntl = (m.category ?? "").trim() === "국제경기";
-  const koreaMatch = isIntl && (isKoreaTeamName(m.teamA) || isKoreaTeamName(m.teamB));
+  const markA = resolveCalendarTeamMark(m.teamA);
+  const markB = resolveCalendarTeamMark(m.teamB);
+  const koreaMatch =
+    (markA.kind === "flag" && markA.korea) || (markB.kind === "flag" && markB.korea);
 
   return (
     <div
@@ -151,19 +152,9 @@ function CalendarMatchShort({ m }: { m: Match }) {
         <Crown className="h-2 w-2 shrink-0 text-amber-500" aria-hidden />
       ) : null}
       <div className="flex max-w-full items-center gap-px">
-        {isIntl ? (
-          <>
-            <CountryFlagMark teamName={m.teamA} />
-            <span className="shrink-0 text-[6px] font-medium leading-none text-zinc-400">vs</span>
-            <CountryFlagMark teamName={m.teamB} />
-          </>
-        ) : (
-          <>
-            <TeamShortChip teamName={m.teamA} />
-            <span className="shrink-0 text-[6px] font-medium leading-none text-zinc-400">vs</span>
-            <TeamShortChip teamName={m.teamB} />
-          </>
-        )}
+        <CalendarTeamMarkView mark={markA} />
+        <span className="shrink-0 text-[6px] font-medium leading-none text-zinc-400">vs</span>
+        <CalendarTeamMarkView mark={markB} />
       </div>
     </div>
   );

@@ -14,7 +14,9 @@ describe("getTeamShort", () => {
 
   it("falls back to first two characters with gray", () => {
     expect(getTeamShort("대한민국")).toEqual({ short: "대한", color: "#8A8A8A" });
+    expect(getTeamShort("수원특례시청")).toEqual({ short: "수원", color: "#8A8A8A" });
     expect(getTeamShort("A")).toEqual({ short: "A", color: "#8A8A8A" });
+    expect(getTeamShort("")).toEqual({ short: "미정", color: "#8A8A8A" });
   });
 });
 

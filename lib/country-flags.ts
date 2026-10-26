@@ -45,9 +45,10 @@ export function getCountryFlag(name: string): string | null {
 
 export function getCountryDisplay(name: string): CountryDisplay {
   const n = (name ?? "").trim();
+  const compact = n.replace(/\s+/g, "");
   return {
     flag: getCountryFlag(n),
-    short: n.slice(0, 2) || "?",
+    short: compact.slice(0, 2) || "미정",
   };
 }
 
