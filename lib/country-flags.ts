@@ -34,11 +34,19 @@ export type CountryDisplay = {
   short: string;
 };
 
+/** "한국"/"대한민국"은 단독 표기만 허용 — "한국도로공사" 오매칭 방지 */
+function matchesCountryKeyword(name: string, match: string): boolean {
+  if (match === "한국" || match === "대한민국") {
+    return name === match;
+  }
+  return name.includes(match);
+}
+
 export function getCountryFlag(name: string): string | null {
   const n = (name ?? "").trim();
   if (!n) return null;
   for (const entry of COUNTRY_FLAGS) {
-    if (n.includes(entry.match)) return entry.flag;
+    if (matchesCountryKeyword(n, entry.match)) return entry.flag;
   }
   return null;
 }
@@ -54,5 +62,5 @@ export function getCountryDisplay(name: string): CountryDisplay {
 
 export function isKoreaTeamName(name: string): boolean {
   const n = (name ?? "").trim();
-  return n.includes("대한민국") || n.includes("한국");
+  return n === "대한민국" || n === "한국";
 }

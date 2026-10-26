@@ -8,11 +8,16 @@ import {
 describe("getCountryFlag", () => {
   it("maps known countries", () => {
     expect(getCountryFlag("대한민국")).toBe("🇰🇷");
-    expect(getCountryFlag("한국 여자배구")).toBe("🇰🇷");
+    expect(getCountryFlag("한국")).toBe("🇰🇷");
     expect(getCountryFlag("일본")).toBe("🇯🇵");
     expect(getCountryFlag("중국")).toBe("🇨🇳");
     expect(getCountryFlag("대만")).toBe("🇹🇼");
     expect(getCountryFlag("카자흐스탄")).toBe("🇰🇿");
+  });
+
+  it("does not match 한국 as a prefix of club names", () => {
+    expect(getCountryFlag("한국도로공사")).toBeNull();
+    expect(getCountryFlag("한국 여자배구")).toBeNull();
   });
 
   it("prefers longer names over shorter ones", () => {
@@ -37,9 +42,10 @@ describe("getCountryDisplay", () => {
 });
 
 describe("isKoreaTeamName", () => {
-  it("detects Korea labels", () => {
+  it("detects exact Korea labels only", () => {
     expect(isKoreaTeamName("대한민국")).toBe(true);
     expect(isKoreaTeamName("한국")).toBe(true);
+    expect(isKoreaTeamName("한국도로공사")).toBe(false);
     expect(isKoreaTeamName("일본")).toBe(false);
   });
 });

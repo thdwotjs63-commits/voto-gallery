@@ -13,7 +13,9 @@ import { MedalRecordList } from "@/components/medal-record";
 import { VLeagueStandings } from "@/components/vleague-standings";
 import { chipTextColor } from "@/lib/vleague-teams";
 import {
+  isEventOnlyMatch,
   resolveCalendarTeamMark,
+  shortenEventLabel,
   type CalendarTeamMark,
 } from "@/lib/calendar-team-mark";
 
@@ -134,9 +136,27 @@ function CalendarTeamMarkView({ mark }: { mark: CalendarTeamMark }) {
   );
 }
 
-/** 모바일 달력 전용: 국기 → V리그 칩 → 팀명 2글자. 왕관은 위에 두어 가로 폭을 확보 */
+/** 모바일 달력 전용: 국기/구단칩/이름 vs. 양팀 없으면 일정 이름. 왕관은 위쪽 */
 function CalendarMatchShort({ m }: { m: Match }) {
   const showCrown = isHyundaiHomeMatch(m);
+
+  if (isEventOnlyMatch(m)) {
+    const label = shortenEventLabel(m.tournament);
+    return (
+      <div className="w-full min-w-0 overflow-hidden">
+        {showCrown ? (
+          <Crown className="mb-px h-2 w-2 shrink-0 text-amber-500" aria-hidden />
+        ) : null}
+        <span
+          title={m.tournament || label}
+          className="block truncate text-[7px] font-medium leading-tight text-zinc-500"
+        >
+          {label}
+        </span>
+      </div>
+    );
+  }
+
   const markA = resolveCalendarTeamMark(m.teamA);
   const markB = resolveCalendarTeamMark(m.teamB);
   const koreaMatch =
