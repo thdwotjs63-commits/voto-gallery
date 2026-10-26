@@ -279,8 +279,8 @@ export default function SchedulePage() {
   const teamKoreaRecord = useMemo(() => getTeamKoreaRecord(matches), [matches]);
   const medals = useMemo(() => getTeamKoreaMedals(matches), [matches]);
   const vleagueStandings = useMemo(() => computeVLeagueStandings(matches), [matches]);
-  /** 팀코리아 성과는 2026년 9월까지 달력에서만 노출 */
-  const showTeamKoreaAchievements = monthPrefix <= "2026-09";
+  /** 팀코리아 성과·승패는 2026년 4~9월 달력에서만 노출 */
+  const showTeamKoreaAchievements = monthPrefix >= "2026-04" && monthPrefix <= "2026-09";
   /** 2026-27 V리그 순위는 시즌 기간(2026-11 ~ 2027-04) 달력에서만 노출 */
   const showVleagueStandings = monthPrefix >= "2026-11" && monthPrefix <= "2027-04";
 
