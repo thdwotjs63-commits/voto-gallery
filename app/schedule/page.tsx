@@ -21,7 +21,24 @@ import {
 import {
   TEAM_TICKET_CONFIGS,
   computeTicketOpenEvents,
+  groupTicketEventsByMatch,
+  type TicketMatchGroup,
 } from "@/lib/ticketing-rules";
+
+function formatMatchMd(matchDate: string): string {
+  const [, mm, dd] = matchDate.split("-");
+  return mm && dd ? `${Number(mm)}/${Number(dd)}` : matchDate;
+}
+
+function ticketMatchTitle(group: TicketMatchGroup): string {
+  const md = formatMatchMd(group.matchDate);
+  const vs =
+    group.kind === "away"
+      ? `${group.opponent} vs ${group.teamName}`
+      : `${group.teamName} vs ${group.opponent}`;
+  const venue = group.venue.trim();
+  return venue ? `${md} ${vs} (${venue})` : `${md} ${vs}`;
+}
 
 const CATEGORY_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   "브이리그": { bg: "#E6F1FB", text: "#0C447C", label: "브이리그" },
@@ -264,6 +281,8 @@ export default function SchedulePage() {
   );
   const [ticketIncludeAway, setTicketIncludeAway] = useState(false);
   const [ticketPanelOpen, setTicketPanelOpen] = useState(false);
+  /** 체크 해제된 경기 키 — 기본은 전체 선택(이 목록에 없는 키 = 선택됨) */
+  const [ticketDeselectedMatchKeys, setTicketDeselectedMatchKeys] = useState<string[]>([]);
 
   useEffect(() => {
     setShowIosSafariTip(needsIosSafariTip());
@@ -395,10 +414,49 @@ export default function SchedulePage() {
     [matches, ticketTeam, ticketSelectedLabels, ticketIncludeAway]
   );
 
+  const ticketMatchGroups = useMemo(
+    () => groupTicketEventsByMatch(ticketPreview),
+    [ticketPreview]
+  );
+
+  const ticketDeselectedSet = useMemo(
+    () => new Set(ticketDeselectedMatchKeys),
+    [ticketDeselectedMatchKeys]
+  );
+
+  const selectedTicketGroups = useMemo(
+    () => ticketMatchGroups.filter((g) => !ticketDeselectedSet.has(g.key)),
+    [ticketMatchGroups, ticketDeselectedSet]
+  );
+
+  const selectedTicketEvents = useMemo(
+    () => selectedTicketGroups.flatMap((g) => g.events),
+    [selectedTicketGroups]
+  );
+
+  const allTicketMatchesSelected =
+    ticketMatchGroups.length > 0 && selectedTicketGroups.length === ticketMatchGroups.length;
+
+  const clearTicketMatchSelection = () => setTicketDeselectedMatchKeys([]);
+
+  const toggleAllTicketMatches = () => {
+    if (allTicketMatchesSelected) {
+      setTicketDeselectedMatchKeys(ticketMatchGroups.map((g) => g.key));
+    } else {
+      setTicketDeselectedMatchKeys([]);
+    }
+  };
+
+  const toggleTicketMatch = (key: string) => {
+    setTicketDeselectedMatchKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
   const handleSaveTicketing = () => {
-    if (ticketPreview.length === 0) return;
+    if (selectedTicketEvents.length === 0) return;
     downloadICS(
-      buildTicketingICS(ticketPreview),
+      buildTicketingICS(selectedTicketEvents),
       `voto_ticketing_${ticketTeam}.ics`
     );
   };
@@ -558,6 +616,7 @@ export default function SchedulePage() {
                               if (!cfg.enabled) return;
                               setTicketTeam(cfg.match);
                               setTicketSelectedLabels(cfg.rules.map((r) => r.label));
+                              clearTicketMatchSelection();
                             }}
                             className={`rounded-full px-3 py-1 text-[11px] transition ${
                               !cfg.enabled
@@ -601,6 +660,7 @@ export default function SchedulePage() {
                                     ? [...prev, rule.label]
                                     : prev.filter((l) => l !== rule.label)
                                 );
+                                clearTicketMatchSelection();
                               }}
                               className="h-3.5 w-3.5 rounded border-zinc-300 text-[#00287A] focus:ring-[#00287A]"
                             />
@@ -621,7 +681,10 @@ export default function SchedulePage() {
                       <input
                         type="checkbox"
                         checked={ticketIncludeAway}
-                        onChange={(e) => setTicketIncludeAway(e.target.checked)}
+                        onChange={(e) => {
+                          setTicketIncludeAway(e.target.checked);
+                          clearTicketMatchSelection();
+                        }}
                         className="h-3.5 w-3.5 rounded border-zinc-300 text-[#00287A] focus:ring-[#00287A]"
                       />
                       🚌 원정경기 티켓도 챙기기
@@ -632,50 +695,82 @@ export default function SchedulePage() {
                   </div>
 
                   <div className="mb-3 rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2.5">
-                    <p className="mb-1.5 text-[11px] font-medium text-zinc-500">
-                      남은 티켓 오픈 미리보기
-                      {ticketPreview.length > 0 ? (
-                        <span className="ml-1 text-zinc-400">· {ticketPreview.length}건</span>
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] font-medium text-zinc-500">
+                        갈 수 있는 경기 고르기
+                        {ticketMatchGroups.length > 0 ? (
+                          <span className="ml-1 text-zinc-400">
+                            · {selectedTicketGroups.length}/{ticketMatchGroups.length}경기
+                          </span>
+                        ) : null}
+                      </p>
+                      {ticketMatchGroups.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={toggleAllTicketMatches}
+                          className="min-h-9 shrink-0 rounded-md px-2 text-[11px] font-medium text-[#00287A] hover:bg-[#00287A]/5"
+                        >
+                          {allTicketMatchesSelected ? "전체 해제" : "전체 선택"}
+                        </button>
                       ) : null}
-                    </p>
+                    </div>
                     {ticketSelectedLabels.length === 0 && !ticketIncludeAway ? (
                       <p className="text-[11px] text-zinc-500">
                         예매 종류를 고르거나 원정경기를 체크해 주세요.
                       </p>
-                    ) : ticketPreview.length === 0 ? (
+                    ) : ticketMatchGroups.length === 0 ? (
                       <p className="text-[11px] text-zinc-500">
                         앞으로 남은 티켓 오픈이 없어요.
                       </p>
                     ) : (
-                      <ul className="max-h-44 space-y-1 overflow-y-auto text-[11px] text-zinc-700">
-                        {ticketPreview.map((ev) => {
-                          const [, mm, dd] = ev.matchDate.split("-");
-                          const matchMd =
-                            mm && dd ? `${Number(mm)}/${Number(dd)}` : ev.matchDate;
-                          const isAway = ev.kind === "away";
+                      <ul className="max-h-72 space-y-2 overflow-y-auto overscroll-contain pr-0.5">
+                        {ticketMatchGroups.map((group) => {
+                          const checked = !ticketDeselectedSet.has(group.key);
                           return (
                             <li
-                              key={`${ev.kind}-${ev.date}-${ev.time}-${ev.label}-${ev.matchDate}`}
-                              className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5"
+                              key={group.key}
+                              className="rounded-lg border border-zinc-100 bg-white px-2 py-1"
                             >
-                              <span className="font-medium tabular-nums text-zinc-900">
-                                {ev.date} {ev.time}
-                              </span>
-                              <span
-                                className={`rounded px-1.5 py-px text-[10px] font-medium ${
-                                  isAway
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-[#00287A]/10 text-[#00287A]"
-                                }`}
-                              >
-                                {isAway ? "원정 · 일반예매" : ev.label}
-                              </span>
-                              <span className="text-zinc-600">
-                                {isAway
-                                  ? `${ev.opponent} vs ${ev.teamName}`
-                                  : `vs ${ev.opponent}`}
-                                <span className="text-zinc-400"> · 경기 {matchMd}</span>
-                              </span>
+                              <label className="flex min-h-11 cursor-pointer items-start gap-2.5 py-1.5">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleTicketMatch(group.key)}
+                                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-300 text-[#00287A] focus:ring-[#00287A]"
+                                />
+                                <span className="min-w-0 text-[12px] font-medium leading-snug text-zinc-900">
+                                  {ticketMatchTitle(group)}
+                                  {group.kind === "away" ? (
+                                    <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-px text-[10px] font-medium text-amber-800">
+                                      원정
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </label>
+                              <ul className="mb-1 ml-7 space-y-0.5 text-[11px] text-zinc-600">
+                                {group.events.map((ev) => {
+                                  const isAway = ev.kind === "away";
+                                  return (
+                                    <li
+                                      key={`${ev.kind}-${ev.date}-${ev.time}-${ev.label}`}
+                                      className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5"
+                                    >
+                                      <span className="font-medium tabular-nums text-zinc-800">
+                                        {ev.date} {ev.time}
+                                      </span>
+                                      <span
+                                        className={`rounded px-1.5 py-px text-[10px] font-medium ${
+                                          isAway
+                                            ? "bg-amber-100 text-amber-800"
+                                            : "bg-[#00287A]/10 text-[#00287A]"
+                                        }`}
+                                      >
+                                        {isAway ? "원정 · 일반예매" : ev.label}
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
                             </li>
                           );
                         })}
@@ -686,14 +781,21 @@ export default function SchedulePage() {
                   <p className="mb-2 text-[11px] font-medium leading-snug text-[#00287A]">
                     저장하면 티켓 오픈 10분 전에 알림이 울려요 🔔
                   </p>
+                  {ticketMatchGroups.length > 0 && selectedTicketGroups.length === 0 ? (
+                    <p className="mb-2 text-[11px] text-amber-700">
+                      저장할 경기를 선택해 주세요.
+                    </p>
+                  ) : null}
                   <button
                     type="button"
                     onClick={handleSaveTicketing}
-                    disabled={ticketPreview.length === 0}
+                    disabled={selectedTicketEvents.length === 0}
                     className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-[#00287A] bg-[#00287A] px-3 py-2.5 text-xs font-medium text-white transition hover:bg-[#001f5c] disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-200 disabled:text-zinc-500 sm:w-auto sm:px-4"
                   >
                     <CalendarPlus className="h-3.5 w-3.5" />
-                    티켓 오픈 알림 저장
+                    {selectedTicketGroups.length > 0
+                      ? `선택한 ${selectedTicketGroups.length}경기 티켓 일정 저장`
+                      : "티켓 오픈 알림 저장"}
                   </button>
 
                   <p className="mt-2.5 text-[10px] leading-relaxed text-zinc-500">

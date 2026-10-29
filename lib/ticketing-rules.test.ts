@@ -6,6 +6,7 @@ import {
   findConfig,
   findConfigForTeamName,
   getGeneralSaleRule,
+  groupTicketEventsByMatch,
   isTeamAwayVleagueMatch,
   isTeamHomeVleagueMatch,
   subtractCalendarDays,
@@ -302,5 +303,38 @@ describe("computeTicketOpenEvents away via teamB", () => {
       { onlyUpcoming: false, labels: [], includeAway: true }
     );
     expect(events).toHaveLength(0);
+  });
+});
+
+describe("groupTicketEventsByMatch", () => {
+  it("groups home opens for the same matchDate together", () => {
+    const events = computeTicketOpenEvents(
+      [
+        match({
+          date: "2026-11-15",
+          teamA: "현대건설",
+          teamB: "GS칼텍스",
+          venue: "수원실내체육관",
+        }),
+        match({
+          date: "2026-11-22",
+          teamA: "현대건설",
+          teamB: "흥국생명",
+          venue: "수원실내체육관",
+        }),
+      ],
+      "현대건설",
+      { onlyUpcoming: false }
+    );
+    const groups = groupTicketEventsByMatch(events);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({
+      matchDate: "2026-11-15",
+      kind: "home",
+      opponent: "GS칼텍스",
+      venue: "수원실내체육관",
+    });
+    expect(groups[0]!.events.length).toBeGreaterThanOrEqual(2);
+    expect(groups[1]!.matchDate).toBe("2026-11-22");
   });
 });

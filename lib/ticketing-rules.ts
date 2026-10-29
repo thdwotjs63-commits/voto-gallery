@@ -310,3 +310,47 @@ export function computeTicketOpenEvents(
     return a.label.localeCompare(b.label);
   });
 }
+
+/** 미리보기·선택 저장용 — 같은 경기의 티켓 오픈들을 묶음 */
+export type TicketMatchGroup = {
+  key: string;
+  matchDate: string;
+  kind: "home" | "away";
+  opponent: string;
+  teamName: string;
+  venue: string;
+  events: TicketOpenEvent[];
+};
+
+export function ticketMatchGroupKey(ev: Pick<TicketOpenEvent, "matchDate" | "kind" | "opponent" | "teamName">): string {
+  return `${ev.matchDate}|${ev.kind}|${ev.opponent}|${ev.teamName}`;
+}
+
+/** 경기일 순으로 그룹. 그룹 안 이벤트는 오픈 시각 순 유지 */
+export function groupTicketEventsByMatch(
+  events: readonly TicketOpenEvent[]
+): TicketMatchGroup[] {
+  const map = new Map<string, TicketMatchGroup>();
+  for (const ev of events) {
+    const key = ticketMatchGroupKey(ev);
+    let group = map.get(key);
+    if (!group) {
+      group = {
+        key,
+        matchDate: ev.matchDate,
+        kind: ev.kind,
+        opponent: ev.opponent,
+        teamName: ev.teamName,
+        venue: ev.venue,
+        events: [],
+      };
+      map.set(key, group);
+    }
+    group.events.push(ev);
+  }
+  return [...map.values()].sort((a, b) => {
+    const byMatch = a.matchDate.localeCompare(b.matchDate);
+    if (byMatch !== 0) return byMatch;
+    return a.kind.localeCompare(b.kind);
+  });
+}
