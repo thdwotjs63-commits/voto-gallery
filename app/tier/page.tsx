@@ -41,7 +41,7 @@ import {
   renderTierChartCanvas,
   revokeBlobUrl,
   revokeParticipantBlobs,
-  tierCreditLabel,
+  tierSiteCredit,
   type TierParticipantDraft,
   type TierTitleKind,
 } from "@/lib/tier-chart";
@@ -391,7 +391,7 @@ function TierPageInner() {
   const [pasteErr, setPasteErr] = useState<string | null>(null);
 
   const title = useMemo(() => chartTitle(titleKind), [titleKind]);
-  const handleLabel = useMemo(() => tierCreditLabel(twitterId), [twitterId]);
+  const siteCredit = useMemo(() => tierSiteCredit(), []);
 
   const updateParticipant = useCallback(
     (id: string, patch: Partial<TierParticipantDraft>) => {
@@ -645,19 +645,6 @@ function TierPageInner() {
               />
             </label>
 
-            <label className="block shrink-0">
-              <span className="mb-1 block text-[11px] font-medium text-zinc-500">
-                트위터 닉 (선택)
-              </span>
-              <input
-                type="text"
-                value={twitterId}
-                onChange={(e) => setTwitterId(e.target.value.replace(/^@+/, ""))}
-                placeholder="daeniorea"
-                className="min-h-10 w-32 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#00287A] sm:w-40"
-              />
-            </label>
-
             <button
               type="button"
               onClick={addParticipant}
@@ -702,8 +689,24 @@ function TierPageInner() {
           <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-1 [-webkit-overflow-scrolling:touch]">
             <div className="min-w-[820px] overflow-hidden rounded-lg border border-zinc-200">
               <div className="flex items-center justify-between gap-3 border-b border-zinc-100 bg-white px-3 py-2.5">
-                <p className="min-w-0 text-sm font-semibold text-[#0B1F4D]">{title}</p>
-                <p className="shrink-0 text-[11px] text-zinc-500">{handleLabel}</p>
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <p className="text-sm font-semibold text-[#0B1F4D]">{title}</p>
+                  <label className="inline-flex min-h-8 items-center gap-0.5 rounded border border-zinc-200 bg-zinc-50 px-1.5 text-[11px] text-zinc-600 focus-within:border-[#00287A]">
+                    <span className="select-none font-medium text-zinc-500" aria-hidden>
+                      @
+                    </span>
+                    <input
+                      type="text"
+                      value={twitterId}
+                      onChange={(e) => setTwitterId(e.target.value.replace(/^@+/, ""))}
+                      placeholder="트위터닉"
+                      maxLength={30}
+                      className="w-[7.5rem] bg-transparent py-1 outline-none placeholder:text-zinc-400"
+                      aria-label="트위터 닉네임"
+                    />
+                  </label>
+                </div>
+                <p className="shrink-0 text-[11px] text-zinc-500">{siteCredit}</p>
               </div>
               <div
                 className="grid"
