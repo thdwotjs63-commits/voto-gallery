@@ -22,13 +22,19 @@ describe("players-roster", () => {
     expect(total).toBe(121);
   });
 
-  it("parses Hyundai #3 Kim Dain and builds encoded url", () => {
+  it("parses Hyundai #3 Kim Dain and builds NFC-encoded url", () => {
     const p = findRosterPlayer("현대건설", 3);
     expect(p?.name).toBe("김다인");
     expect(p?.photo.startsWith("3 ")).toBe(true);
     const url = rosterPlayerUrl("현대건설", p!);
     expect(url.startsWith("/players/")).toBe(true);
     expect(url).toContain("%20");
+    // NFC Hangul for 현 (not NFD jamo %E1%84%…)
+    expect(url).toContain(encodeURIComponent("현대건설".normalize("NFC")));
+    expect(url).toContain(encodeURIComponent("3 김다인.webp".normalize("NFC")));
+    expect(url).not.toContain("%E1%84%");
+    // single encode only
+    expect(url).not.toContain("%25");
   });
 });
 

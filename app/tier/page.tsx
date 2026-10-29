@@ -252,6 +252,40 @@ function IdentityCell({
   );
 }
 
+/** 공식/커스텀 선수 사진 — next/image 없이 <img>, 로드 실패 시 이름 fallback */
+function PlayerPhoto({
+  src,
+  label,
+  className = "h-full w-full object-cover object-top",
+}: {
+  src: string;
+  label: string;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed || !src) {
+    return (
+      <span className="flex h-full w-full flex-col items-center justify-center gap-0.5 bg-zinc-200 px-1 text-center">
+        <span className="text-[10px] font-semibold leading-tight text-zinc-600">{label}</span>
+      </span>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={label}
+      loading="lazy"
+      decoding="async"
+      className={`pointer-events-none ${className}`}
+      draggable={false}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 /** 표 칸: 선수 선택 + 사진 교체 (저장 이미지에는 이 UI 없음) */
 function EditablePickCell({
   teamId,
@@ -300,6 +334,7 @@ function EditablePickCell({
   }
 
   const src = customUrl || rosterPlayerUrl(teamId, player);
+  const label = `${player.no} ${player.name}`;
 
   return (
     <div
@@ -322,18 +357,10 @@ function EditablePickCell({
         type="button"
         className="relative min-h-0 flex-1 touch-manipulation"
         title="사진 교체"
-        aria-label={`${player.no} ${player.name} 사진 교체`}
+        aria-label={`${label} 사진 교체`}
         onClick={() => photoInputRef.current?.click()}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt={`${player.no} ${player.name}`}
-          loading="lazy"
-          decoding="async"
-          className="pointer-events-none h-full w-full object-cover object-top"
-          draggable={false}
-        />
+        <PlayerPhoto key={src} src={src} label={label} />
         <span className="pointer-events-none absolute bottom-1 right-1 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white shadow-sm">
           <Camera className="h-3.5 w-3.5" aria-hidden />
         </span>

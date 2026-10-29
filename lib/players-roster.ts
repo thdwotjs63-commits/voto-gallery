@@ -187,9 +187,16 @@ export function getTierTeam(teamId: TierTeamId): TierTeam {
   return t;
 }
 
-/** 정적 이미지 URL (실제 폴더·파일명 인코딩) */
+/**
+ * 정적 이미지 URL.
+ * - 폴더·파일명은 NFC로 맞춘 뒤 세그먼트별 encodeURIComponent (공백→%20, 한글 안전).
+ * - macOS 소스는 NFD인 경우가 많고, git/리눅스 배포·iOS Safari는 NFC를 기대함.
+ * - 세그먼트만 한 번 인코딩 (이미 % 인코딩된 문자열을 넣지 말 것).
+ */
 export function playerPhotoUrl(teamFolder: string, photoFile: string): string {
-  return `/players/${encodeURIComponent(teamFolder)}/${encodeURIComponent(photoFile)}`;
+  const folder = teamFolder.normalize("NFC");
+  const file = photoFile.normalize("NFC");
+  return `/players/${encodeURIComponent(folder)}/${encodeURIComponent(file)}`;
 }
 
 export function rosterPlayerUrl(teamId: TierTeamId, player: RosterPlayer): string {
