@@ -349,6 +349,17 @@ export default function SchedulePage() {
   /** 2026-27 V리그 순위는 시즌 기간(2026-11 ~ 2027-04) 달력에서만 노출 */
   const showVleagueStandings = monthPrefix >= "2026-11" && monthPrefix <= "2027-04";
 
+  /** 현재 보고 있는 월(또는 리스트 검색 결과 기간)에 브이리그 경기가 있을 때만 티켓팅 섹션 표시 */
+  const showTicketingSection = useMemo(() => {
+    const isVleague = (m: Match) => (m.category ?? "").trim() === "브이리그";
+    if (view === "list" && teamQuery.trim()) {
+      return listDays.some((d) =>
+        d.groups.some((g) => g.matches.some(isVleague))
+      );
+    }
+    return matches.some((m) => m.date.startsWith(monthPrefix) && isVleague(m));
+  }, [view, teamQuery, listDays, matches, monthPrefix]);
+
   const downloadICS = (ics: string, filename: string) => {
     const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -423,9 +434,29 @@ export default function SchedulePage() {
       <main className="mx-auto max-w-[1100px] px-4 pb-20 sm:px-8 sm:pb-0">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex items-center justify-center gap-2 sm:justify-start sm:gap-3">
-            <button type="button" aria-label="이전 달" onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))} className="rounded-lg border border-zinc-200 p-2 text-zinc-700 hover:bg-zinc-50"><ChevronLeft className="h-4 w-4" /></button>
+            <button
+              type="button"
+              aria-label="이전 달"
+              onClick={() => {
+                setTicketPanelOpen(false);
+                setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1));
+              }}
+              className="rounded-lg border border-zinc-200 p-2 text-zinc-700 hover:bg-zinc-50"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
             <span className="min-w-[7.5rem] text-center text-base font-medium text-zinc-900">{monthLabel}</span>
-            <button type="button" aria-label="다음 달" onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))} className="rounded-lg border border-zinc-200 p-2 text-zinc-700 hover:bg-zinc-50"><ChevronRight className="h-4 w-4" /></button>
+            <button
+              type="button"
+              aria-label="다음 달"
+              onClick={() => {
+                setTicketPanelOpen(false);
+                setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1));
+              }}
+              className="rounded-lg border border-zinc-200 p-2 text-zinc-700 hover:bg-zinc-50"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
           <div className="flex justify-center gap-1.5 sm:justify-end">
             <button
@@ -475,7 +506,7 @@ export default function SchedulePage() {
           </div>
         ) : null}
 
-        {!loading && !error ? (
+        {!loading && !error && showTicketingSection ? (
           <section aria-label="티켓팅 알림" className="mb-4">
             <button
               type="button"

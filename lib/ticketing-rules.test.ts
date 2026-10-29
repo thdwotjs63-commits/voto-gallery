@@ -223,6 +223,23 @@ describe("computeTicketOpenEvents home for any club", () => {
     );
     expect(events).toHaveLength(0);
   });
+
+  it("only includes matches from 2026-10 through 2027-04", () => {
+    const events = computeTicketOpenEvents(
+      [
+        match({ date: "2026-09-30", teamA: "현대건설", teamB: "정관장" }),
+        match({ date: "2026-10-01", teamA: "현대건설", teamB: "흥국생명" }),
+        match({ date: "2027-04-30", teamA: "현대건설", teamB: "GS칼텍스" }),
+        match({ date: "2027-05-01", teamA: "현대건설", teamB: "도로공사" }),
+      ],
+      "현대건설",
+      { onlyUpcoming: false, labels: ["일반예매"] }
+    );
+    expect(events.map((e) => e.matchDate).sort()).toEqual([
+      "2026-10-01",
+      "2027-04-30",
+    ]);
+  });
 });
 
 describe("computeTicketOpenEvents away via teamB", () => {

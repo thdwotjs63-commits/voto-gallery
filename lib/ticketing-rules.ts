@@ -22,6 +22,14 @@ export type TeamTicketConfig = {
 /** 원정 티켓 계산에 쓰는 상대 구단 일반예매 라벨 */
 export const GENERAL_SALE_LABEL = "일반예매";
 
+/** 티켓 오픈 알림 대상 경기일 범위 (2026-27 시즌: 10월~4월) */
+export const TICKETING_MATCH_FROM = "2026-10-01";
+export const TICKETING_MATCH_TO = "2027-04-30";
+
+function isInTicketingSeason(matchDate: string): boolean {
+  return matchDate >= TICKETING_MATCH_FROM && matchDate <= TICKETING_MATCH_TO;
+}
+
 /** KOVO 여자부 7구단 — 선예매 7일전 / 일반예매 5일전, 시각·등급만 구단별 */
 export const TEAM_TICKET_CONFIGS: readonly TeamTicketConfig[] = [
   {
@@ -250,6 +258,7 @@ export function computeTicketOpenEvents(
   for (const m of matches) {
     const matchDate = (m.date ?? "").trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(matchDate)) continue;
+    if (!isInTicketingSeason(matchDate)) continue;
     if (options.onlyUpcoming && !isUpcomingMatchDay(matchDate, todayKey)) continue;
 
     if (homeRules.length > 0 && isTeamHomeVleagueMatch(m, config)) {
