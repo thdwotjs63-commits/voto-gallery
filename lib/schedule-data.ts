@@ -527,13 +527,15 @@ export type TicketingIcsEvent = {
   matchDate: string;
   venue: string;
   teamName: string;
+  kind?: "home" | "away";
 };
 
 function buildTicketingVEVENT(ev: TicketingIcsEvent): string[] {
   const end = addMinutesKst(ev.date, ev.time, 15);
   const dtStart = toICSUtc(ev.date, ev.time);
   const dtEnd = toICSUtc(end.date, end.time);
-  const uidBase = `${ev.teamName}-${ev.matchDate}-${ev.label}`
+  const kind = ev.kind ?? "home";
+  const uidBase = `${ev.teamName}-${ev.matchDate}-${kind}-${ev.label}`
     .replace(/\s/g, "")
     .replace(/[^\w가-힣()-]/g, "");
   const uid = `${uidBase}@voto-gallery-ticketing`;
@@ -541,8 +543,13 @@ function buildTicketingVEVENT(ev: TicketingIcsEvent): string[] {
   const [, mm, dd] = ev.matchDate.split("-");
   const matchMd = mm && dd ? `${Number(mm)}/${Number(dd)}` : ev.matchDate;
   const venuePart = ev.venue ? ` · ${ev.venue}` : "";
-  const description = `${ev.teamName} 홈경기(경기일 ${matchMd}) 티켓 오픈${venuePart}`;
-  const summary = `🎟 [${ev.label}] ${ev.teamName} vs ${ev.opponent} 티켓`;
+  const isAway = kind === "away";
+  const summary = isAway
+    ? `🎟 [원정 일반예매] ${ev.opponent} vs ${ev.teamName} 티켓`
+    : `🎟 [${ev.label}] ${ev.teamName} vs ${ev.opponent} 티켓`;
+  const description = isAway
+    ? `${ev.teamName} 원정경기(경기일 ${matchMd}) · ${ev.opponent} 일반예매 티켓 오픈${venuePart}`
+    : `${ev.teamName} 홈경기(경기일 ${matchMd}) 티켓 오픈${venuePart}`;
 
   return [
     "BEGIN:VEVENT",
