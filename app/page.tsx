@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { SeasonOpeningBanner } from "@/components/season-opening-banner";
-import { Daeni4CutHomePopup } from "@/components/daeni-4cut-home-popup";
+import { TierHomePopup } from "@/components/tier-home-popup";
 import { GalleryChangelog } from "@/components/gallery-changelog";
 import { SiteNav } from "@/components/site-nav";
 import {
@@ -2623,7 +2623,7 @@ export default function Home() {
           ))}
         </section>
 
-        <div className="mx-auto grid max-w-[1100px] grid-cols-2 gap-3">
+        <div className="mx-auto grid max-w-[1100px] grid-cols-2 gap-3 sm:grid-cols-3">
           <div
             onClick={() => router.push("/saju")}
             onKeyDown={(event) => {
@@ -2655,6 +2655,23 @@ export default function Home() {
           >
             <p className="truncate text-center text-[13px] font-medium text-[#E9E3D6]">
               다인네컷 찍기
+            </p>
+          </div>
+
+          <div
+            onClick={() => router.push("/tier")}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                router.push("/tier");
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            className="col-span-2 flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-[#00287A]/45 bg-[#0a1428] px-3 py-3 sm:col-span-1"
+          >
+            <p className="truncate text-center text-[13px] font-medium text-[#E9E3D6]">
+              KOVO 취향표 만들기
             </p>
           </div>
         </div>
@@ -3712,7 +3729,7 @@ export default function Home() {
           </motion.div>
         ) : null}
       </AnimatePresence>
-      <Daeni4CutHomePopup />
+      <TierHomePopup />
       </div>
     </>
   );
