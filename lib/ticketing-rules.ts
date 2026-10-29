@@ -1,4 +1,5 @@
 import type { Match } from "./schedule-data";
+import { VLEAGUE_TEAMS } from "./vleague-teams";
 
 /** 예: { daysBefore: 7, time: "11:00", label: "선예매 (힐스/테리)" } */
 export type TicketRule = {
@@ -8,7 +9,7 @@ export type TicketRule = {
 };
 
 export type TeamTicketConfig = {
-  /** 일정 시트 팀명 매칭 키워드 */
+  /** UI·선택용 키 (findConfig 매칭) */
   match: string;
   /** UI 표시명 */
   name: string;
@@ -88,7 +89,6 @@ export const TEAM_TICKET_CONFIGS: readonly TeamTicketConfig[] = [
     ],
   },
   {
-    /** "한국도로공사"·"도로공사" 모두 포함 매칭 */
     match: "도로공사",
     name: "한국도로공사",
     homeVenue: "김천실내체육관",
@@ -147,26 +147,45 @@ export function seoulTimeHm(date: Date): string {
   return `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
 }
 
-function involvesTeam(m: Match, teamKeyword: string): boolean {
-  return (m.teamA ?? "").includes(teamKeyword) || (m.teamB ?? "").includes(teamKeyword);
+/**
+ * 구단 매칭 키워드 — vleague-teams 부분포함 키워드 + config.match.
+ * 긴 키워드 우선(한국도로공사 > 도로공사, GS칼텍스 > GS).
+ */
+export function matchKeywordsForConfig(config: TeamTicketConfig): string[] {
+  const keys = new Set<string>([config.match, config.name]);
+  for (const t of VLEAGUE_TEAMS) {
+    if (
+      t.match === config.match ||
+      config.name.includes(t.match) ||
+      (config.match === "도로공사" &&
+        (t.match === "도로공사" || t.match === "한국도로공사")) ||
+      (config.match === "GS칼텍스" && t.match === "GS칼텍스") ||
+      (config.match === "SOOP" && t.match === "SOOP") ||
+      (config.match === "IBK" && t.match === "IBK")
+    ) {
+      keys.add(t.match);
+    }
+  }
+  if (config.match === "GS칼텍스") keys.add("GS");
+  return [...keys].sort((a, b) => b.length - a.length);
 }
 
-export function isTeamHomeVleagueMatch(m: Match, teamKeyword: string): boolean {
+export function teamNameMatchesConfig(teamName: string, config: TeamTicketConfig): boolean {
+  const n = (teamName ?? "").trim();
+  if (!n) return false;
+  return matchKeywordsForConfig(config).some((k) => n.includes(k));
+}
+
+/** 브이리그 + teamA(홈)에 구단 포함 — homeAway 미사용 */
+export function isTeamHomeVleagueMatch(m: Match, config: TeamTicketConfig): boolean {
   if ((m.category ?? "").trim() !== "브이리그") return false;
-  if ((m.homeAway ?? "").trim() !== "홈") return false;
-  return involvesTeam(m, teamKeyword);
+  return teamNameMatchesConfig(m.teamA ?? "", config);
 }
 
-export function isTeamAwayVleagueMatch(m: Match, teamKeyword: string): boolean {
+/** 브이리그 + teamB(원정)에 구단 포함 — homeAway 미사용 */
+export function isTeamAwayVleagueMatch(m: Match, config: TeamTicketConfig): boolean {
   if ((m.category ?? "").trim() !== "브이리그") return false;
-  if ((m.homeAway ?? "").trim() !== "원정") return false;
-  return involvesTeam(m, teamKeyword);
-}
-
-function opponentOf(m: Match, teamKeyword: string): string {
-  if ((m.teamA ?? "").includes(teamKeyword)) return (m.teamB ?? "").trim() || "상대";
-  if ((m.teamB ?? "").includes(teamKeyword)) return (m.teamA ?? "").trim() || "상대";
-  return ((m.teamB || m.teamA) ?? "").trim() || "상대";
+  return teamNameMatchesConfig(m.teamB ?? "", config);
 }
 
 export function findConfig(teamKeyword: string): TeamTicketConfig | undefined {
@@ -177,9 +196,10 @@ export function findConfig(teamKeyword: string): TeamTicketConfig | undefined {
 export function findConfigForTeamName(teamName: string): TeamTicketConfig | undefined {
   const n = (teamName ?? "").trim();
   if (!n) return undefined;
-  return [...TEAM_TICKET_CONFIGS]
-    .sort((a, b) => b.match.length - a.match.length)
-    .find((c) => n.includes(c.match));
+  const ranked = [...TEAM_TICKET_CONFIGS].sort(
+    (a, b) => matchKeywordsForConfig(b)[0]!.length - matchKeywordsForConfig(a)[0]!.length
+  );
+  return ranked.find((c) => teamNameMatchesConfig(n, c));
 }
 
 export function getGeneralSaleRule(config: TeamTicketConfig): TicketRule | undefined {
@@ -187,29 +207,27 @@ export function getGeneralSaleRule(config: TeamTicketConfig): TicketRule | undef
 }
 
 export type ComputeTicketOpenOptions = {
+  /** true면 경기일이 오늘(KST) 이후인 것만. 오픈 시각이 지났어도 경기가 남으면 포함 */
   onlyUpcoming?: boolean;
   /** 테스트용. 기본은 현재 시각 */
   now?: Date;
   /** 홈경기 규칙 label 필터. 비우면 홈 이벤트 없음(원정만 가능) */
   labels?: readonly string[];
-  /** 원정경기 → 상대 구단 일반예매로 추가 */
+  /** 원정경기 → 상대(teamA) 구단 일반예매로 추가 */
   includeAway?: boolean;
 };
 
-function isUpcoming(
-  openDate: string,
-  openTime: string,
-  todayKey: string,
-  nowHm: string
-): boolean {
-  if (openDate < todayKey) return false;
-  if (openDate === todayKey && openTime <= nowHm) return false;
-  return true;
+/**
+ * onlyUpcoming: 오픈 시각이 아니라 "경기일"이 오늘 이후인 것만.
+ * (개막 직전처럼 오픈은 지났어도 경기가 남으면 목록·ICS에 남긴다)
+ */
+function isUpcomingMatchDay(matchDate: string, todayKey: string): boolean {
+  return matchDate >= todayKey;
 }
 
 /**
- * 해당 구단 브이리그 홈(선택 규칙) + 선택 시 원정(상대 일반예매) 티켓 오픈 이벤트.
- * onlyUpcoming 이면 이미 지난 오픈(날짜+시각)은 제외.
+ * 해당 구단 브이리그 홈(teamA) + 선택 시 원정(teamB→teamA 일반예매) 티켓 오픈.
+ * homeAway 필드는 사용하지 않는다(현대건설 전용 값이라 다른 구단 누락됨).
  */
 export function computeTicketOpenEvents(
   matches: readonly Match[],
@@ -226,22 +244,19 @@ export function computeTicketOpenEvents(
 
   const now = options.now ?? new Date();
   const todayKey = seoulDateKey(now);
-  const nowHm = seoulTimeHm(now);
 
   const events: TicketOpenEvent[] = [];
 
   for (const m of matches) {
     const matchDate = (m.date ?? "").trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(matchDate)) continue;
+    if (options.onlyUpcoming && !isUpcomingMatchDay(matchDate, todayKey)) continue;
 
-    if (homeRules.length > 0 && isTeamHomeVleagueMatch(m, config.match)) {
+    if (homeRules.length > 0 && isTeamHomeVleagueMatch(m, config)) {
       const venue = (m.venue ?? "").trim() || config.homeVenue;
-      const opponent = opponentOf(m, config.match);
+      const opponent = (m.teamB ?? "").trim() || "상대";
       for (const rule of homeRules) {
         const openDate = subtractCalendarDays(matchDate, rule.daysBefore);
-        if (options.onlyUpcoming && !isUpcoming(openDate, rule.time, todayKey, nowHm)) {
-          continue;
-        }
         events.push({
           date: openDate,
           time: rule.time,
@@ -255,16 +270,13 @@ export function computeTicketOpenEvents(
       }
     }
 
-    if (options.includeAway && isTeamAwayVleagueMatch(m, config.match)) {
-      const homeTeamName = opponentOf(m, config.match);
+    if (options.includeAway && isTeamAwayVleagueMatch(m, config)) {
+      const homeTeamName = (m.teamA ?? "").trim();
       const homeConfig = findConfigForTeamName(homeTeamName);
       const general = homeConfig ? getGeneralSaleRule(homeConfig) : undefined;
       if (!homeConfig || !general) continue;
 
       const openDate = subtractCalendarDays(matchDate, general.daysBefore);
-      if (options.onlyUpcoming && !isUpcoming(openDate, general.time, todayKey, nowHm)) {
-        continue;
-      }
       const venue = (m.venue ?? "").trim() || homeConfig.homeVenue;
       events.push({
         date: openDate,
