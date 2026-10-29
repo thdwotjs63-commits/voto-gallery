@@ -6,7 +6,13 @@ import {
 } from "./players-roster";
 import { chipTextColor } from "./vleague-teams";
 
-export const TIER_TITLE_KINDS = ["취향표", "취향파괴범", "최애제외취향"] as const;
+export const TIER_TITLE_KINDS = [
+  "취향표",
+  "취향파괴범",
+  "최애제외취향",
+  "얼굴취향",
+  "배구취향",
+] as const;
 export type TierTitleKind = (typeof TIER_TITLE_KINDS)[number];
 
 export const TIER_PARTICIPANT_MIN = 1;
