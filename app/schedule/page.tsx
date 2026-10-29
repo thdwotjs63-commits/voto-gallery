@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus, ExternalLink, Calculator, Crown } from "lucide-react";
-import { groupByDate, buildTournamentICS, buildAllScheduleICS, getTeamKoreaRecord, getTeamKoreaMedals, type Match, type DaySchedule } from "@/lib/schedule-data";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus, ExternalLink, Calculator, Crown, Ticket } from "lucide-react";
+import { groupByDate, buildTournamentICS, buildAllScheduleICS, buildTicketingICS, getTeamKoreaRecord, getTeamKoreaMedals, type Match, type DaySchedule } from "@/lib/schedule-data";
 import { computeVLeagueStandings } from "@/lib/standings";
 import { getHoliday, getDayType } from "@/lib/holidays";
 import { SiteNav } from "@/components/site-nav";
@@ -18,6 +18,10 @@ import {
   shortenEventLabel,
   type CalendarTeamMark,
 } from "@/lib/calendar-team-mark";
+import {
+  TEAM_TICKET_CONFIGS,
+  computeTicketOpenEvents,
+} from "@/lib/ticketing-rules";
 
 const CATEGORY_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   "브이리그": { bg: "#E6F1FB", text: "#0C447C", label: "브이리그" },
@@ -254,6 +258,10 @@ export default function SchedulePage() {
   const [view, setView] = useState<"calendar" | "list">("calendar");
   const [teamQuery, setTeamQuery] = useState("");
   const [showIosSafariTip, setShowIosSafariTip] = useState(false);
+  const [ticketTeam, setTicketTeam] = useState("현대건설");
+  const [ticketEarly, setTicketEarly] = useState(true);
+  const [ticketGeneral, setTicketGeneral] = useState(true);
+  const [ticketPanelOpen, setTicketPanelOpen] = useState(false);
 
   useEffect(() => {
     setShowIosSafariTip(needsIosSafariTip());
@@ -359,6 +367,30 @@ export default function SchedulePage() {
     downloadICS(buildAllScheduleICS(allDaySchedules), "voto_volleyball_schedule.ics");
   };
 
+  const ticketLabels = useMemo(() => {
+    const labels: string[] = [];
+    if (ticketEarly) labels.push("선예매(멤버십)");
+    if (ticketGeneral) labels.push("일반예매");
+    return labels;
+  }, [ticketEarly, ticketGeneral]);
+
+  const ticketPreview = useMemo(
+    () =>
+      computeTicketOpenEvents(matches, ticketTeam, {
+        onlyUpcoming: true,
+        labels: ticketLabels,
+      }),
+    [matches, ticketTeam, ticketLabels]
+  );
+
+  const handleSaveTicketing = () => {
+    if (ticketPreview.length === 0) return;
+    downloadICS(
+      buildTicketingICS(ticketPreview),
+      `voto_ticketing_${ticketTeam}.ics`
+    );
+  };
+
   return (
     <div className="min-h-screen bg-white text-zinc-900 [color-scheme:light]">
       <SiteNav />
@@ -440,6 +472,159 @@ export default function SchedulePage() {
               전체 일정 저장
             </button>
           </div>
+        ) : null}
+
+        {!loading && !error ? (
+          <section aria-label="티켓팅 알림" className="mb-4">
+            <button
+              type="button"
+              aria-expanded={ticketPanelOpen}
+              aria-controls="ticketing-panel"
+              onClick={() => setTicketPanelOpen((open) => !open)}
+              className="flex w-full items-center justify-between gap-2 rounded-lg border border-[#00287A]/20 bg-white px-3 py-2 text-left transition hover:bg-[#00287A]/[0.03]"
+            >
+              <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-[#00287A]">
+                <Ticket className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="truncate">🎟 티켓 오픈 알림 추가하기</span>
+              </span>
+              <ChevronRight
+                className={`h-4 w-4 shrink-0 text-[#00287A]/70 transition-transform duration-200 ${
+                  ticketPanelOpen ? "rotate-90" : ""
+                }`}
+                aria-hidden
+              />
+            </button>
+
+            <div
+              id="ticketing-panel"
+              role="region"
+              aria-labelledby="ticketing-panel-title"
+              className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                ticketPanelOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+              }`}
+            >
+              <div className="overflow-hidden">
+                <div className="mt-2 rounded-xl border border-[#00287A]/15 bg-white px-4 py-3">
+                  <h2 id="ticketing-panel-title" className="sr-only">
+                    티켓팅 알림 설정
+                  </h2>
+                  <p className="mb-3 text-[11px] leading-relaxed text-zinc-600">
+                    티켓 오픈 10분 전에 알림이 울려요 · 캘린더 앱에 추가하면 자동으로 알림됩니다
+                  </p>
+
+                  <div className="mb-3">
+                    <p className="mb-1.5 text-[11px] font-medium text-zinc-500">구단</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {TEAM_TICKET_CONFIGS.map((cfg) => {
+                        const active = ticketTeam === cfg.match;
+                        return (
+                          <button
+                            key={cfg.match}
+                            type="button"
+                            disabled={!cfg.enabled}
+                            onClick={() => cfg.enabled && setTicketTeam(cfg.match)}
+                            className={`rounded-full px-3 py-1 text-[11px] transition ${
+                              !cfg.enabled
+                                ? "cursor-not-allowed border border-zinc-100 bg-zinc-50 text-zinc-400"
+                                : active
+                                  ? "bg-[#00287A] text-white"
+                                  : "border border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                            }`}
+                            title={!cfg.enabled ? "준비 중" : undefined}
+                          >
+                            {cfg.name}
+                            {!cfg.enabled ? (
+                              <span className="ml-1 text-[10px] opacity-80">준비 중</span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <p className="mb-1.5 text-[11px] font-medium text-zinc-500">예매 종류</p>
+                    <div className="flex flex-wrap gap-3">
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-zinc-800">
+                        <input
+                          type="checkbox"
+                          checked={ticketEarly}
+                          onChange={(e) => setTicketEarly(e.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-zinc-300 text-[#00287A] focus:ring-[#00287A]"
+                        />
+                        선예매(멤버십)
+                      </label>
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-zinc-800">
+                        <input
+                          type="checkbox"
+                          checked={ticketGeneral}
+                          onChange={(e) => setTicketGeneral(e.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-zinc-300 text-[#00287A] focus:ring-[#00287A]"
+                        />
+                        일반예매
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="mb-3 rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2.5">
+                    <p className="mb-1.5 text-[11px] font-medium text-zinc-500">
+                      남은 티켓 오픈 미리보기
+                      {ticketPreview.length > 0 ? (
+                        <span className="ml-1 text-zinc-400">· {ticketPreview.length}건</span>
+                      ) : null}
+                    </p>
+                    {ticketLabels.length === 0 ? (
+                      <p className="text-[11px] text-zinc-500">예매 종류를 하나 이상 선택해 주세요.</p>
+                    ) : ticketPreview.length === 0 ? (
+                      <p className="text-[11px] text-zinc-500">앞으로 남은 홈경기 티켓 오픈이 없어요.</p>
+                    ) : (
+                      <ul className="max-h-40 space-y-1 overflow-y-auto text-[11px] text-zinc-700">
+                        {ticketPreview.map((ev) => {
+                          const [, mm, dd] = ev.matchDate.split("-");
+                          const matchMd =
+                            mm && dd ? `${Number(mm)}/${Number(dd)}` : ev.matchDate;
+                          return (
+                            <li
+                              key={`${ev.date}-${ev.label}-${ev.matchDate}`}
+                              className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5"
+                            >
+                              <span className="font-medium tabular-nums text-zinc-900">
+                                {ev.date} {ev.time}
+                              </span>
+                              <span className="rounded bg-[#00287A]/10 px-1.5 py-px text-[10px] font-medium text-[#00287A]">
+                                {ev.label}
+                              </span>
+                              <span className="text-zinc-600">
+                                vs {ev.opponent}
+                                <span className="text-zinc-400"> · 경기 {matchMd}</span>
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+
+                  <p className="mb-2 text-[11px] font-medium leading-snug text-[#00287A]">
+                    저장하면 티켓 오픈 10분 전에 알림이 울려요 🔔
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSaveTicketing}
+                    disabled={ticketPreview.length === 0}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-[#00287A] bg-[#00287A] px-3 py-2.5 text-xs font-medium text-white transition hover:bg-[#001f5c] disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-200 disabled:text-zinc-500 sm:w-auto sm:px-4"
+                  >
+                    <CalendarPlus className="h-3.5 w-3.5" />
+                    티켓 오픈 알림 저장
+                  </button>
+
+                  <p className="mt-2.5 text-[10px] leading-relaxed text-zinc-500">
+                    실제 티켓 오픈 시각은 구단 공지를 꼭 확인하세요. 공지 변경으로 알림 시각이 다를 수 있어요.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
         ) : null}
 
         {!loading && !error ? (

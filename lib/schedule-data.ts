@@ -497,3 +497,72 @@ export function buildAllScheduleICS(daySchedules: DaySchedule[]): string {
   );
   return [...ICS_CALENDAR_HEADER, ...events, "END:VCALENDAR"].join("\r\n");
 }
+
+/** KST 날짜+시각에 분 추가 → { date, time } */
+function addMinutesKst(
+  dateStr: string,
+  timeStr: string,
+  mins: number
+): { date: string; time: string } {
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  const [h, mi] = (timeStr || "00:00").split(":").map(Number);
+  const total = h * 60 + mi + mins;
+  const dayAdd = Math.floor(total / (24 * 60));
+  const rem = ((total % (24 * 60)) + 24 * 60) % (24 * 60);
+  const nh = Math.floor(rem / 60);
+  const nm = rem % 60;
+  const dt = new Date(Date.UTC(y, mo - 1, d + dayAdd));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    date: `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`,
+    time: `${pad(nh)}:${pad(nm)}`,
+  };
+}
+
+export type TicketingIcsEvent = {
+  date: string;
+  time: string;
+  label: string;
+  opponent: string;
+  matchDate: string;
+  venue: string;
+  teamName: string;
+};
+
+function buildTicketingVEVENT(ev: TicketingIcsEvent): string[] {
+  const end = addMinutesKst(ev.date, ev.time, 15);
+  const dtStart = toICSUtc(ev.date, ev.time);
+  const dtEnd = toICSUtc(end.date, end.time);
+  const uidBase = `${ev.teamName}-${ev.matchDate}-${ev.label}`
+    .replace(/\s/g, "")
+    .replace(/[^\w가-힣()-]/g, "");
+  const uid = `${uidBase}@voto-gallery-ticketing`;
+
+  const [, mm, dd] = ev.matchDate.split("-");
+  const matchMd = mm && dd ? `${Number(mm)}/${Number(dd)}` : ev.matchDate;
+  const venuePart = ev.venue ? ` · ${ev.venue}` : "";
+  const description = `${ev.teamName} 홈경기(경기일 ${matchMd}) 티켓 오픈${venuePart}`;
+  const summary = `🎟 [${ev.label}] ${ev.teamName} vs ${ev.opponent} 티켓`;
+
+  return [
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTART:${dtStart}`,
+    `DTEND:${dtEnd}`,
+    `SUMMARY:${escapeICS(summary)}`,
+    `LOCATION:${escapeICS(ev.venue)}`,
+    `DESCRIPTION:${escapeICS(description)}`,
+    "BEGIN:VALARM",
+    "TRIGGER:-PT10M",
+    "ACTION:DISPLAY",
+    `DESCRIPTION:${escapeICS("티켓 오픈 10분 전")}`,
+    "END:VALARM",
+    "END:VEVENT",
+  ];
+}
+
+/** 티켓 오픈 이벤트들을 하나의 .ics 로 (오픈 10분 전 VALARM 포함) */
+export function buildTicketingICS(events: readonly TicketingIcsEvent[]): string {
+  const vevents = events.flatMap((ev) => buildTicketingVEVENT(ev));
+  return [...ICS_CALENDAR_HEADER, ...vevents, "END:VCALENDAR"].join("\r\n");
+}

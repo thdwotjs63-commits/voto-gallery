@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildTicketingICS,
   getHyundaiStreak,
   getWeeklyMatches,
   type Match,
@@ -115,5 +116,29 @@ describe("getWeeklyMatches", () => {
 
   it("returns empty lists when there are no Hyundai games", () => {
     expect(getWeeklyMatches([], sunday)).toEqual({ thisWeek: [], nextWeek: [] });
+  });
+});
+
+describe("buildTicketingICS", () => {
+  it("includes VALARM 10 minutes before open and a ticket summary", () => {
+    const ics = buildTicketingICS([
+      {
+        date: "2026-11-08",
+        time: "11:00",
+        label: "선예매(멤버십)",
+        opponent: "IBK기업은행",
+        matchDate: "2026-11-15",
+        venue: "수원체육관",
+        teamName: "현대건설",
+      },
+    ]);
+    expect(ics).toContain("BEGIN:VALARM");
+    expect(ics).toContain("TRIGGER:-PT10M");
+    expect(ics).toContain("ACTION:DISPLAY");
+    expect(ics).toContain("END:VALARM");
+    expect(ics).toContain("선예매(멤버십)");
+    expect(ics).toContain("현대건설");
+    // 11:00 KST = 02:00 UTC
+    expect(ics).toContain("DTSTART:20261108T020000Z");
   });
 });
