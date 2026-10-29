@@ -47,10 +47,10 @@ export function chartTitle(kind: TierTitleKind): string {
   return `KOVO 여자배구 ${kind}`;
 }
 
-/** 표·저장 이미지 하단 출처 (예: daeni.kr/tier) */
+/** 표·저장 이미지 우측 상단 출처 (예: 출처는 @daeniorea) */
 export function tierCreditLabel(twitterId: string): string {
-  const handle = (twitterId || "daeni.kr").replace(/^@/, "").trim() || "daeni.kr";
-  return `${handle}/tier`;
+  const handle = (twitterId || "daeniorea").replace(/^@/, "").trim() || "daeniorea";
+  return `출처는 @${handle}`;
 }
 
 export function createEmptyParticipant(index: number): TierParticipantDraft {
@@ -148,17 +148,18 @@ export async function renderTierChartCanvas(
   ctx.fillStyle = "#FFFFFF";
   ctx.fillRect(0, 0, width, height);
 
-  // title
+  // title (left) + credit (top-right)
   const title = chartTitle(input.titleKind);
   ctx.fillStyle = "#0B1F4D";
   ctx.font = "bold 28px Pretendard, Apple SD Gothic Neo, sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.fillText(title, pad, pad + 28);
+  ctx.fillText(title, pad, pad + titleH / 2);
 
   ctx.fillStyle = "#71717A";
   ctx.font = "14px Pretendard, Apple SD Gothic Neo, sans-serif";
-  ctx.fillText(tierCreditLabel(input.twitterId), pad, pad + 56);
+  ctx.textAlign = "right";
+  ctx.fillText(tierCreditLabel(input.twitterId), width - pad, pad + titleH / 2);
 
   const gridTop = pad + titleH;
   const gridLeft = pad;

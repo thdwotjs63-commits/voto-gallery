@@ -1,8 +1,25 @@
 "use client";
 
-import { useCallback, useMemo, useState, type CSSProperties } from "react";
-import { useRouter } from "next/navigation";
-import { Camera, ClipboardPaste, Copy, Download, Plus, Share2, Trash2, Upload, UserRound } from "lucide-react";
+import {
+  Suspense,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  Camera,
+  ClipboardPaste,
+  Copy,
+  Download,
+  Plus,
+  Share2,
+  Trash2,
+  Upload,
+  UserRound,
+} from "lucide-react";
 import { SiteNav } from "@/components/site-nav";
 import { PageShareButton } from "@/components/page-share-button";
 import {
@@ -33,6 +50,7 @@ import {
   buildTierAddUrl,
   nicknamesEqual,
   parseTierShareInput,
+  participantFromShare,
   sharePayloadFromParticipant,
 } from "@/lib/tier-share";
 import { upsertTierSubmissions } from "@/lib/tier-submissions";
@@ -44,14 +62,24 @@ function shortTeamLabel(label: string): string {
   return label;
 }
 
+function hasAnyPick(p: TierParticipantDraft): boolean {
+  return TIER_TEAMS.some((t) => p.picks[t.id] != null);
+}
+
+function participantsFromAddParam(add: string | null): TierParticipantDraft[] {
+  if (!add) return [createEmptyParticipant(1)];
+  const payload = parseTierShareInput(add);
+  if (!payload) return [createEmptyParticipant(1)];
+  return [participantFromShare(payload, 1)];
+}
+
 function AvatarCircle({
   url,
   nickname,
   fanTeam,
-  sizeClass = "h-20 w-20",
-  textClass = "text-base",
-  ringWidth = 5,
-  dashed,
+  sizeClass = "h-12 w-12",
+  textClass = "text-sm",
+  ringWidth = 4,
 }: {
   url: string | null;
   nickname: string;
@@ -59,15 +87,13 @@ function AvatarCircle({
   sizeClass?: string;
   textClass?: string;
   ringWidth?: number;
-  dashed?: boolean;
 }) {
   const ring = fanTeamColor(fanTeam);
   const initial = (nickname.trim() || "?").slice(0, 1);
-  const borderWidth = ring ? ringWidth : dashed ? 2 : 2;
   const style: CSSProperties = {
-    borderWidth,
-    borderStyle: ring ? "solid" : dashed ? "dashed" : "solid",
-    borderColor: ring ?? (dashed ? "#d4d4d8" : "#e4e4e7"),
+    borderWidth: ring ? ringWidth : 2,
+    borderStyle: ring ? "solid" : "dashed",
+    borderColor: ring ?? "#d4d4d8",
     background: !url && ring ? ring : undefined,
     color: !url && ring ? chipTextColor(ring) : undefined,
   };
@@ -89,59 +115,67 @@ function AvatarCircle({
   );
 }
 
-function ProfilePicker({
-  url,
-  nickname,
-  fanTeam,
-  onChange,
+/** 행 왼쪽: 닉네임·응원팀·프로필 (저장 이미지에는 편집 UI 없음) */
+function IdentityCell({
+  participant,
+  index,
+  canRemove,
+  onUpdate,
+  onProfile,
+  onCopy,
+  onShare,
+  onRemove,
 }: {
-  url: string | null;
-  nickname: string;
-  fanTeam: TierTeamId | null;
-  onChange: (nextUrl: string | null) => void;
+  participant: TierParticipantDraft;
+  index: number;
+  canRemove: boolean;
+  onUpdate: (patch: Partial<TierParticipantDraft>) => void;
+  onProfile: (url: string | null) => void;
+  onCopy: () => void;
+  onShare: () => void;
+  onRemove: () => void;
 }) {
   const [dragging, setDragging] = useState(false);
 
   const applyFile = (file: File | null) => {
     if (!file || !file.type.startsWith("image/")) return;
-    const objectUrl = URL.createObjectURL(file);
-    onChange(objectUrl);
+    onProfile(URL.createObjectURL(file));
   };
 
   return (
-    <div className="flex items-center gap-3">
-      {/* label + 투명 file input이 원 전체를 히트박스로 덮음 (display:none 프로그래밍 클릭 회피) */}
+    <div className="flex h-full min-h-[9.5rem] flex-col gap-1 border-t border-zinc-100 bg-zinc-50 px-1.5 py-2">
+      <p className="text-center text-[9px] font-medium text-zinc-400">
+        {index + 1}
+        {participant.fromLink ? " · 링크" : ""}
+      </p>
+
       <label
-        className={`relative block h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-full transition ${
-          dragging ? "ring-2 ring-[#00287A]/40 ring-offset-2" : ""
+        className={`relative mx-auto block h-12 w-12 shrink-0 cursor-pointer overflow-hidden rounded-full ${
+          dragging ? "ring-2 ring-[#00287A]/40" : ""
         }`}
         onDragEnter={(e) => {
           e.preventDefault();
-          e.stopPropagation();
           setDragging(true);
         }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-        onDragLeave={(e) => {
-          e.preventDefault();
-          setDragging(false);
-        }}
+        onDragOver={(e) => e.preventDefault()}
+        onDragLeave={() => setDragging(false)}
         onDrop={(e) => {
           e.preventDefault();
-          e.stopPropagation();
           setDragging(false);
           applyFile(e.dataTransfer.files?.[0] ?? null);
         }}
       >
-        <span className="pointer-events-none block h-full w-full" aria-hidden>
-          {url || fanTeam ? (
-            <AvatarCircle url={url} nickname={nickname} fanTeam={fanTeam} />
+        <span className="pointer-events-none block h-full w-full">
+          {participant.profileUrl || participant.fanTeam ? (
+            <AvatarCircle
+              url={participant.profileUrl}
+              nickname={participant.nickname}
+              fanTeam={participant.fanTeam}
+            />
           ) : (
-            <span className="flex h-20 w-20 flex-col items-center justify-center gap-0.5 rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 text-zinc-400">
-              <UserRound className="h-6 w-6" />
-              <Upload className="h-3.5 w-3.5" />
+            <span className="flex h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-full border-2 border-dashed border-zinc-300 bg-white text-zinc-400">
+              <UserRound className="h-4 w-4" />
+              <Upload className="h-2.5 w-2.5" />
             </span>
           )}
         </span>
@@ -149,245 +183,212 @@ function ProfilePicker({
           type="file"
           accept="image/*"
           className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-          aria-label="프로필 사진 업로드"
+          aria-label={`참가자 ${index + 1} 프로필 사진`}
           onChange={(e) => {
             applyFile(e.target.files?.[0] ?? null);
             e.target.value = "";
           }}
         />
       </label>
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] text-zinc-500">
-          {nickname.trim() || "닉네임"} · 탭하거나 사진을 끌어다 놓아요
-        </p>
-        {url ? (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="mt-1 text-[11px] text-zinc-500 underline-offset-2 hover:underline"
-          >
-            사진 지우기
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
 
-/** 각 참가자 행 전용 링크 붙여넣기 — 그 행만 채움 */
-function RowLinkPaste({
-  participantId,
-  onFill,
-}: {
-  participantId: string;
-  onFill: (participantId: string, raw: string) => string | null;
-}) {
-  const [value, setValue] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
+      <input
+        type="text"
+        value={participant.nickname}
+        onChange={(e) => onUpdate({ nickname: e.target.value })}
+        maxLength={20}
+        placeholder="닉네임"
+        className="min-h-9 w-full rounded border border-zinc-200 bg-white px-1 py-1 text-center text-[10px] font-medium outline-none focus:border-[#00287A]"
+        aria-label={`참가자 ${index + 1} 닉네임`}
+      />
 
-  const run = (raw: string) => {
-    const msg = onFill(participantId, raw);
-    if (msg) {
-      setError(msg);
-      setOkMsg(null);
-      return;
-    }
-    setError(null);
-    setOkMsg("이 칸에 반영했어요.");
-    setValue("");
-  };
+      <select
+        value={participant.fanTeam ?? ""}
+        onChange={(e) =>
+          onUpdate({
+            fanTeam: e.target.value ? (e.target.value as TierTeamId) : null,
+          })
+        }
+        className="min-h-9 w-full rounded border border-zinc-200 bg-white px-0.5 py-1 text-[9px] outline-none focus:border-[#00287A]"
+        aria-label={`참가자 ${index + 1} 응원팀`}
+      >
+        <option value="">응원팀</option>
+        {TIER_TEAMS.map((team) => (
+          <option key={team.id} value={team.id}>
+            {shortTeamLabel(team.label)}
+          </option>
+        ))}
+      </select>
 
-  return (
-    <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50/80 px-2.5 py-2">
-      <p className="mb-1 flex items-center gap-1 text-[10px] font-medium text-zinc-500">
-        <ClipboardPaste className="h-3 w-3" aria-hidden />
-        링크 붙여넣기
-      </p>
-      <p className="mb-1.5 text-[10px] leading-relaxed text-zinc-400">
-        친구 링크를 넣으면 이 칸만 채워져요 (사진은 응원팀 색)
-      </p>
-      <div className="flex gap-1.5">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            if (error) setError(null);
-            if (okMsg) setOkMsg(null);
-          }}
-          onPaste={(e) => {
-            const text = e.clipboardData.getData("text");
-            if (!text.trim()) return;
-            e.preventDefault();
-            setValue(text);
-            window.setTimeout(() => run(text), 0);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              run(value);
-            }
-          }}
-          placeholder="링크 또는 코드"
-          className={`min-h-9 min-w-0 flex-1 rounded-md border bg-white px-2 py-1.5 text-[11px] outline-none focus:border-[#00287A] ${
-            error ? "border-amber-500" : "border-zinc-200"
-          }`}
-          aria-label="이 참가자에 친구 취향 링크 붙여넣기"
-        />
+      <div className="mt-auto flex flex-wrap justify-center gap-0.5 pt-0.5">
         <button
           type="button"
-          onClick={() => run(value)}
-          className="inline-flex min-h-9 shrink-0 items-center rounded-md border border-zinc-200 bg-white px-2.5 text-[11px] font-medium text-[#00287A] hover:bg-[#00287A]/5"
+          onClick={onCopy}
+          className="inline-flex min-h-8 min-w-8 items-center justify-center gap-0.5 rounded px-1 text-[9px] font-medium text-[#00287A] hover:bg-[#00287A]/5"
+          title="내 취향 링크 복사"
         >
-          적용
+          <Copy className="h-3 w-3" />
+          복사
+        </button>
+        <button
+          type="button"
+          onClick={onShare}
+          className="inline-flex min-h-8 min-w-8 items-center justify-center gap-0.5 rounded px-1 text-[9px] font-medium text-[#00287A] hover:bg-[#00287A]/5"
+          title="링크 공유"
+        >
+          <Share2 className="h-3 w-3" />
+          공유
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={!canRemove}
+          className="inline-flex min-h-8 min-w-8 items-center justify-center gap-0.5 rounded px-1 text-[9px] text-zinc-500 hover:bg-zinc-100 disabled:opacity-30"
+          title="참가자 삭제"
+        >
+          <Trash2 className="h-3 w-3" />
         </button>
       </div>
-      {error ? <p className="mt-1 text-[10px] font-medium text-amber-700">{error}</p> : null}
-      {okMsg ? <p className="mt-1 text-[10px] font-medium text-[#00287A]">{okMsg}</p> : null}
     </div>
   );
 }
 
-/** 선수 선택 후 공식 사진 → 직찍/셀카 교체 (참가자×구단 독립) */
-function PickPhotoSlot({
-  officialUrl,
+/** 표 칸: 선수 선택 + 사진 교체 (저장 이미지에는 이 UI 없음) */
+function EditablePickCell({
+  teamId,
+  jerseyNo,
   customUrl,
-  playerLabel,
-  onChange,
+  onPick,
+  onPhoto,
 }: {
-  officialUrl: string;
+  teamId: TierTeamId;
+  jerseyNo: number | null | undefined;
   customUrl: string | null;
-  playerLabel: string;
-  onChange: (nextUrl: string | null) => void;
+  onPick: (value: string) => void;
+  onPhoto: (url: string | null) => void;
 }) {
   const [dragging, setDragging] = useState(false);
-  const src = customUrl || officialUrl;
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const roster = PLAYERS_ROSTER[teamId];
+  const player = jerseyNo != null ? findRosterPlayer(teamId, jerseyNo) : null;
+  const teamLabel = shortTeamLabel(TIER_TEAMS.find((t) => t.id === teamId)?.label ?? teamId);
 
   const applyFile = (file: File | null) => {
     if (!file || !file.type.startsWith("image/")) return;
-    onChange(URL.createObjectURL(file));
+    onPhoto(URL.createObjectURL(file));
   };
 
+  if (!player) {
+    return (
+      <div className="relative flex h-full min-h-[7.5rem] flex-col items-center justify-center bg-zinc-100 active:bg-zinc-200/80">
+        <span className="pointer-events-none text-sm font-semibold text-zinc-400">텅</span>
+        <span className="pointer-events-none mt-0.5 text-[9px] text-zinc-400">탭해서 선택</span>
+        <select
+          value=""
+          onChange={(e) => onPick(e.target.value)}
+          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+          aria-label={`${teamLabel} 선수 선택`}
+        >
+          <option value="">선택 안 함 (텅)</option>
+          {roster.map((pl) => (
+            <option key={pl.no} value={pl.no}>
+              {pl.no} {pl.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  const src = customUrl || rosterPlayerUrl(teamId, player);
+
   return (
-    <div className="mt-1.5">
-      <label
-        className={`relative block aspect-[3/4] w-full max-w-[7.5rem] cursor-pointer overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition ${
-          dragging ? "ring-2 ring-[#00287A]/40" : ""
-        }`}
-        onDragEnter={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setDragging(true);
-        }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-        onDragLeave={(e) => {
-          e.preventDefault();
-          setDragging(false);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setDragging(false);
-          applyFile(e.dataTransfer.files?.[0] ?? null);
-        }}
+    <div
+      className={`relative flex h-full min-h-[7.5rem] flex-col overflow-hidden bg-zinc-50 ${
+        dragging ? "ring-2 ring-inset ring-[#00287A]/50" : ""
+      }`}
+      onDragEnter={(e) => {
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragOver={(e) => e.preventDefault()}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        applyFile(e.dataTransfer.files?.[0] ?? null);
+      }}
+    >
+      <button
+        type="button"
+        className="relative min-h-0 flex-1 touch-manipulation"
+        title="사진 교체"
+        aria-label={`${player.no} ${player.name} 사진 교체`}
+        onClick={() => photoInputRef.current?.click()}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
-          alt={playerLabel}
+          alt={`${player.no} ${player.name}`}
+          loading="lazy"
+          decoding="async"
           className="pointer-events-none h-full w-full object-cover object-top"
           draggable={false}
         />
-        <span className="pointer-events-none absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white shadow-sm">
+        <span className="pointer-events-none absolute bottom-1 right-1 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white shadow-sm">
           <Camera className="h-3.5 w-3.5" aria-hidden />
         </span>
-        <input
-          type="file"
-          accept="image/*"
-          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-          aria-label={`${playerLabel} 사진 교체`}
-          onChange={(e) => {
-            applyFile(e.target.files?.[0] ?? null);
-            e.target.value = "";
-          }}
-        />
-      </label>
-      <p className="mt-1 text-[10px] leading-relaxed text-zinc-400">
-        사진 교체
-      </p>
+      </button>
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        aria-hidden
+        tabIndex={-1}
+        onChange={(e) => {
+          applyFile(e.target.files?.[0] ?? null);
+          e.target.value = "";
+        }}
+      />
+      <select
+        value={String(jerseyNo)}
+        onChange={(e) => onPick(e.target.value)}
+        className="min-h-10 w-full shrink-0 touch-manipulation border-t border-zinc-100 bg-white px-0.5 py-1.5 text-center text-[9px] font-medium text-zinc-800 outline-none focus:bg-[#00287A]/5"
+        aria-label={`${teamLabel} 선수 변경`}
+      >
+        <option value="">텅으로</option>
+        {roster.map((pl) => (
+          <option key={pl.no} value={pl.no}>
+            {pl.no} {pl.name}
+          </option>
+        ))}
+      </select>
       {customUrl ? (
         <button
           type="button"
-          onClick={() => onChange(null)}
-          className="mt-0.5 text-[10px] font-medium text-[#00287A] underline-offset-2 hover:underline"
+          onClick={() => onPhoto(null)}
+          className="absolute left-1 top-1 z-20 min-h-7 rounded bg-white/90 px-1.5 py-0.5 text-[8px] font-medium text-[#00287A] shadow-sm"
         >
-          공식 사진으로 되돌리기
+          공식
         </button>
       ) : null}
     </div>
   );
 }
 
-function PreviewCell({
-  teamId,
-  jerseyNo,
-  customUrl,
-}: {
-  teamId: TierTeamId;
-  jerseyNo: number | null | undefined;
-  customUrl?: string | null;
-}) {
-  if (jerseyNo == null) {
-    return (
-      <div className="flex h-full min-h-[6.5rem] items-center justify-center bg-zinc-100 text-sm font-semibold text-zinc-400">
-        텅
-      </div>
-    );
-  }
-  const player = findRosterPlayer(teamId, jerseyNo);
-  if (!player) {
-    return (
-      <div className="flex h-full min-h-[6.5rem] items-center justify-center bg-zinc-100 text-sm font-semibold text-zinc-400">
-        텅
-      </div>
-    );
-  }
-  return (
-    <div className="relative flex h-full min-h-[6.5rem] flex-col overflow-hidden bg-zinc-50">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={customUrl || rosterPlayerUrl(teamId, player)}
-        alt={`${player.no} ${player.name}`}
-        loading="lazy"
-        decoding="async"
-        className="aspect-[3/4] w-full flex-1 object-cover object-top"
-      />
-      {customUrl ? (
-        <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/50 text-white">
-          <Camera className="h-2.5 w-2.5" aria-hidden />
-        </span>
-      ) : null}
-      <p className="truncate px-0.5 py-0.5 text-center text-[9px] text-zinc-700">
-        {player.name}
-      </p>
-    </div>
-  );
-}
-
-export default function TierPage() {
+function TierPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [titleKind, setTitleKind] = useState<TierTitleKind>("취향표");
   const [twitterId, setTwitterId] = useState("");
-  const [participants, setParticipants] = useState<TierParticipantDraft[]>(() => [
-    createEmptyParticipant(1),
-  ]);
+  const [participants, setParticipants] = useState<TierParticipantDraft[]>(() =>
+    participantsFromAddParam(searchParams.get("add"))
+  );
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
+  const [paste, setPaste] = useState("");
+  const [pasteErr, setPasteErr] = useState<string | null>(null);
 
   const title = useMemo(() => chartTitle(titleKind), [titleKind]);
   const handleLabel = useMemo(() => tierCreditLabel(twitterId), [twitterId]);
@@ -445,35 +446,54 @@ export default function TierPage() {
     });
   };
 
-  /** 지정한 참가자 행만 링크 내용으로 채움. 실패 시 에러 문구 반환 */
-  const fillParticipantFromLink = useCallback(
-    (participantId: string, raw: string): string | null => {
+  const runPaste = useCallback(
+    (raw: string) => {
       const text = raw.trim();
-      if (!text) return "링크를 확인해 주세요.";
+      if (!text) {
+        setPasteErr("링크를 확인해 주세요.");
+        return;
+      }
       const payload = parseTierShareInput(text);
-      if (!payload) return "링크를 확인해 주세요.";
-
-      const target = participants.find((p) => p.id === participantId);
-      if (!target) return "링크를 확인해 주세요.";
-
-      const conflict = participants.find(
-        (p) => p.id !== participantId && nicknamesEqual(p.nickname, payload.nickname)
-      );
-      if (conflict) {
-        const ok = window.confirm(
-          `"${payload.nickname}"이(가) 다른 참가자에 있어요. 이 칸에 그래도 넣을까요?`
-        );
-        if (!ok) return "추가를 취소했어요.";
+      if (!payload) {
+        setPasteErr("링크를 확인해 주세요.");
+        return;
       }
 
-      setParticipants((prev) =>
-        prev.map((p) => {
-          if (p.id !== participantId) return p;
-          revokeParticipantBlobs(p);
-          return applyShareToParticipant(p, payload);
-        })
+      const conflict = participants.find((p) =>
+        nicknamesEqual(p.nickname, payload.nickname)
       );
-      return null;
+      if (conflict && hasAnyPick(conflict)) {
+        const ok = window.confirm(
+          `"${payload.nickname}"이(가) 이미 있어요. 그래도 추가할까요?`
+        );
+        if (!ok) {
+          setPasteErr("추가를 취소했어요.");
+          return;
+        }
+      }
+
+      const emptyIdx = participants.findIndex((p) => !hasAnyPick(p) && !p.fromLink);
+      if (emptyIdx >= 0) {
+        const target = participants[emptyIdx]!;
+        revokeParticipantBlobs(target);
+        setParticipants((prev) =>
+          prev.map((p, i) =>
+            i === emptyIdx ? applyShareToParticipant(p, payload) : p
+          )
+        );
+      } else if (participants.length >= TIER_PARTICIPANT_MAX) {
+        setPasteErr("참가자가 가득 찼어요.");
+        return;
+      } else {
+        setParticipants((prev) => [
+          ...prev,
+          participantFromShare(payload, prev.length + 1),
+        ]);
+      }
+
+      setPasteErr(null);
+      setPaste("");
+      setCopyMsg("링크 취향을 표에 넣었어요.");
     },
     [participants]
   );
@@ -505,7 +525,6 @@ export default function TierPage() {
         return;
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return;
-        // 미지원·실패 시 클립보드로 폴백
       }
     }
     try {
@@ -519,7 +538,6 @@ export default function TierPage() {
   const handleSave = async () => {
     setSaving(true);
     setSaveMsg(null);
-    // 집계는 백그라운드(실패해도 이미지 저장에 영향 없음 · UI 에러 없음)
     void upsertTierSubmissions(titleKind, participants);
     try {
       const canvas = await renderTierChartCanvas({
@@ -553,7 +571,7 @@ export default function TierPage() {
             KOVO 취향표
           </h1>
           <p className="mt-0.5 text-xs text-zinc-500">
-            구단별 최애를 골라 한 장으로 만들고 공유해요
+            표에서 바로 골라 한 장으로 만들고 공유해요
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -568,210 +586,104 @@ export default function TierPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1100px] space-y-6 px-4 pb-28 sm:px-8 sm:pb-12">
-        <section className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3">
-          <p className="mb-2 text-[11px] font-medium text-zinc-500">제목 종류</p>
-          <div className="flex flex-wrap gap-1.5">
-            {TIER_TITLE_KINDS.map((kind) => {
-              const active = titleKind === kind;
-              return (
-                <button
-                  key={kind}
-                  type="button"
-                  onClick={() => setTitleKind(kind)}
-                  className={`rounded-full px-3 py-1.5 text-xs transition ${
-                    active
-                      ? "bg-[#00287A] text-white"
-                      : "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                  }`}
-                >
-                  {kind}
-                </button>
-              );
-            })}
-          </div>
-          <label className="mt-3 block">
-            <span className="mb-1 block text-[11px] font-medium text-zinc-500">
-              트위터 아이디 (선택)
-            </span>
-            <input
-              type="text"
-              value={twitterId}
-              onChange={(e) => setTwitterId(e.target.value)}
-              placeholder="daeni.kr"
-              className="w-full max-w-xs rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#00287A]"
-            />
-          </label>
-        </section>
+      <main className="mx-auto max-w-[1100px] space-y-3 px-4 pb-28 sm:px-8 sm:pb-12">
+        <section className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-3 py-3 sm:px-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-0">
+              <p className="mb-1.5 text-[11px] font-medium text-zinc-500">제목 종류</p>
+              <div className="flex flex-wrap gap-1.5">
+                {TIER_TITLE_KINDS.map((kind) => {
+                  const active = titleKind === kind;
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={() => setTitleKind(kind)}
+                      className={`rounded-full px-3 py-1.5 text-xs transition ${
+                        active
+                          ? "bg-[#00287A] text-white"
+                          : "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                      }`}
+                    >
+                      {kind}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-medium text-zinc-900">
-              참가자
-              <span className="ml-1.5 text-xs font-normal text-zinc-400">
-                {participants.length}/{TIER_PARTICIPANT_MAX}
+            <label className="block min-w-0 flex-1 basis-[14rem]">
+              <span className="mb-1 flex items-center gap-1 text-[11px] font-medium text-zinc-500">
+                <ClipboardPaste className="h-3 w-3" aria-hidden />
+                링크 붙여넣기
               </span>
-            </h2>
+              <input
+                type="text"
+                value={paste}
+                onChange={(e) => {
+                  setPaste(e.target.value);
+                  if (pasteErr) setPasteErr(null);
+                }}
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData("text");
+                  if (!text.trim()) return;
+                  e.preventDefault();
+                  setPaste(text);
+                  window.setTimeout(() => runPaste(text), 0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    runPaste(paste);
+                  }
+                }}
+                placeholder="친구 취향 링크"
+                className={`min-h-10 w-full rounded-lg border bg-white px-3 py-2 text-sm outline-none focus:border-[#00287A] ${
+                  pasteErr ? "border-amber-500" : "border-zinc-200"
+                }`}
+                aria-label="친구 취향 링크 붙여넣기"
+              />
+            </label>
+
+            <label className="block shrink-0">
+              <span className="mb-1 block text-[11px] font-medium text-zinc-500">
+                트위터 닉 (선택)
+              </span>
+              <input
+                type="text"
+                value={twitterId}
+                onChange={(e) => setTwitterId(e.target.value.replace(/^@+/, ""))}
+                placeholder="daeniorea"
+                className="min-h-10 w-32 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#00287A] sm:w-40"
+              />
+            </label>
+
             <button
               type="button"
               onClick={addParticipant}
               disabled={participants.length >= TIER_PARTICIPANT_MAX}
-              className="inline-flex min-h-10 items-center gap-1 rounded-full border border-[#00287A] bg-[#00287A] px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-200 disabled:text-zinc-500"
+              className="inline-flex min-h-10 items-center gap-1 rounded-full border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-[#00287A] disabled:cursor-not-allowed disabled:text-zinc-400"
             >
               <Plus className="h-3.5 w-3.5" />
               참가자 추가
             </button>
           </div>
-          <p className="text-[11px] leading-relaxed text-zinc-500">
-            빈 칸을 늘린 뒤, 각 칸에서 직접 입력하거나 친구 링크를 붙여넣어 채우세요.
-          </p>
-          {copyMsg ? <p className="text-[11px] text-zinc-600">{copyMsg}</p> : null}
-
-          {participants.map((p, index) => (
-            <div
-              key={p.id}
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-3 sm:px-4"
-            >
-              <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                <p className="text-xs font-medium text-zinc-500">
-                  참가자 {index + 1}
-                  {p.fromLink ? (
-                    <span className="ml-1.5 rounded bg-zinc-100 px-1.5 py-px text-[10px] font-normal text-zinc-500">
-                      링크
-                    </span>
-                  ) : null}
-                </p>
-                <div className="flex flex-wrap items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => void copyMyLink(p)}
-                    className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-[#00287A] hover:bg-[#00287A]/5"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    내 취향 링크 복사
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void shareMyLink(p)}
-                    className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-[#00287A] hover:bg-[#00287A]/5"
-                  >
-                    <Share2 className="h-3.5 w-3.5" />
-                    복사한 링크 공유하기
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeParticipant(p.id)}
-                    disabled={participants.length <= TIER_PARTICIPANT_MIN}
-                    className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-[11px] text-zinc-500 hover:bg-zinc-50 disabled:opacity-40"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    삭제
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-3">
-                <RowLinkPaste participantId={p.id} onFill={fillParticipantFromLink} />
-              </div>
-
-              <div className="mb-3 grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
-                <ProfilePicker
-                  url={p.profileUrl}
-                  nickname={p.nickname}
-                  fanTeam={p.fanTeam}
-                  onChange={(profileUrl) => {
-                    revokeBlobUrl(p.profileUrl);
-                    updateParticipant(p.id, { profileUrl, fromLink: false });
-                  }}
-                />
-                <div className="grid gap-2">
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-medium text-zinc-500">닉네임</span>
-                    <input
-                      type="text"
-                      value={p.nickname}
-                      onChange={(e) => updateParticipant(p.id, { nickname: e.target.value })}
-                      className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-[#00287A]"
-                      maxLength={20}
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-medium text-zinc-500">
-                      내 응원팀 (프로필 테두리)
-                    </span>
-                    <select
-                      value={p.fanTeam ?? ""}
-                      onChange={(e) =>
-                        updateParticipant(p.id, {
-                          fanTeam: e.target.value ? (e.target.value as TierTeamId) : null,
-                        })
-                      }
-                      className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs outline-none focus:border-[#00287A]"
-                    >
-                      <option value="">선택 안 함</option>
-                      {TIER_TEAMS.map((team) => (
-                        <option key={team.id} value={team.id}>
-                          {team.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              </div>
-
-              <p className="mb-1.5 text-[11px] font-medium text-zinc-500">구단별 최애</p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {TIER_TEAMS.map((team) => {
-                  const value = p.picks[team.id];
-                  const roster = PLAYERS_ROSTER[team.id];
-                  const player = value != null ? findRosterPlayer(team.id, value) : null;
-                  const customUrl = p.pickPhotos?.[team.id] ?? null;
-                  return (
-                    <div key={team.id} className="block">
-                      <span
-                        className="mb-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium"
-                        style={{
-                          background: team.color,
-                          color: chipTextColor(team.color),
-                        }}
-                      >
-                        {shortTeamLabel(team.label)}
-                      </span>
-                      <select
-                        value={value == null ? "" : String(value)}
-                        onChange={(e) => setPick(p.id, team.id, e.target.value)}
-                        className="mt-0.5 w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs outline-none focus:border-[#00287A]"
-                        aria-label={`${shortTeamLabel(team.label)} 최애 선수`}
-                      >
-                        <option value="">선택 안 함 (텅)</option>
-                        {roster.map((pl) => (
-                          <option key={pl.no} value={pl.no}>
-                            {pl.no} {pl.name}
-                          </option>
-                        ))}
-                      </select>
-                      {player ? (
-                        <PickPhotoSlot
-                          officialUrl={rosterPlayerUrl(team.id, player)}
-                          customUrl={customUrl}
-                          playerLabel={`${player.no} ${player.name}`}
-                          onChange={(url) => setPickPhoto(p.id, team.id, url)}
-                        />
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+          {pasteErr ? (
+            <p className="mt-2 text-[11px] font-medium text-amber-700">{pasteErr}</p>
+          ) : null}
         </section>
 
         <section className="rounded-xl border border-zinc-200 bg-white p-3 sm:p-4">
           <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
             <div>
-              <h2 className="text-sm font-medium text-zinc-900">미리보기</h2>
+              <h2 className="text-sm font-medium text-zinc-900">
+                취향표
+                <span className="ml-1.5 text-xs font-normal text-zinc-400">
+                  {participants.length}/{TIER_PARTICIPANT_MAX}
+                </span>
+              </h2>
               <p className="text-[11px] text-zinc-500">
-                모바일에서는 옆으로 밀어 보세요 · 저장 이미지는 7열 전부 포함
+                칸 탭 → 선수 선택 · 사진/📷 → 교체 · 왼쪽에서 프로필
               </p>
             </div>
             <button
@@ -784,18 +696,19 @@ export default function TierPage() {
               {saving ? "만드는 중…" : "이미지로 저장"}
             </button>
           </div>
+          {copyMsg ? <p className="mb-2 text-[11px] text-zinc-600">{copyMsg}</p> : null}
           {saveMsg ? <p className="mb-2 text-[11px] text-zinc-600">{saveMsg}</p> : null}
 
-          <div className="-mx-1 overflow-x-auto px-1 pb-1">
-            <div className="min-w-[720px] overflow-hidden rounded-lg border border-zinc-200">
-              <div className="border-b border-zinc-100 bg-white px-3 py-2.5">
-                <p className="text-sm font-semibold text-[#0B1F4D]">{title}</p>
-                <p className="text-[11px] text-zinc-500">{handleLabel}</p>
+          <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-1 [-webkit-overflow-scrolling:touch]">
+            <div className="min-w-[820px] overflow-hidden rounded-lg border border-zinc-200">
+              <div className="flex items-center justify-between gap-3 border-b border-zinc-100 bg-white px-3 py-2.5">
+                <p className="min-w-0 text-sm font-semibold text-[#0B1F4D]">{title}</p>
+                <p className="shrink-0 text-[11px] text-zinc-500">{handleLabel}</p>
               </div>
               <div
                 className="grid"
                 style={{
-                  gridTemplateColumns: `7rem repeat(${TIER_TEAMS.length}, minmax(5rem, 1fr))`,
+                  gridTemplateColumns: `8.75rem repeat(${TIER_TEAMS.length}, minmax(5.5rem, 1fr))`,
                 }}
               >
                 <div className="flex items-center justify-center bg-zinc-100 px-1 py-2 text-[10px] text-zinc-500">
@@ -814,30 +727,32 @@ export default function TierPage() {
                   </div>
                 ))}
 
-                {participants.map((p) => (
+                {participants.map((p, index) => (
                   <div key={p.id} className="contents">
-                    <div className="flex flex-col items-center justify-center gap-1.5 border-t border-zinc-100 bg-zinc-50 px-1.5 py-2.5">
-                      <AvatarCircle
-                        url={p.profileUrl}
-                        nickname={p.nickname}
-                        fanTeam={p.fanTeam}
-                        sizeClass="h-14 w-14"
-                        textClass="text-sm"
-                        ringWidth={5}
-                      />
-                      <p className="max-w-full truncate text-center text-[10px] font-medium text-zinc-800">
-                        {p.nickname.trim() || "참가자"}
-                      </p>
-                    </div>
+                    <IdentityCell
+                      participant={p}
+                      index={index}
+                      canRemove={participants.length > TIER_PARTICIPANT_MIN}
+                      onUpdate={(patch) => updateParticipant(p.id, patch)}
+                      onProfile={(profileUrl) => {
+                        revokeBlobUrl(p.profileUrl);
+                        updateParticipant(p.id, { profileUrl, fromLink: false });
+                      }}
+                      onCopy={() => void copyMyLink(p)}
+                      onShare={() => void shareMyLink(p)}
+                      onRemove={() => removeParticipant(p.id)}
+                    />
                     {TIER_TEAMS.map((team) => (
                       <div
                         key={`${p.id}-${team.id}`}
                         className="border-t border-l border-zinc-100"
                       >
-                        <PreviewCell
+                        <EditablePickCell
                           teamId={team.id}
                           jerseyNo={p.picks[team.id]}
                           customUrl={p.pickPhotos?.[team.id] ?? null}
+                          onPick={(value) => setPick(p.id, team.id, value)}
+                          onPhoto={(url) => setPickPhoto(p.id, team.id, url)}
                         />
                       </div>
                     ))}
@@ -849,5 +764,22 @@ export default function TierPage() {
         </section>
       </main>
     </div>
+  );
+}
+
+export default function TierPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-white text-zinc-900 [color-scheme:light]">
+          <SiteNav />
+          <p className="px-4 py-10 text-center text-sm text-zinc-500 sm:px-8">
+            취향표 불러오는 중…
+          </p>
+        </div>
+      }
+    >
+      <TierPageInner />
+    </Suspense>
   );
 }
