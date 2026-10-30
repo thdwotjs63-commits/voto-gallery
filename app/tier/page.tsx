@@ -41,11 +41,16 @@ import {
   createEmptyParticipant,
   downloadTierChartPng,
   fanTeamColor,
-  renderTierChartCanvas,
+  picksForKind,
+  pickPhotosForKind,
+  projectParticipantToKind,
+  renderTierMultiCanvas,
   revokeBlobUrl,
   revokeParticipantBlobs,
   tierSiteCredit,
   type TierParticipantDraft,
+  type TierPickMap,
+  type TierPickPhotoMap,
   type TierTitleKind,
 } from "@/lib/tier-chart";
 import {
@@ -68,8 +73,15 @@ function shortTeamLabel(label: string): string {
 
 const WONDERDOGS_ID: TierTeamId = "원더독스";
 
+/** 어느 항목에서든 선택이 있으면 true (공통 picks + 항목별 picks 모두 확인) */
 function hasAnyPick(p: TierParticipantDraft): boolean {
-  return TIER_TEAMS.some((t) => p.picks[t.id] != null);
+  if (TIER_TEAMS.some((t) => p.picks[t.id] != null)) return true;
+  if (p.picksByKind) {
+    for (const map of Object.values(p.picksByKind)) {
+      if (map && TIER_TEAMS.some((t) => map[t.id] != null)) return true;
+    }
+  }
+  return false;
 }
 
 function participantsFromAddParam(add: string | null): TierParticipantDraft[] {
@@ -414,7 +426,7 @@ function EditablePickCell({
 function TierPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [titleKind, setTitleKind] = useState<TierTitleKind>("취향표");
+  const [selectedKinds, setSelectedKinds] = useState<TierTitleKind[]>(["취향표"]);
   const [twitterId, setTwitterId] = useState("");
   const [includeWonderdogs, setIncludeWonderdogs] = useState(false);
   const [participants, setParticipants] = useState<TierParticipantDraft[]>(() =>
@@ -426,12 +438,23 @@ function TierPageInner() {
   const [paste, setPaste] = useState("");
   const [pasteErr, setPasteErr] = useState<string | null>(null);
 
-  const title = useMemo(() => chartTitle(titleKind), [titleKind]);
   const siteCredit = useMemo(() => tierSiteCredit(), []);
   const visibleTeams = useMemo(
     () => getVisibleTierTeams(includeWonderdogs),
     [includeWonderdogs]
   );
+
+  /** 항목(제목 종류) 체크 토글 — 최소 1개는 유지 */
+  const toggleKind = (kind: TierTitleKind) => {
+    setSelectedKinds((prev) => {
+      if (prev.includes(kind)) {
+        if (prev.length <= 1) return prev; // 마지막 1개는 못 끔
+        return prev.filter((k) => k !== kind);
+      }
+      // 원래 TIER_TITLE_KINDS 순서를 유지해 추가
+      return TIER_TITLE_KINDS.filter((k) => prev.includes(k) || k === kind);
+    });
+  };
 
   const setWonderdogsIncluded = (on: boolean) => {
     setIncludeWonderdogs(on);
@@ -443,10 +466,34 @@ function TierPageInner() {
         revokeBlobUrl(nextPhotos[WONDERDOGS_ID]);
         delete nextPicks[WONDERDOGS_ID];
         delete nextPhotos[WONDERDOGS_ID];
+
+        // 항목별 선택(picksByKind)에서도 원더독스 칸 제거
+        const nextPicksByKind = p.picksByKind
+          ? Object.fromEntries(
+              Object.entries(p.picksByKind).map(([k, picks]) => {
+                const copy = { ...picks };
+                delete copy[WONDERDOGS_ID];
+                return [k, copy];
+              })
+            )
+          : p.picksByKind;
+        const nextPhotosByKind = p.pickPhotosByKind
+          ? Object.fromEntries(
+              Object.entries(p.pickPhotosByKind).map(([k, photos]) => {
+                const copy = { ...photos };
+                revokeBlobUrl(copy[WONDERDOGS_ID]);
+                delete copy[WONDERDOGS_ID];
+                return [k, copy];
+              })
+            )
+          : p.pickPhotosByKind;
+
         return {
           ...p,
           picks: nextPicks,
           pickPhotos: nextPhotos,
+          picksByKind: nextPicksByKind,
+          pickPhotosByKind: nextPhotosByKind,
           fanTeam: p.fanTeam === WONDERDOGS_ID ? null : p.fanTeam,
         };
       })
@@ -462,33 +509,54 @@ function TierPageInner() {
     []
   );
 
-  const setPick = useCallback((id: string, teamId: TierTeamId, value: string) => {
-    setParticipants((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        const next = { ...p.picks };
-        const nextPhotos = { ...(p.pickPhotos ?? {}) };
-        revokeBlobUrl(nextPhotos[teamId]);
-        delete nextPhotos[teamId];
-        if (value === "") next[teamId] = null;
-        else next[teamId] = Number(value);
-        return { ...p, picks: next, pickPhotos: nextPhotos };
-      })
-    );
-  }, []);
+  const setPick = useCallback(
+    (id: string, kind: TierTitleKind, teamId: TierTeamId, value: string) => {
+      setParticipants((prev) =>
+        prev.map((p) => {
+          if (p.id !== id) return p;
+          const curPicks = picksForKind(p, kind);
+          const curPhotos = pickPhotosForKind(p, kind);
+          const nextPicks: TierPickMap = { ...curPicks };
+          const nextPhotos: TierPickPhotoMap = { ...curPhotos };
+          revokeBlobUrl(nextPhotos[teamId]);
+          delete nextPhotos[teamId];
+          if (value === "") nextPicks[teamId] = null;
+          else nextPicks[teamId] = Number(value);
+          return {
+            ...p,
+            picksByKind: { ...(p.picksByKind ?? {}), [kind]: nextPicks },
+            pickPhotosByKind: { ...(p.pickPhotosByKind ?? {}), [kind]: nextPhotos },
+          };
+        })
+      );
+    },
+    []
+  );
 
-  const setPickPhoto = useCallback((id: string, teamId: TierTeamId, url: string | null) => {
-    setParticipants((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        const nextPhotos = { ...(p.pickPhotos ?? {}) };
-        revokeBlobUrl(nextPhotos[teamId]);
-        if (url == null) delete nextPhotos[teamId];
-        else nextPhotos[teamId] = url;
-        return { ...p, pickPhotos: nextPhotos };
-      })
-    );
-  }, []);
+  const setPickPhoto = useCallback(
+    (id: string, kind: TierTitleKind, teamId: TierTeamId, url: string | null) => {
+      setParticipants((prev) =>
+        prev.map((p) => {
+          if (p.id !== id) return p;
+          const curPhotos = pickPhotosForKind(p, kind);
+          const nextPhotos: TierPickPhotoMap = { ...curPhotos };
+          revokeBlobUrl(nextPhotos[teamId]);
+          if (url == null) delete nextPhotos[teamId];
+          else nextPhotos[teamId] = url;
+          return {
+            ...p,
+            // picksByKind 도 초기화 보장 (항목이 picks 를 갖도록)
+            picksByKind: {
+              ...(p.picksByKind ?? {}),
+              [kind]: picksForKind(p, kind),
+            },
+            pickPhotosByKind: { ...(p.pickPhotosByKind ?? {}), [kind]: nextPhotos },
+          };
+        })
+      );
+    },
+    []
+  );
 
   const addParticipant = () => {
     setParticipants((prev) => {
@@ -598,18 +666,26 @@ function TierPageInner() {
   const handleSave = async () => {
     setSaving(true);
     setSaveMsg(null);
-    void upsertTierSubmissions(titleKind, participants);
+    // 항목마다 그 항목의 선택(picksByKind)으로 집계 저장
+    for (const kind of selectedKinds) {
+      void upsertTierSubmissions(
+        kind,
+        participants.map((p) => projectParticipantToKind(p, kind))
+      );
+    }
     try {
-      const canvas = await renderTierChartCanvas({
-        titleKind,
+      const canvas = await renderTierMultiCanvas({
+        kinds: selectedKinds,
         twitterId,
         participants,
         teams: visibleTeams,
       });
       const stamp = new Date().toISOString().slice(0, 10);
+      const nameKind =
+        selectedKinds.length === 1 ? selectedKinds[0] : `모음${selectedKinds.length}`;
       const result = await downloadTierChartPng(
         canvas,
-        `kovo-${titleKind}-${stamp}.png`
+        `kovo-${nameKind}-${stamp}.png`
       );
       if (result === "saved") setSaveMsg("이미지를 저장했어요.");
       else if (result === "opened") setSaveMsg("새 탭에서 이미지를 길게 눌러 저장해 주세요.");
@@ -651,21 +727,30 @@ function TierPageInner() {
         <section className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-3 py-3 sm:px-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-0">
-              <p className="mb-1.5 text-[11px] font-medium text-zinc-500">제목 종류</p>
+              <p className="mb-1.5 text-[11px] font-medium text-zinc-500">
+                제목 종류
+                <span className="ml-1 font-normal text-zinc-400">
+                  (여러 개 고르면 한 장에 이어 붙여요)
+                </span>
+              </p>
               <div className="flex flex-wrap gap-1.5">
                 {TIER_TITLE_KINDS.map((kind) => {
-                  const active = titleKind === kind;
+                  const active = selectedKinds.includes(kind);
+                  const locked = active && selectedKinds.length <= 1;
                   return (
                     <button
                       key={kind}
                       type="button"
-                      onClick={() => setTitleKind(kind)}
+                      onClick={() => toggleKind(kind)}
+                      aria-pressed={active}
+                      title={locked ? "최소 1개는 선택해야 해요" : undefined}
                       className={`rounded-full px-3 py-1.5 text-xs transition ${
                         active
                           ? "bg-[#00287A] text-white"
                           : "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
                       }`}
                     >
+                      {active ? "✓ " : ""}
                       {kind}
                     </button>
                   );
@@ -758,89 +843,114 @@ function TierPageInner() {
           {copyMsg ? <p className="mb-2 text-[11px] text-zinc-600">{copyMsg}</p> : null}
           {saveMsg ? <p className="mb-2 text-[11px] text-zinc-600">{saveMsg}</p> : null}
 
-          <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-1 [-webkit-overflow-scrolling:touch]">
-            <div
-              className="overflow-hidden rounded-lg border border-zinc-200"
-              style={{
-                minWidth: includeWonderdogs ? 940 : 820,
-              }}
-            >
-              <div className="flex items-center justify-between gap-3 border-b border-zinc-100 bg-white px-3 py-2.5">
-                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <p className="text-sm font-semibold text-[#0B1F4D]">{title}</p>
-                  <label className="inline-flex min-h-8 items-center gap-0.5 rounded border border-zinc-200 bg-zinc-50 px-1.5 text-[11px] text-zinc-600 focus-within:border-[#00287A]">
-                    <span className="select-none font-medium text-zinc-500" aria-hidden>
-                      @
-                    </span>
-                    <input
-                      type="text"
-                      value={twitterId}
-                      onChange={(e) => setTwitterId(e.target.value.replace(/^@+/, ""))}
-                      placeholder="트위터닉"
-                      maxLength={30}
-                      className="w-[7.5rem] bg-transparent py-1 outline-none placeholder:text-zinc-400"
-                      aria-label="트위터 닉네임"
-                    />
-                  </label>
-                </div>
-                <p className="shrink-0 text-[11px] text-zinc-500">{siteCredit}</p>
-              </div>
+          {selectedKinds.length > 1 ? (
+            <p className="mb-2 rounded-lg bg-[#00287A]/5 px-3 py-2 text-[11px] text-[#00287A]">
+              {selectedKinds.length}개 항목을 각각 골라 한 장으로 이어서 저장해요. 항목마다 선택이 따로 저장돼요.
+            </p>
+          ) : null}
+
+          <div className="space-y-5">
+            {selectedKinds.map((kind, kindIndex) => (
               <div
-                className="grid"
-                style={{
-                  gridTemplateColumns: `8.75rem repeat(${visibleTeams.length}, minmax(5.25rem, 1fr))`,
-                }}
+                key={kind}
+                className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-1 [-webkit-overflow-scrolling:touch]"
               >
-                <div className="flex items-center justify-center bg-zinc-100 px-1 py-2 text-[10px] text-zinc-500">
-                  참가자
-                </div>
-                {visibleTeams.map((team) => (
+                <div
+                  className="overflow-hidden rounded-lg border border-zinc-200"
+                  style={{
+                    minWidth: includeWonderdogs ? 940 : 820,
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3 border-b border-zinc-100 bg-white px-3 py-2.5">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      <p className="text-sm font-semibold text-[#0B1F4D]">
+                        {chartTitle(kind)}
+                      </p>
+                      {kindIndex === 0 ? (
+                        <label className="inline-flex min-h-8 items-center gap-0.5 rounded border border-zinc-200 bg-zinc-50 px-1.5 text-[11px] text-zinc-600 focus-within:border-[#00287A]">
+                          <span className="select-none font-medium text-zinc-500" aria-hidden>
+                            @
+                          </span>
+                          <input
+                            type="text"
+                            value={twitterId}
+                            onChange={(e) => setTwitterId(e.target.value.replace(/^@+/, ""))}
+                            placeholder="트위터닉"
+                            maxLength={30}
+                            className="w-[7.5rem] bg-transparent py-1 outline-none placeholder:text-zinc-400"
+                            aria-label="트위터 닉네임"
+                          />
+                        </label>
+                      ) : (
+                        twitterId ? (
+                          <span className="text-[11px] text-zinc-500">@{twitterId}</span>
+                        ) : null
+                      )}
+                    </div>
+                    <p className="shrink-0 text-[11px] text-zinc-500">{siteCredit}</p>
+                  </div>
                   <div
-                    key={team.id}
-                    className="flex items-center justify-center px-1 py-2 text-center text-[10px] font-semibold leading-tight"
+                    className="grid"
                     style={{
-                      background: team.color,
-                      color: chipTextColor(team.color),
+                      gridTemplateColumns: `8.75rem repeat(${visibleTeams.length}, minmax(5.25rem, 1fr))`,
                     }}
                   >
-                    {shortTeamLabel(team.label)}
-                  </div>
-                ))}
-
-                {participants.map((p, index) => (
-                  <div key={p.id} className="contents">
-                    <IdentityCell
-                      participant={p}
-                      index={index}
-                      canRemove={participants.length > TIER_PARTICIPANT_MIN}
-                      fanTeams={visibleTeams}
-                      onUpdate={(patch) => updateParticipant(p.id, patch)}
-                      onProfile={(profileUrl) => {
-                        revokeBlobUrl(p.profileUrl);
-                        updateParticipant(p.id, { profileUrl, fromLink: false });
-                      }}
-                      onCopy={() => void copyMyLink(p)}
-                      onShare={() => void shareMyLink(p)}
-                      onRemove={() => removeParticipant(p.id)}
-                    />
+                    <div className="flex items-center justify-center bg-zinc-100 px-1 py-2 text-[10px] text-zinc-500">
+                      참가자
+                    </div>
                     {visibleTeams.map((team) => (
                       <div
-                        key={`${p.id}-${team.id}`}
-                        className="border-t border-l border-zinc-100"
+                        key={team.id}
+                        className="flex items-center justify-center px-1 py-2 text-center text-[10px] font-semibold leading-tight"
+                        style={{
+                          background: team.color,
+                          color: chipTextColor(team.color),
+                        }}
                       >
-                        <EditablePickCell
-                          teamId={team.id}
-                          jerseyNo={p.picks[team.id]}
-                          customUrl={p.pickPhotos?.[team.id] ?? null}
-                          onPick={(value) => setPick(p.id, team.id, value)}
-                          onPhoto={(url) => setPickPhoto(p.id, team.id, url)}
-                        />
+                        {shortTeamLabel(team.label)}
                       </div>
                     ))}
+
+                    {participants.map((p, index) => {
+                      const kindPicks = picksForKind(p, kind);
+                      const kindPhotos = pickPhotosForKind(p, kind);
+                      return (
+                        <div key={p.id} className="contents">
+                          <IdentityCell
+                            participant={p}
+                            index={index}
+                            canRemove={participants.length > TIER_PARTICIPANT_MIN}
+                            fanTeams={visibleTeams}
+                            onUpdate={(patch) => updateParticipant(p.id, patch)}
+                            onProfile={(profileUrl) => {
+                              revokeBlobUrl(p.profileUrl);
+                              updateParticipant(p.id, { profileUrl, fromLink: false });
+                            }}
+                            onCopy={() => void copyMyLink(p)}
+                            onShare={() => void shareMyLink(p)}
+                            onRemove={() => removeParticipant(p.id)}
+                          />
+                          {visibleTeams.map((team) => (
+                            <div
+                              key={`${p.id}-${team.id}`}
+                              className="border-t border-l border-zinc-100"
+                            >
+                              <EditablePickCell
+                                teamId={team.id}
+                                jerseyNo={kindPicks[team.id]}
+                                customUrl={kindPhotos[team.id] ?? null}
+                                onPick={(value) => setPick(p.id, kind, team.id, value)}
+                                onPhoto={(url) => setPickPhoto(p.id, kind, team.id, url)}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         </section>
       </main>

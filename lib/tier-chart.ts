@@ -37,7 +37,40 @@ export type TierParticipantDraft = {
   picks: TierPickMap;
   /** 참가자×구단별 선수 사진 교체 (공식 사진 대신) */
   pickPhotos?: TierPickPhotoMap;
+  /**
+   * 항목(제목 종류)별 선수 선택 — 한 명이 여러 항목을 만들 때 각 항목마다 다른 선수 가능.
+   * 없으면(레거시·링크) picks/pickPhotos 를 기본 항목으로 사용.
+   */
+  picksByKind?: Partial<Record<TierTitleKind, TierPickMap>>;
+  pickPhotosByKind?: Partial<Record<TierTitleKind, TierPickPhotoMap>>;
 };
+
+/** 특정 항목(kind)의 picks 를 꺼낸다. 항목별 맵이 없으면 공통 picks 로 폴백 */
+export function picksForKind(
+  p: TierParticipantDraft,
+  kind: TierTitleKind
+): TierPickMap {
+  return p.picksByKind?.[kind] ?? p.picks ?? {};
+}
+
+export function pickPhotosForKind(
+  p: TierParticipantDraft,
+  kind: TierTitleKind
+): TierPickPhotoMap {
+  return p.pickPhotosByKind?.[kind] ?? p.pickPhotos ?? {};
+}
+
+/** 참가자를 "그 항목의 picks 만" 가진 단일-항목 draft 로 투영 (렌더·통계용) */
+export function projectParticipantToKind(
+  p: TierParticipantDraft,
+  kind: TierTitleKind
+): TierParticipantDraft {
+  return {
+    ...p,
+    picks: picksForKind(p, kind),
+    pickPhotos: pickPhotosForKind(p, kind),
+  };
+}
 
 export function revokeBlobUrl(url: string | null | undefined) {
   if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
@@ -45,14 +78,26 @@ export function revokeBlobUrl(url: string | null | undefined) {
 
 export function revokeParticipantBlobs(p: TierParticipantDraft) {
   revokeBlobUrl(p.profileUrl);
-  if (!p.pickPhotos) return;
-  for (const team of TIER_TEAMS) {
-    revokeBlobUrl(p.pickPhotos[team.id]);
+  if (p.pickPhotos) {
+    for (const team of TIER_TEAMS) revokeBlobUrl(p.pickPhotos[team.id]);
+  }
+  if (p.pickPhotosByKind) {
+    for (const map of Object.values(p.pickPhotosByKind)) {
+      if (!map) continue;
+      for (const team of TIER_TEAMS) revokeBlobUrl(map[team.id]);
+    }
   }
 }
 
 export function chartTitle(kind: TierTitleKind): string {
   return `KOVO 여자배구 ${kind}`;
+}
+
+/** 저장 이미지 컬럼 헤더용 구단명 (IBK 중복 표기 방지) */
+function exportTeamLabel(label: string): string {
+  if (label === "IBK기업은행") return "IBK";
+  if (label === "한국도로공사") return "도로공사";
+  return label;
 }
 
 /** 표·저장 이미지 우측 상단 사이트 출처 */
@@ -212,13 +257,7 @@ export async function renderTierChartCanvas(
     ctx.fillStyle = team.color;
     ctx.fillRect(x, gridTop, cellW, headerH);
     ctx.fillStyle = chipTextColor(team.color);
-    const label =
-      team.label.length > 6
-        ? team.label.replace("기업은행", "IBK").replace("한국", "")
-        : team.label === "원더독스"
-          ? "원더독스"
-          : team.label;
-    ctx.fillText(label, x + cellW / 2, gridTop + headerH / 2);
+    ctx.fillText(exportTeamLabel(team.label), x + cellW / 2, gridTop + headerH / 2);
   }
 
   // left header corner
@@ -353,6 +392,62 @@ export async function renderTierChartCanvas(
     headerH + participants.length * rowH
   );
 
+  return canvas;
+}
+
+export type TierMultiRenderInput = {
+  /** 세로로 이어붙일 항목들 (최소 1개) */
+  kinds: readonly TierTitleKind[];
+  twitterId: string;
+  participants: readonly TierParticipantDraft[];
+  teams?: readonly TierTeam[];
+};
+
+/**
+ * 선택한 여러 항목의 표를 각각 렌더해 세로로 이어붙인 한 장 캔버스로.
+ * 각 항목은 그 항목의 picks(projectParticipantToKind)로 그린다.
+ */
+export async function renderTierMultiCanvas(
+  input: TierMultiRenderInput
+): Promise<HTMLCanvasElement> {
+  const kinds = input.kinds.length > 0 ? input.kinds : (["취향표"] as const);
+  const gap = 24; // 항목 사이 세로 간격 (논리px, scale 미반영 전)
+  const scale = tierChartExportScale();
+
+  const sections = await Promise.all(
+    kinds.map((kind) =>
+      renderTierChartCanvas({
+        titleKind: kind,
+        twitterId: input.twitterId,
+        participants: input.participants.map((p) =>
+          projectParticipantToKind(p, kind)
+        ),
+        teams: input.teams,
+      })
+    )
+  );
+
+  if (sections.length === 1) return sections[0]!;
+
+  const gapPx = Math.round(gap * scale);
+  const width = Math.max(...sections.map((c) => c.width));
+  const height =
+    sections.reduce((sum, c) => sum + c.height, 0) +
+    gapPx * (sections.length - 1);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas unsupported");
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, width, height);
+
+  let y = 0;
+  for (const section of sections) {
+    ctx.drawImage(section, 0, y);
+    y += section.height + gapPx;
+  }
   return canvas;
 }
 
