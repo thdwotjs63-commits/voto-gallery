@@ -1,10 +1,13 @@
-/** KOVO 여자부 선수 명단 — public/players/<구단>/<등번호 이름>.webp */
+/** KOVO 여자부 선수 명단 — public/players/<구단>/<파일>.webp|.jpg */
 
 export type RosterPlayer = {
+  /** picks 키. 등번호 없는 스태프는 900번대 */
   no: number;
   name: string;
-  /** public/players/<team.folder>/ 아래 실제 파일명(정규화 그대로) */
+  /** public/players/<team.folder>/ 아래 실제 파일명(확장자 포함) */
   photo: string;
+  /** false면 셀렉트·표기에 등번호 생략 (감독 등) */
+  showNo?: boolean;
 };
 
 export type TierTeamId =
@@ -14,7 +17,8 @@ export type TierTeamId =
   | "GS칼텍스"
   | "한국도로공사"
   | "IBK기업은행"
-  | "SOOP";
+  | "SOOP"
+  | "원더독스";
 
 export type TierTeam = {
   id: TierTeamId;
@@ -24,8 +28,8 @@ export type TierTeam = {
   color: string;
 };
 
-/** 취향표 열 순서 */
-export const TIER_TEAMS: readonly TierTeam[] = [
+/** 기본 7구단 열 순서 */
+export const TIER_TEAMS_CORE: readonly TierTeam[] = [
   { id: "현대건설", folder: "현대건설", label: "현대건설", color: "#F7C331" },
   { id: "흥국생명", folder: "흥국생명", label: "흥국생명", color: "#E6007E" },
   { id: "정관장", folder: "정관장", label: "정관장", color: "#D7152B" },
@@ -34,6 +38,23 @@ export const TIER_TEAMS: readonly TierTeam[] = [
   { id: "IBK기업은행", folder: "IBK기업은행", label: "IBK기업은행", color: "#4090D2" },
   { id: "SOOP", folder: "SOOP", label: "SOOP", color: "#0A5FBF" },
 ] as const;
+
+export const TIER_TEAM_WONDERDOGS: TierTeam = {
+  id: "원더독스",
+  folder: "원더독스",
+  label: "원더독스",
+  color: "#D55329",
+};
+
+/** 전체(공유·명단). 표 열은 getVisibleTierTeams() 사용 */
+export const TIER_TEAMS: readonly TierTeam[] = [
+  ...TIER_TEAMS_CORE,
+  TIER_TEAM_WONDERDOGS,
+] as const;
+
+export function getVisibleTierTeams(includeWonderdogs: boolean): readonly TierTeam[] {
+  return includeWonderdogs ? TIER_TEAMS : TIER_TEAMS_CORE;
+}
 
 export const PLAYERS_ROSTER: Readonly<Record<TierTeamId, readonly RosterPlayer[]>> = {
   "현대건설": [
@@ -171,6 +192,25 @@ export const PLAYERS_ROSTER: Readonly<Record<TierTeamId, readonly RosterPlayer[]
     { no: 23, name: "이원정", photo: "23 이원정.webp" },
     { no: 77, name: "하혜진", photo: "77 하혜진.webp" },
   ],
+  "원더독스": [
+    { no: 1, name: "한송희", photo: "1 한송희.jpg" },
+    { no: 2, name: "하효림", photo: "2 하효림.jpg" },
+    { no: 3, name: "인쿠시", photo: "3 인쿠시.jpg" },
+    { no: 4, name: "황연주", photo: "4 황연주.jpg" },
+    { no: 6, name: "김보빈", photo: "6 김보빈.jpg" },
+    { no: 7, name: "서유경", photo: "7 서유경.jpg" },
+    { no: 8, name: "백채림", photo: "8 백채림.jpg" },
+    { no: 9, name: "윤영인", photo: "9 윤영인.jpg" },
+    { no: 12, name: "채선아", photo: "12 채선아.jpg" },
+    { no: 14, name: "이호빈", photo: "14 이호빈.jpg" },
+    { no: 17, name: "지민경", photo: "17 지민경.jpg" },
+    { no: 18, name: "김다솔", photo: "18 김다솔.jpg" },
+    { no: 19, name: "이예담", photo: "19 이예담.jpg" },
+    { no: 21, name: "이예은", photo: "21 이예은.jpg" },
+    { no: 901, name: "감독 김연경", photo: "감독 김연경.jpg", showNo: false },
+    { no: 902, name: "해설위원 양효진", photo: "해설위원 양효진.jpg", showNo: false },
+    { no: 903, name: "홍보팀장 부승관", photo: "홍보팀장 부승관.jpg", showNo: false },
+  ],
 };
 
 export function getTeamRoster(teamId: TierTeamId): readonly RosterPlayer[] {
@@ -185,6 +225,12 @@ export function getTierTeam(teamId: TierTeamId): TierTeam {
   const t = TIER_TEAMS.find((x) => x.id === teamId);
   if (!t) throw new Error(`unknown team: ${teamId}`);
   return t;
+}
+
+/** 셀렉트·제출용 표기 (스태프는 이름만) */
+export function rosterPlayerLabel(player: RosterPlayer): string {
+  if (player.showNo === false) return player.name;
+  return `${player.no} ${player.name}`;
 }
 
 /**

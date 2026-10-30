@@ -26,7 +26,10 @@ import {
   PLAYERS_ROSTER,
   TIER_TEAMS,
   findRosterPlayer,
+  getVisibleTierTeams,
+  rosterPlayerLabel,
   rosterPlayerUrl,
+  type TierTeam,
   type TierTeamId,
 } from "@/lib/players-roster";
 import { chipTextColor } from "@/lib/vleague-teams";
@@ -59,8 +62,11 @@ function shortTeamLabel(label: string): string {
   if (label === "한국도로공사") return "도로공사";
   if (label === "IBK기업은행") return "IBK";
   if (label === "GS칼텍스") return "GS";
+  if (label === "원더독스") return "원더독스";
   return label;
 }
+
+const WONDERDOGS_ID: TierTeamId = "원더독스";
 
 function hasAnyPick(p: TierParticipantDraft): boolean {
   return TIER_TEAMS.some((t) => p.picks[t.id] != null);
@@ -120,6 +126,7 @@ function IdentityCell({
   participant,
   index,
   canRemove,
+  fanTeams,
   onUpdate,
   onProfile,
   onCopy,
@@ -129,6 +136,7 @@ function IdentityCell({
   participant: TierParticipantDraft;
   index: number;
   canRemove: boolean;
+  fanTeams: readonly TierTeam[];
   onUpdate: (patch: Partial<TierParticipantDraft>) => void;
   onProfile: (url: string | null) => void;
   onCopy: () => void;
@@ -212,7 +220,7 @@ function IdentityCell({
         aria-label={`참가자 ${index + 1} 응원팀`}
       >
         <option value="">응원팀</option>
-        {TIER_TEAMS.map((team) => (
+        {fanTeams.map((team) => (
           <option key={team.id} value={team.id}>
             {shortTeamLabel(team.label)}
           </option>
@@ -325,7 +333,7 @@ function EditablePickCell({
           <option value="">선택 안 함 (텅)</option>
           {roster.map((pl) => (
             <option key={pl.no} value={pl.no}>
-              {pl.no} {pl.name}
+              {rosterPlayerLabel(pl)}
             </option>
           ))}
         </select>
@@ -334,7 +342,7 @@ function EditablePickCell({
   }
 
   const src = customUrl || rosterPlayerUrl(teamId, player);
-  const label = `${player.no} ${player.name}`;
+  const label = rosterPlayerLabel(player);
 
   return (
     <div
@@ -386,7 +394,7 @@ function EditablePickCell({
         <option value="">텅으로</option>
         {roster.map((pl) => (
           <option key={pl.no} value={pl.no}>
-            {pl.no} {pl.name}
+            {rosterPlayerLabel(pl)}
           </option>
         ))}
       </select>
@@ -408,6 +416,7 @@ function TierPageInner() {
   const searchParams = useSearchParams();
   const [titleKind, setTitleKind] = useState<TierTitleKind>("취향표");
   const [twitterId, setTwitterId] = useState("");
+  const [includeWonderdogs, setIncludeWonderdogs] = useState(false);
   const [participants, setParticipants] = useState<TierParticipantDraft[]>(() =>
     participantsFromAddParam(searchParams.get("add"))
   );
@@ -419,6 +428,30 @@ function TierPageInner() {
 
   const title = useMemo(() => chartTitle(titleKind), [titleKind]);
   const siteCredit = useMemo(() => tierSiteCredit(), []);
+  const visibleTeams = useMemo(
+    () => getVisibleTierTeams(includeWonderdogs),
+    [includeWonderdogs]
+  );
+
+  const setWonderdogsIncluded = (on: boolean) => {
+    setIncludeWonderdogs(on);
+    if (on) return;
+    setParticipants((prev) =>
+      prev.map((p) => {
+        const nextPicks = { ...p.picks };
+        const nextPhotos = { ...(p.pickPhotos ?? {}) };
+        revokeBlobUrl(nextPhotos[WONDERDOGS_ID]);
+        delete nextPicks[WONDERDOGS_ID];
+        delete nextPhotos[WONDERDOGS_ID];
+        return {
+          ...p,
+          picks: nextPicks,
+          pickPhotos: nextPhotos,
+          fanTeam: p.fanTeam === WONDERDOGS_ID ? null : p.fanTeam,
+        };
+      })
+    );
+  };
 
   const updateParticipant = useCallback(
     (id: string, patch: Partial<TierParticipantDraft>) => {
@@ -571,6 +604,7 @@ function TierPageInner() {
         titleKind,
         twitterId,
         participants,
+        teams: visibleTeams,
       });
       const stamp = new Date().toISOString().slice(0, 10);
       const result = await downloadTierChartPng(
@@ -681,6 +715,17 @@ function TierPageInner() {
               <Plus className="h-3.5 w-3.5" />
               참가자 추가
             </button>
+
+            <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800">
+              <input
+                type="checkbox"
+                checked={includeWonderdogs}
+                onChange={(e) => setWonderdogsIncluded(e.target.checked)}
+                className="h-4 w-4 accent-[#D55329]"
+              />
+              <span aria-hidden>🧡</span>
+              원더독스도 포함하기
+            </label>
           </div>
           {pasteErr ? (
             <p className="mt-2 text-[11px] font-medium text-amber-700">{pasteErr}</p>
@@ -714,7 +759,12 @@ function TierPageInner() {
           {saveMsg ? <p className="mb-2 text-[11px] text-zinc-600">{saveMsg}</p> : null}
 
           <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-1 [-webkit-overflow-scrolling:touch]">
-            <div className="min-w-[820px] overflow-hidden rounded-lg border border-zinc-200">
+            <div
+              className="overflow-hidden rounded-lg border border-zinc-200"
+              style={{
+                minWidth: includeWonderdogs ? 940 : 820,
+              }}
+            >
               <div className="flex items-center justify-between gap-3 border-b border-zinc-100 bg-white px-3 py-2.5">
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                   <p className="text-sm font-semibold text-[#0B1F4D]">{title}</p>
@@ -738,13 +788,13 @@ function TierPageInner() {
               <div
                 className="grid"
                 style={{
-                  gridTemplateColumns: `8.75rem repeat(${TIER_TEAMS.length}, minmax(5.5rem, 1fr))`,
+                  gridTemplateColumns: `8.75rem repeat(${visibleTeams.length}, minmax(5.25rem, 1fr))`,
                 }}
               >
                 <div className="flex items-center justify-center bg-zinc-100 px-1 py-2 text-[10px] text-zinc-500">
                   참가자
                 </div>
-                {TIER_TEAMS.map((team) => (
+                {visibleTeams.map((team) => (
                   <div
                     key={team.id}
                     className="flex items-center justify-center px-1 py-2 text-center text-[10px] font-semibold leading-tight"
@@ -763,6 +813,7 @@ function TierPageInner() {
                       participant={p}
                       index={index}
                       canRemove={participants.length > TIER_PARTICIPANT_MIN}
+                      fanTeams={visibleTeams}
                       onUpdate={(patch) => updateParticipant(p.id, patch)}
                       onProfile={(profileUrl) => {
                         revokeBlobUrl(p.profileUrl);
@@ -772,7 +823,7 @@ function TierPageInner() {
                       onShare={() => void shareMyLink(p)}
                       onRemove={() => removeParticipant(p.id)}
                     />
-                    {TIER_TEAMS.map((team) => (
+                    {visibleTeams.map((team) => (
                       <div
                         key={`${p.id}-${team.id}`}
                         className="border-t border-l border-zinc-100"

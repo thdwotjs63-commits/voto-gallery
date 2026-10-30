@@ -43,6 +43,7 @@ describe("tier-share encode/decode", () => {
         한국도로공사: 97,
         IBK기업은행: null,
         SOOP: 10,
+        원더독스: null,
       },
     });
   });
@@ -92,6 +93,7 @@ describe("tier-share encode/decode", () => {
         한국도로공사: null,
         IBK기업은행: 1,
         SOOP: null,
+        원더독스: null,
       },
     });
     expect(parseTierShareInput("not-a-valid-link!!!")).toBeNull();

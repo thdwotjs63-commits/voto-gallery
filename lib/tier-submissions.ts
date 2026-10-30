@@ -1,4 +1,9 @@
-import { findRosterPlayer, TIER_TEAMS, type TierTeamId } from "./players-roster";
+import {
+  findRosterPlayer,
+  rosterPlayerLabel,
+  TIER_TEAMS,
+  type TierTeamId,
+} from "./players-roster";
 import { isSupabaseConfigured, supabase } from "./supabase-client";
 import type { TierParticipantDraft, TierPickMap, TierTitleKind } from "./tier-chart";
 
@@ -12,7 +17,7 @@ export function buildTierSubmissionPicks(picks: TierPickMap): TierSubmissionPick
     if (no == null) continue;
     const player = findRosterPlayer(team.id, no);
     if (!player) continue;
-    out[team.id] = `${player.no} ${player.name}`;
+    out[team.id] = rosterPlayerLabel(player);
   }
   return out;
 }

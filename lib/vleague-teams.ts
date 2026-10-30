@@ -15,6 +15,7 @@ export const VLEAGUE_TEAMS: readonly VLeagueTeam[] = [
   { match: "도로공사", short: "도", color: "#283585" },
   { match: "IBK", short: "통", color: "#4090D2" },
   { match: "SOOP", short: "숲", color: "#0A5FBF" },
+  { match: "원더독스", short: "원", color: "#D55329" },
 ] as const;
 
 export type TeamShort = {

@@ -25,4 +25,10 @@ describe("buildTierSubmissionPicks", () => {
   it("returns empty object when nothing selected", () => {
     expect(buildTierSubmissionPicks({})).toEqual({});
   });
+
+  it("formats 원더독스 staff without jersey number", () => {
+    expect(buildTierSubmissionPicks({ 원더독스: 901 })).toEqual({
+      원더독스: "감독 김연경",
+    });
+  });
 });

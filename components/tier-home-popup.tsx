@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { clockNow } from "@/lib/clock";
 import { seoulDateKey } from "@/lib/home-notice";
-import { TIER_TEAMS } from "@/lib/players-roster";
+import { TIER_TEAMS_CORE } from "@/lib/players-roster";
 
 const TIER_URL = "/tier";
 
@@ -154,7 +154,7 @@ export function TierHomePopup() {
               className="mt-2 flex overflow-hidden rounded-lg border border-zinc-200"
               aria-hidden
             >
-              {TIER_TEAMS.map((team) => (
+              {TIER_TEAMS_CORE.map((team) => (
                 <span
                   key={team.id}
                   className="h-8 flex-1"

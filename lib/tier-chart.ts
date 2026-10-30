@@ -1,5 +1,7 @@
 import {
   TIER_TEAMS,
+  TIER_TEAMS_CORE,
+  type TierTeam,
   type TierTeamId,
   findRosterPlayer,
   rosterPlayerUrl,
@@ -134,20 +136,23 @@ export type TierChartRenderInput = {
   titleKind: TierTitleKind;
   twitterId: string;
   participants: readonly TierParticipantDraft[];
+  /** 저장 이미지 열 (기본 7구단). 원더독스 포함 시 8열 */
+  teams?: readonly TierTeam[];
 };
 
-/** 7열 전부 한 장에 합성 (공유·저장용) */
+/** 구단 열을 한 장에 합성 (공유·저장용) */
 export async function renderTierChartCanvas(
   input: TierChartRenderInput
 ): Promise<HTMLCanvasElement> {
   const participants = input.participants;
+  const teams = input.teams ?? TIER_TEAMS_CORE;
   const leftW = 140;
   const cellW = 118;
   const headerH = 44;
   const titleH = 78;
   const rowH = 152;
   const pad = 20;
-  const width = pad * 2 + leftW + TIER_TEAMS.length * cellW;
+  const width = pad * 2 + leftW + teams.length * cellW;
   const height = pad * 2 + titleH + headerH + Math.max(participants.length, 1) * rowH;
 
   const canvas = document.createElement("canvas");
@@ -187,14 +192,18 @@ export async function renderTierChartCanvas(
   ctx.font = "bold 12px Pretendard, Apple SD Gothic Neo, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  for (let i = 0; i < TIER_TEAMS.length; i++) {
-    const team = TIER_TEAMS[i]!;
+  for (let i = 0; i < teams.length; i++) {
+    const team = teams[i]!;
     const x = gridLeft + leftW + i * cellW;
     ctx.fillStyle = team.color;
     ctx.fillRect(x, gridTop, cellW, headerH);
     ctx.fillStyle = chipTextColor(team.color);
     const label =
-      team.label.length > 6 ? team.label.replace("기업은행", "IBK").replace("한국", "") : team.label;
+      team.label.length > 6
+        ? team.label.replace("기업은행", "IBK").replace("한국", "")
+        : team.label === "원더독스"
+          ? "원더독스"
+          : team.label;
     ctx.fillText(label, x + cellW / 2, gridTop + headerH / 2);
   }
 
@@ -220,7 +229,7 @@ export async function renderTierChartCanvas(
   const pickImgs: (HTMLImageElement | null)[][] = [];
   for (const p of participants) {
     const row: (HTMLImageElement | null)[] = [];
-    for (const team of TIER_TEAMS) {
+    for (const team of teams) {
       const no = p.picks[team.id];
       if (no == null) {
         row.push(null);
@@ -255,7 +264,7 @@ export async function renderTierChartCanvas(
 
     // zebra
     ctx.fillStyle = r % 2 === 0 ? "#FAFAFA" : "#FFFFFF";
-    ctx.fillRect(gridLeft, y, leftW + TIER_TEAMS.length * cellW, rowH);
+    ctx.fillRect(gridLeft, y, leftW + teams.length * cellW, rowH);
 
     // left identity
     ctx.strokeStyle = "#E4E4E7";
@@ -292,16 +301,16 @@ export async function renderTierChartCanvas(
     const nickShown = nick.length > 9 ? `${nick.slice(0, 8)}…` : nick;
     ctx.fillText(nickShown, cx, cy + rAvatar + 8);
 
-    for (let c = 0; c < TIER_TEAMS.length; c++) {
+    for (let c = 0; c < teams.length; c++) {
       const x = gridLeft + leftW + c * cellW;
       const inset = 6;
       ctx.strokeStyle = "#E4E4E7";
       ctx.strokeRect(x, y, cellW, rowH);
       const img = pickImgs[r]![c] ?? null;
-      const pickNo = p.picks[TIER_TEAMS[c]!.id];
+      const pickNo = p.picks[teams[c]!.id];
       if (img && pickNo != null) {
         drawCover(ctx, img, x + inset, y + inset, cellW - inset * 2, rowH - inset * 2 - 18);
-        const player = findRosterPlayer(TIER_TEAMS[c]!.id, pickNo);
+        const player = findRosterPlayer(teams[c]!.id, pickNo);
         ctx.fillStyle = "#27272A";
         ctx.font = "11px Pretendard, Apple SD Gothic Neo, sans-serif";
         ctx.textAlign = "center";
@@ -326,7 +335,7 @@ export async function renderTierChartCanvas(
   ctx.strokeRect(
     gridLeft,
     gridTop,
-    leftW + TIER_TEAMS.length * cellW,
+    leftW + teams.length * cellW,
     headerH + participants.length * rowH
   );
 
