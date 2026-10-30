@@ -140,6 +140,15 @@ export type TierChartRenderInput = {
   teams?: readonly TierTeam[];
 };
 
+/** 저장용 Canvas 배율 — dpr 반영하되 최소 2·최대 3 (모바일에서도 선명) */
+export function tierChartExportScale(): number {
+  const dpr =
+    typeof window !== "undefined" && Number.isFinite(window.devicePixelRatio)
+      ? window.devicePixelRatio
+      : 1;
+  return Math.min(3, Math.max(2, dpr));
+}
+
 /** 구단 열을 한 장에 합성 (공유·저장용) */
 export async function renderTierChartCanvas(
   input: TierChartRenderInput
@@ -154,12 +163,17 @@ export async function renderTierChartCanvas(
   const pad = 20;
   const width = pad * 2 + leftW + teams.length * cellW;
   const height = pad * 2 + titleH + headerH + Math.max(participants.length, 1) * rowH;
+  const scale = tierChartExportScale();
 
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("canvas unsupported");
+
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
 
   ctx.fillStyle = "#FFFFFF";
   ctx.fillRect(0, 0, width, height);
@@ -363,6 +377,7 @@ export async function downloadTierChartPng(
   }
 
   try {
+    // PNG — 무손실 (jpeg quality 이슈 없음). 고해상도 canvas 픽셀 그대로 보존.
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("blob failed"))), "image/png");
     });

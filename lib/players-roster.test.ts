@@ -8,7 +8,7 @@ import {
   rosterPlayerLabel,
   rosterPlayerUrl,
 } from "./players-roster";
-import { chartTitle } from "./tier-chart";
+import { chartTitle, tierChartExportScale } from "./tier-chart";
 
 describe("players-roster", () => {
   it("has 7 core teams and optional 원더독스 as 8th", () => {
@@ -67,5 +67,13 @@ describe("tier-chart title", () => {
   it("prefixes KOVO label", () => {
     expect(chartTitle("취향표")).toBe("KOVO 여자배구 취향표");
     expect(chartTitle("취향파괴범")).toBe("KOVO 여자배구 취향파괴범");
+  });
+});
+
+describe("tier-chart export scale", () => {
+  it("keeps export scale between 2 and 3", () => {
+    const scale = tierChartExportScale();
+    expect(scale).toBeGreaterThanOrEqual(2);
+    expect(scale).toBeLessThanOrEqual(3);
   });
 });
