@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Match } from "./schedule-data";
-import { computeVLeagueStandings, formatSetRatio, vLeagueMatchPoints } from "./standings";
+import {
+  computeVLeagueStandings,
+  formatPointRatio,
+  formatSetRatio,
+  vLeagueMatchPoints,
+} from "./standings";
 
 function match(
   partial: Partial<Match> & Pick<Match, "teamA" | "teamB" | "scoreA" | "scoreB">
@@ -18,6 +23,7 @@ function match(
     dain: false,
     natl: false,
     homeAway: "",
+    pointRatio: null,
     ...partial,
   };
 }
@@ -129,9 +135,45 @@ describe("computeVLeagueStandings", () => {
     expect(rows[0].team).toBe("강한팀");
   });
 
+  it("breaks a set-ratio tie using the sheet 점수득실률 (GS 1.23 > 흥국 1.21)", () => {
+    // 둘 다 3-0 승 → 승점 3, 승수 1, 세트 득실률 ∞ 로 동점.
+    // 시트 점수득실률: GS 1.23, 흥국 1.21 → GS 가 위.
+    const rows = computeVLeagueStandings([
+      match({ teamA: "GS칼텍스", teamB: "한국도로공사", scoreA: "3", scoreB: "0", pointRatio: 1.23 }),
+      match({ teamA: "흥국생명", teamB: "SOOP SOOPers", scoreA: "3", scoreB: "0", pointRatio: 1.21 }),
+    ]);
+    expect(rows[0].team).toBe("GS칼텍스");
+    expect(rows[1].team).toBe("흥국생명");
+    expect(rows[0].pointRatio).toBeCloseTo(1.23);
+  });
+
+  it("uses the team's most recent 점수득실률 row", () => {
+    const rows = computeVLeagueStandings([
+      match({ date: "2026-10-31", teamA: "GS칼텍스", teamB: "한국도로공사", scoreA: "3", scoreB: "0", pointRatio: 1.1 }),
+      match({ date: "2026-11-05", teamA: "GS칼텍스", teamB: "흥국생명", scoreA: "3", scoreB: "0", pointRatio: 1.45 }),
+    ]);
+    expect(rows.find((r) => r.team === "GS칼텍스")!.pointRatio).toBeCloseTo(1.45);
+  });
+
+  it("falls back to team name when 점수득실률 is missing on either side", () => {
+    // 점수득실률 둘 다 없으면 세트 동점일 때 이름순으로만.
+    const rows = computeVLeagueStandings([
+      match({ teamA: "나팀", teamB: "상대1", scoreA: "3", scoreB: "0" }),
+      match({ teamA: "가팀", teamB: "상대2", scoreA: "3", scoreB: "0" }),
+    ]);
+    const tied = rows.filter((r) => r.setsLost === 0 && r.points === 3);
+    expect(tied.map((r) => r.team)).toEqual(["가팀", "나팀"]);
+    expect(tied[0].pointRatio).toBeNull();
+  });
+
   it("formats set ratio for display", () => {
     expect(formatSetRatio(Number.POSITIVE_INFINITY)).toBe("∞");
     expect(formatSetRatio(1.5)).toBe("1.500");
     expect(formatSetRatio(0)).toBe("0.000");
+  });
+
+  it("formats point ratio for display", () => {
+    expect(formatPointRatio(1.23)).toBe("1.230");
+    expect(formatPointRatio(null)).toBe("-");
   });
 });

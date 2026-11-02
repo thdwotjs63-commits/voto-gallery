@@ -19,6 +19,12 @@ export type Match = {
   natl: boolean;
   /** 홈/원정 (예: "홈", "원정") */
   homeAway: string;
+  /**
+   * 점수 득실률 (시트 "점수득실률" 열에서 직접 입력한 값, 예: 1.23).
+   * 승점·세트 득실률이 같을 때의 타이브레이커로만 쓴다.
+   * 빈 칸이면 null → 세트 득실률까지만으로 순위를 가린다.
+   */
+  pointRatio: number | null;
 };
 
 export type OngoingTournament = {
@@ -371,6 +377,14 @@ function parseHomeAway(row: RawRow, note: string): string {
   return splitNote(note).homeAway;
 }
 
+/** 시트 "점수득실률" 값을 숫자로. 비었거나 숫자가 아니면 null */
+function parsePointRatio(raw: string | undefined): number | null {
+  const v = (raw ?? "").trim();
+  if (!v) return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export async function fetchSchedule(csvUrl: string): Promise<Match[]> {
   const res = await fetch(csvUrl, { next: { revalidate: 300 } });
   if (!res.ok) throw new Error(`Schedule CSV fetch failed (${res.status})`);
@@ -396,6 +410,7 @@ export async function fetchSchedule(csvUrl: string): Promise<Match[]> {
       dain: (row.dain ?? "").trim() === "1",
       natl: (row.natl ?? "").trim() === "1",
       homeAway: parseHomeAway(row, note),
+      pointRatio: parsePointRatio(row["점수득실률"]),
     };
     })
     .filter((m) => m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date));

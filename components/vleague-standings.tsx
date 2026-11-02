@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { formatSetRatio, type TeamStanding } from "@/lib/standings";
+import { formatPointRatio, formatSetRatio, type TeamStanding } from "@/lib/standings";
 
 const HYUNDAI = "현대건설";
 
@@ -79,6 +79,9 @@ export function VLeagueStandings({
                 <th className="hidden px-2 py-2.5 text-center tabular-nums sm:table-cell sm:px-3">
                   세트득실률
                 </th>
+                <th className="hidden px-2 py-2.5 text-center tabular-nums sm:table-cell sm:px-3">
+                  점수득실률
+                </th>
                 <th className="px-2 py-2.5 text-center tabular-nums sm:hidden">세트</th>
               </tr>
             </thead>
@@ -122,6 +125,13 @@ export function VLeagueStandings({
                       <span className={`ml-1 text-[10px] ${hyundai ? "text-white/50" : "text-[#00287A]/40"}`}>
                         ({row.setsWon}-{row.setsLost})
                       </span>
+                    </td>
+                    <td
+                      className={`hidden px-2 py-2.5 text-center tabular-nums sm:table-cell sm:px-3 ${
+                        hyundai ? "text-white/85" : "text-[#00287A]/70"
+                      }`}
+                    >
+                      {formatPointRatio(row.pointRatio)}
                     </td>
                     <td
                       className={`px-2 py-2.5 text-center tabular-nums sm:hidden ${
