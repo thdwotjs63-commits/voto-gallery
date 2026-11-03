@@ -1,5 +1,9 @@
 import type { VotoCategoryId } from "@/lib/voto-categories";
-import { VOTO_CATEGORIES } from "@/lib/voto-categories";
+import {
+  ALL_VOTO_CATEGORY,
+  SOURCE_VOTO_CATEGORIES,
+  VOTO_CATEGORIES,
+} from "@/lib/voto-categories";
 import { WORLDCUP_FOLDER_ID_ENV_KEY } from "@/lib/drive-gallery-data";
 
 export type VotoImage = {
@@ -308,7 +312,40 @@ async function listAllImagesUnderFolder(rootFolderId: string, apiKey: string): P
  * Lists images under the Drive folder tree for the Voto category.
  * Uses thumbnailLink when the API returns it; otherwise lh3 `=s1000`.
  */
+/** 정렬: 최신(sortTimeMs) 우선, 같으면 파일명 역순 */
+function sortVotoImages(images: VotoImage[]): VotoImage[] {
+  return images.sort((a, b) => {
+    if (b.sortTimeMs !== a.sortTimeMs) return b.sortTimeMs - a.sortTimeMs;
+    return b.name.localeCompare(a.name, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+  });
+}
+
+/**
+ * 전체 보기: 모든 소스 카테고리의 사진을 합친다.
+ * 각 사진은 "원래 카테고리"의 태그·제목 규칙을 그대로 유지하고(현대건설은 팀 숨김 등),
+ * 같은 파일 id 는 한 번만 담는다.
+ */
+async function fetchAllVotoImages(): Promise<VotoImage[]> {
+  const perCategory = await Promise.all(
+    SOURCE_VOTO_CATEGORIES.map((c) => fetchVotoCategoryImages(c.id))
+  );
+  const byId = new Map<string, VotoImage>();
+  for (const list of perCategory) {
+    for (const img of list) {
+      if (!byId.has(img.id)) byId.set(img.id, img);
+    }
+  }
+  return sortVotoImages(Array.from(byId.values()));
+}
+
 export async function fetchVotoCategoryImages(categoryId: VotoCategoryId): Promise<VotoImage[]> {
+  if (categoryId === ALL_VOTO_CATEGORY) {
+    return fetchAllVotoImages();
+  }
+
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY is not set.");
@@ -330,13 +367,7 @@ export async function fetchVotoCategoryImages(categoryId: VotoCategoryId): Promi
     }
   }
 
-  return Array.from(uniqueFiles.values())
-    .map((f) => mapRow(f, categoryId))
-    .sort((a, b) => {
-      if (b.sortTimeMs !== a.sortTimeMs) return b.sortTimeMs - a.sortTimeMs;
-      return b.name.localeCompare(a.name, undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
-    });
+  return sortVotoImages(
+    Array.from(uniqueFiles.values()).map((f) => mapRow(f, categoryId))
+  );
 }

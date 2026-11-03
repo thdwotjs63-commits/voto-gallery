@@ -21,6 +21,7 @@ function match(partial: Partial<Match> & Pick<Match, "date" | "teamA" | "teamB">
     dain: false,
     natl: false,
     homeAway: "",
+    pointRatio: null,
     ...partial,
   };
 }

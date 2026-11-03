@@ -1,5 +1,12 @@
 export const VOTO_CATEGORIES = [
   {
+    id: "all",
+    label: "전체",
+    // 전체 보기: 다른 모든 카테고리의 사진을 합쳐서 보여준다.
+    // 실제 폴더는 각 카테고리에서 가져오므로 envKeys 는 비워 둔다.
+    envKeys: [] as const,
+  },
+  {
     id: "team_korea",
     label: "팀코리아",
     envKeys: ["VOTO_DRIVE_FOLDER_TEAM_KOREA"] as const,
@@ -18,13 +25,21 @@ export const VOTO_CATEGORIES = [
 
 export type VotoCategoryId = (typeof VOTO_CATEGORIES)[number]["id"];
 
+/** 전체 보기 카테고리 id */
+export const ALL_VOTO_CATEGORY: VotoCategoryId = "all";
+
+/** 전체(all)를 뺀 실제 사진 폴더 카테고리들 — 전체 보기가 이들을 합친다. */
+export const SOURCE_VOTO_CATEGORIES = VOTO_CATEGORIES.filter(
+  (c) => c.id !== "all"
+);
+
 /** 예전 URL 호환: 브이리그·실업배구 → 여자배구 */
 const LEGACY_CATEGORY_ALIASES: Record<string, VotoCategoryId> = {
   v_league: "women_volleyball",
   amateur: "women_volleyball",
 };
 
-export const DEFAULT_VOTO_CATEGORY: VotoCategoryId = "team_korea";
+export const DEFAULT_VOTO_CATEGORY: VotoCategoryId = ALL_VOTO_CATEGORY;
 
 export function isVotoCategoryId(value: string): value is VotoCategoryId {
   return VOTO_CATEGORIES.some((c) => c.id === value);

@@ -31,6 +31,7 @@ function match(
     dain: false,
     natl: false,
     homeAway: "",
+    pointRatio: null,
     ...partial,
   };
 }
