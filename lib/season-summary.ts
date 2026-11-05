@@ -22,9 +22,20 @@ export const SEASON_STATS: SeasonStat[] = [
   { season: "2017-2018", games: 3, points: 2, attackSuccess: 0.00, serve: 0.29, block: 0.00, dig: 2.29, set: 7.57, errors: 3 },
 ];
 
-// 통산 누적 (네이버 표의 "통산" 행)
-export const CAREER_TOTAL = {
+/**
+ * KOVO 공식 통산 앵커 (2026년까지).
+ * 출처: KOVO 홈페이지 선수 통산 — 세트성공·경기 수.
+ * 2026-27 시즌부터는 시트의 "경기별" 숫자를 여기에 더해 히어로에 표시한다.
+ * 시즌이 끝나면 그 시즌 합계를 반영해 이 상수를 갱신하고, 다음 시즌도 같은 방식으로 누적한다.
+ */
+export const KOVO_CAREER_ANCHOR = {
+  setSuccess: 8449,
   games: 207,
+} as const;
+
+// 통산 누적 (네이버 표의 "통산" 행). games 는 KOVO 앵커와 동일(2026년까지).
+export const CAREER_TOTAL = {
+  games: KOVO_CAREER_ANCHOR.games,
   points: 287,
   attackSuccess: 23.64,
   set: 10.80,

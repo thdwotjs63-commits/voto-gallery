@@ -9,7 +9,8 @@ import {
   displayRecordValue,
   formatPercentDisplay,
   formatRate,
-  getLatestSetSuccessCountTotal,
+  getHeroGamesCount,
+  getHeroSetSuccessCount,
   getLatestTotalPoints,
   getRecordMoments,
   isDidNotPlay,
@@ -17,13 +18,14 @@ import {
   isPostseasonRecord,
   isSeasonRecord,
   parsePercent,
+  usesKovoCareerAnchor,
   type PlayerRecord,
   type RecordMoment,
   type RecordsSheet,
 } from "@/lib/records-data";
 import { SiteNav } from "@/components/site-nav";
 import { PageShareButton } from "@/components/page-share-button";
-import { SEASON_STATS, CAREER_TOTAL } from "@/lib/season-summary";
+import { SEASON_STATS, CAREER_TOTAL, KOVO_CAREER_ANCHOR } from "@/lib/season-summary";
 import {
   buildGalleryLinkForRecordDate,
   hasGalleryPhotosForRecordDate,
@@ -241,6 +243,18 @@ export default function RecordsPage() {
     () => (sheets[0]?.records ?? []).filter(isSeasonRecord),
     [sheets]
   );
+  const latestSheetName = sheets[0]?.name ?? "";
+  const allCareerSeasonRecords = useMemo(
+    () => sheets.flatMap((s) => s.records).filter(isSeasonRecord),
+    [sheets]
+  );
+  /** 통산 경기: 2026-27+ 는 KOVO 앵커(207)+시즌 뛴 경기, 그 이전이면 시트 합산 */
+  const careerGames = useMemo(
+    () =>
+      getHeroGamesCount(latestSheetName, currentSeasonRecords, allCareerSeasonRecords) ??
+      KOVO_CAREER_ANCHOR.games,
+    [latestSheetName, currentSeasonRecords, allCareerSeasonRecords]
+  );
 
   const teamOptions = useMemo(() => {
     const teams = new Set<string>();
@@ -262,24 +276,42 @@ export default function RecordsPage() {
   const showAvgAxis = chartVisible.avg;
   const showRateAxis = chartVisible.rate;
 
-  const chartData = useMemo(
-    () =>
-      playedRecords.map((r) => ({
-        date: r.date.slice(5),
-        세트성공률: parsePercent(r.setSuccessRate),
-        세트당평균: r.setAvg,
-        ...(isAllTeams ? { 세트성공수: r.setSuccessCountTotal } : {}),
-      })),
-    [playedRecords, isAllTeams]
-  );
+  const chartData = useMemo(() => {
+    const activeSheetName = sheets.find((s) => s.id === activeSheetId)?.name ?? "";
+    const useAnchorCumulative = usesKovoCareerAnchor(activeSheetName);
+    const cumulativeTotals = useAnchorCumulative
+      ? playedRecords.reduce<number[]>((acc, r) => {
+          const prev = acc.length ? acc[acc.length - 1]! : KOVO_CAREER_ANCHOR.setSuccess;
+          acc.push(prev + (r.setSuccessCount ?? 0));
+          return acc;
+        }, [])
+      : [];
+    return playedRecords.map((r, i) => ({
+      date: r.date.slice(5),
+      세트성공률: parsePercent(r.setSuccessRate),
+      세트당평균: r.setAvg,
+      ...(isAllTeams
+        ? {
+            세트성공수: useAnchorCumulative
+              ? cumulativeTotals[i]!
+              : r.setSuccessCountTotal,
+          }
+        : {}),
+    }));
+  }, [playedRecords, isAllTeams, sheets, activeSheetId]);
 
   const countAxis = useMemo(() => {
     if (!isAllTeams) return null;
-    const values = playedRecords
-      .map((r) => r.setSuccessCountTotal)
-      .filter((v): v is number => v !== null);
+    const activeSheetName = sheets.find((s) => s.id === activeSheetId)?.name ?? "";
+    const values = usesKovoCareerAnchor(activeSheetName)
+      ? chartData
+          .map((d) => d.세트성공수)
+          .filter((v): v is number => v != null && Number.isFinite(v))
+      : playedRecords
+          .map((r) => r.setSuccessCountTotal)
+          .filter((v): v is number => v !== null);
     return buildCountAxis(values, true);
-  }, [playedRecords, isAllTeams]);
+  }, [playedRecords, isAllTeams, sheets, activeSheetId, chartData]);
 
   const totals = useMemo(() => {
     const sum = (key: "points" | "serveAce" | "block" | "setSuccessCount") =>
@@ -364,9 +396,10 @@ export default function RecordsPage() {
     return Number.isInteger(n) ? String(n) : n.toFixed(1);
   };
 
+  /** 통산 세트성공수: 2026-27+ 는 8449+경기별 합, 과거 시즌 탭 기준이면 누적 열 */
   const currentSetSuccessCount = useMemo(
-    () => getLatestSetSuccessCountTotal(currentSeasonRecords),
-    [currentSeasonRecords]
+    () => getHeroSetSuccessCount(latestSheetName, currentSeasonRecords),
+    [latestSheetName, currentSeasonRecords]
   );
 
   const currentTotalPoints = useMemo(
@@ -412,7 +445,7 @@ export default function RecordsPage() {
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">통산 누적</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
-                  { label: "경기", value: CAREER_TOTAL.games },
+                  { label: "경기", value: careerGames },
                   { label: "득점", value: CAREER_TOTAL.points },
                   { label: "세트당 평균", value: CAREER_TOTAL.set.toFixed(2) },
                   { label: "세트 성공률", value: `${CAREER_TOTAL.setSuccessRate}%` },

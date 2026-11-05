@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { KOVO_CAREER_ANCHOR } from "./season-summary";
 
 export type PlayerRecord = {
   date: string;
@@ -344,12 +345,67 @@ export function getRecordMoment(r: PlayerRecord): RecordMoment | null {
   return getRecordMoments(r)[0] ?? null;
 }
 
-export function getLatestSetSuccessCountTotal(records: PlayerRecord[]): number | null {
+export function getLatestSetSuccessCountTotal(
+  records: readonly PlayerRecord[]
+): number | null {
   const latest = records
     .filter((r) => isPlayedRecord(r) && r.setSuccessCountTotal != null)
+    .slice()
     .sort((a, b) => a.date.localeCompare(b.date))
     .at(-1);
   return latest?.setSuccessCountTotal ?? null;
+}
+
+/**
+ * 히어로 SET SUCCESS / GAMES 에 KOVO 앵커+경기별 합산을 쓸 시즌인지.
+ * - 시즌명 `YYYY-YY` 의 시작 연도가 2026 이상이면 새 방식 (2026-27부터).
+ * - 과거 시트(2025-26 이하)는 set_success_count 에 통산 누적이 들어 있으므로 기존 로직 유지.
+ */
+export function usesKovoCareerAnchor(sheetName: string): boolean {
+  const m = sheetName.trim().match(/^(\d{4})-\d{2}/);
+  if (!m) return false;
+  return Number(m[1]) >= 2026;
+}
+
+/** 뛴 경기의 경기별 세트성공(set_success → setSuccessCount) 합. 미출전·미래 일정 제외. */
+export function sumSeasonSetSuccessCounts(records: readonly PlayerRecord[]): number {
+  return records
+    .filter(isPlayedRecord)
+    .reduce((sum, r) => sum + (r.setSuccessCount ?? 0), 0);
+}
+
+/**
+ * 홈 히어로 SET SUCCESS.
+ * - 2026-27+ : KOVO 앵커(8449) + 해당 시즌 경기별 set_success 합
+ * - 그 이전 시즌 시트가 최신이면: 기존처럼 set_success_count(통산 누적 열) 마지막 값
+ */
+export function getHeroSetSuccessCount(
+  latestSheetName: string,
+  latestSheetRecords: readonly PlayerRecord[]
+): number | null {
+  if (usesKovoCareerAnchor(latestSheetName)) {
+    return KOVO_CAREER_ANCHOR.setSuccess + sumSeasonSetSuccessCounts(latestSheetRecords);
+  }
+  return getLatestSetSuccessCountTotal(latestSheetRecords);
+}
+
+/**
+ * 홈 히어로 GAMES.
+ * - 2026-27+ : KOVO 앵커(207) + 해당 시즌 뛴 경기 수
+ *   (기록 시트에 2019-20·2017-18 등이 없어 전 시트 합산만으로는 통산 207이 안 맞음)
+ * - 그 이전: 전 시트 뛴 경기 합산, 비면 앵커/CAREER_TOTAL games
+ */
+export function getHeroGamesCount(
+  latestSheetName: string,
+  latestSheetRecords: readonly PlayerRecord[],
+  allCareerRecords: readonly PlayerRecord[]
+): number | null {
+  if (usesKovoCareerAnchor(latestSheetName)) {
+    return KOVO_CAREER_ANCHOR.games + getPlayedGamesCount(latestSheetRecords);
+  }
+  const games = getPlayedGamesCount(allCareerRecords);
+  if (games > 0) return games;
+  return KOVO_CAREER_ANCHOR.games > 0 ? KOVO_CAREER_ANCHOR.games : null;
 }
 
 export function getLatestTotalPoints(records: PlayerRecord[]): number | null {

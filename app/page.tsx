@@ -61,12 +61,11 @@ import {
 import { buildMatchPhotoAltFromFilename } from "@/lib/image-alt";
 import { SITE_URL, buildPublicPageUrl } from "@/lib/seo-metadata";
 import {
-  getLatestSetSuccessCountTotal,
-  getPlayedGamesCount,
+  getHeroGamesCount,
+  getHeroSetSuccessCount,
   isSeasonRecord,
   type PlayerRecord,
 } from "@/lib/records-data";
-import { CAREER_TOTAL } from "@/lib/season-summary";
 
 /** 트윗 작성창에 넣을 갤러리 제목 */
 const GALLERY_SHARE_TITLE = "voto gallery — Captured Moments of Kim Da-in";
@@ -746,18 +745,20 @@ export default function Home() {
       .then((data) => {
         if (!mounted) return;
         const sheets = Array.isArray(data?.sheets) ? data.sheets : [];
-        const latestSheetRecords = ((sheets[0]?.records ?? []) as PlayerRecord[]).filter(
-          isSeasonRecord
-        );
-        setHeroSetSuccessCount(getLatestSetSuccessCountTotal(latestSheetRecords));
+        const latestSheet = sheets[0] as { name?: string; records?: PlayerRecord[] } | undefined;
+        const latestSheetName = typeof latestSheet?.name === "string" ? latestSheet.name : "";
+        const latestSheetRecords = (Array.isArray(latestSheet?.records) ? latestSheet.records : [])
+          .filter(isSeasonRecord);
         const careerRecords = sheets
           .flatMap((sheet: { records?: PlayerRecord[] }) =>
             Array.isArray(sheet?.records) ? sheet.records : []
           )
           .filter(isSeasonRecord);
-        const games = getPlayedGamesCount(careerRecords);
-        // 시즌 시트가 일부만 있을 수 있어, 집계가 비면 통산 요약(CAREER_TOTAL)으로 보완
-        setHeroGamesCount(games > 0 ? games : CAREER_TOTAL.games > 0 ? CAREER_TOTAL.games : null);
+        // 2026-27+: KOVO 앵커(8449/207) + 최신 시즌 경기별 합. 그 이전 시트면 기존 누적 열/합산.
+        setHeroSetSuccessCount(getHeroSetSuccessCount(latestSheetName, latestSheetRecords));
+        setHeroGamesCount(
+          getHeroGamesCount(latestSheetName, latestSheetRecords, careerRecords)
+        );
       })
       .catch(() => {});
     return () => {
