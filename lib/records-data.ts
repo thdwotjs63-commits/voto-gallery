@@ -97,7 +97,22 @@ function mapRow(row: RawRow): PlayerRecord {
   };
 }
 
-export function parseRecordsSheetsEnv(raw: string | undefined): { name: string; gid: string }[] {
+/**
+ * 시즌별 시트 목록 기본값 (환경변수 RECORDS_SHEETS 가 없을 때 사용).
+ * 새 시즌을 추가할 때는 여기 맨 앞에 "시즌명:gid" 를 넣으면 된다.
+ * (환경변수 RECORDS_SHEETS 가 설정돼 있으면 그쪽이 우선한다.)
+ */
+export const DEFAULT_RECORDS_SHEETS: { name: string; gid: string }[] = [
+  { name: "2026-27", gid: "939464289" },
+  { name: "2025-26", gid: "0" },
+  { name: "2024-25", gid: "1708980432" },
+  { name: "2023-24", gid: "1293342061" },
+  { name: "2022-23", gid: "2010085839" },
+  { name: "2021-22", gid: "1829532681" },
+  { name: "2020-21", gid: "1781609289" },
+];
+
+function parseRecordsSheetsRaw(raw: string | undefined): { name: string; gid: string }[] {
   if (!raw?.trim()) return [];
   return raw
     .split("|")
@@ -110,6 +125,34 @@ export function parseRecordsSheetsEnv(raw: string | undefined): { name: string; 
       return { name, gid };
     })
     .filter((sheet): sheet is { name: string; gid: string } => sheet !== null);
+}
+
+/**
+ * 시즌별 시트 목록을 돌려준다.
+ * 코드 기본값(DEFAULT_RECORDS_SHEETS)을 먼저 깔고, 환경변수 RECORDS_SHEETS 에
+ * 있는 항목으로 보강·덮어쓴다. 같은 시즌명이 양쪽에 있으면 환경변수의 gid 를 쓴다.
+ * → 환경변수를 못 고치는 상황에서도 기본값의 최신 시즌이 항상 노출되고,
+ *   나중에 환경변수를 고치면 그쪽이 우선한다.
+ */
+export function parseRecordsSheetsEnv(raw: string | undefined): { name: string; gid: string }[] {
+  const envSheets = parseRecordsSheetsRaw(raw);
+  const envByName = new Map(envSheets.map((s) => [s.name, s.gid]));
+  const seen = new Set<string>();
+  const merged: { name: string; gid: string }[] = [];
+
+  // 1) 기본값 순서대로 깔되, 같은 시즌명이 환경변수에 있으면 그 gid 를 사용
+  for (const s of DEFAULT_RECORDS_SHEETS) {
+    merged.push({ name: s.name, gid: envByName.get(s.name) ?? s.gid });
+    seen.add(s.name);
+  }
+  // 2) 환경변수에만 있는 시즌(기본값에 없는 것)은 뒤에 덧붙임
+  for (const s of envSheets) {
+    if (!seen.has(s.name)) {
+      merged.push(s);
+      seen.add(s.name);
+    }
+  }
+  return merged;
 }
 
 export function buildSheetCsvUrl(baseCsvUrl: string, gid: string): string {
@@ -205,12 +248,31 @@ export function isPostseasonRecord(r: PlayerRecord): boolean {
   return /V리그/.test(competition) && /플레이오프|챔프전/.test(competition);
 }
 
+/**
+ * 아직 치러지지 않은 경기(일정만 깔아둔 행): 기록 필드가 전부 비어 있다.
+ * 미래 경기 일정을 시트에 미리 넣어도 "경기 수"나 합계에 잡히지 않게 한다.
+ */
+export function isUnplayedFixture(r: PlayerRecord): boolean {
+  const hasAnyStat =
+    r.points != null ||
+    r.serveAce != null ||
+    r.block != null ||
+    r.error != null ||
+    r.setAttempts != null ||
+    r.setAvg != null ||
+    (r.setSuccess?.trim() ?? "") !== "" ||
+    (r.attackSuccess?.trim() ?? "") !== "" ||
+    (r.setSuccessRateRaw?.trim() ?? "") !== "";
+  return !hasAnyStat;
+}
+
 export function isDidNotPlay(r: PlayerRecord): boolean {
   return r.note.includes("미출전") || r.homeAway === "미출전";
 }
 
 export function isPlayedRecord(r: PlayerRecord): boolean {
-  return !isDidNotPlay(r);
+  // 미출전으로 표시됐거나, 아직 치르지 않은 미래 경기(기록 전무)는 제외
+  return !isDidNotPlay(r) && !isUnplayedFixture(r);
 }
 
 /** 출전한 경기 수 (미출전 제외). 통산이면 시즌 시트를 모두 합쳐 넘긴다. */

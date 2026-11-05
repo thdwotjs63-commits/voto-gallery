@@ -20,11 +20,15 @@ export type Match = {
   /** 홈/원정 (예: "홈", "원정") */
   homeAway: string;
   /**
-   * 점수 득실률 (시트 "점수득실률" 열에서 직접 입력한 값, 예: 1.23).
-   * 승점·세트 득실률이 같을 때의 타이브레이커로만 쓴다.
-   * 빈 칸이면 null → 세트 득실률까지만으로 순위를 가린다.
+   * 점수 득실률 (구버전 단일 "점수득실률" 열 = team_a 팀 값).
+   * 승점·세트 득실률이 같을 때의 타이브레이커. 빈 칸이면 null.
+   * 신버전에서는 pointRatioA/pointRatioB 를 우선 사용한다.
    */
   pointRatio: number | null;
+  /** team_a(왼쪽 팀)의 점수 득실률 (시트 "점수득실률_a" 열). 없으면 pointRatio 로 폴백. */
+  pointRatioA: number | null;
+  /** team_b(오른쪽 팀)의 점수 득실률 (시트 "점수득실률_b" 열). 없으면 null. */
+  pointRatioB: number | null;
 };
 
 export type OngoingTournament = {
@@ -411,6 +415,8 @@ export async function fetchSchedule(csvUrl: string): Promise<Match[]> {
       natl: (row.natl ?? "").trim() === "1",
       homeAway: parseHomeAway(row, note),
       pointRatio: parsePointRatio(row["점수득실률"]),
+      pointRatioA: parsePointRatio(row["점수득실률_a"] ?? row["점수득실률"]),
+      pointRatioB: parsePointRatio(row["점수득실률_b"]),
     };
     })
     .filter((m) => m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date));

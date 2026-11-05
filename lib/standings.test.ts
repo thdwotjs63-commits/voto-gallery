@@ -10,7 +10,7 @@ import {
 function match(
   partial: Partial<Match> & Pick<Match, "teamA" | "teamB" | "scoreA" | "scoreB">
 ): Match {
-  return {
+  const base = {
     date: "2026-11-01",
     startTime: "19:00",
     category: "브이리그",
@@ -24,8 +24,15 @@ function match(
     natl: false,
     homeAway: "",
     pointRatio: null,
+    pointRatioA: null,
+    pointRatioB: null,
     ...partial,
-  };
+  } as Match;
+  // 구버전 테스트 호환: pointRatio 만 준 경우 team_a 값으로 반영
+  if (partial.pointRatioA === undefined && partial.pointRatio != null) {
+    base.pointRatioA = partial.pointRatio;
+  }
+  return base;
 }
 
 describe("vLeagueMatchPoints", () => {

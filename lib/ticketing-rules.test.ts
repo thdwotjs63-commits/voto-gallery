@@ -32,6 +32,8 @@ function match(
     natl: false,
     homeAway: "",
     pointRatio: null,
+    pointRatioA: null,
+    pointRatioB: null,
     ...partial,
   };
 }

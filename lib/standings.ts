@@ -114,13 +114,17 @@ export function computeVLeagueStandings(matches: readonly Match[]): TeamStanding
       left.losses += 1;
     }
 
-    // 점수 득실률: 시트 "점수득실률" 칸은 그 행의 team_a(왼쪽 팀) 리그 전체 득실률이다.
-    // 팬이 네이버에서 보고 team_a 팀의 누적 득실률을 직접 적는 방식 → team_a 에만 반영,
-    // 그 팀의 가장 최근(마지막) 경기 행 값을 최신으로 쓴다.
+    // 점수 득실률: 시트의 점수득실률_a(team_a)·점수득실률_b(team_b) 값을 각 팀에 반영한다.
+    // (구버전 단일 "점수득실률" 열은 pointRatioA 로 폴백되어 team_a 에 들어간다.)
+    // 각 팀의 가장 최근(마지막) 경기 행 값을 최신으로 쓴다.
     const d = (m.date ?? "").trim();
-    if (m.pointRatio != null && d >= left.pointRatioDate) {
-      left.pointRatio = m.pointRatio;
+    if (m.pointRatioA != null && d >= left.pointRatioDate) {
+      left.pointRatio = m.pointRatioA;
       left.pointRatioDate = d;
+    }
+    if (m.pointRatioB != null && d >= right.pointRatioDate) {
+      right.pointRatio = m.pointRatioB;
+      right.pointRatioDate = d;
     }
   }
 
