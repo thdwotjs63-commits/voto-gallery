@@ -4,13 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List as ListIcon, MapPin, Clock, Search, X, CalendarPlus, ExternalLink, Calculator, Crown, Ticket } from "lucide-react";
 import { groupByDate, buildTournamentICS, buildAllScheduleICS, buildTicketingICS, getTeamKoreaRecord, getTeamKoreaMedals, type Match, type DaySchedule } from "@/lib/schedule-data";
-import { computeVLeagueStandings } from "@/lib/standings";
 import { getHoliday, getDayType } from "@/lib/holidays";
 import { SiteNav } from "@/components/site-nav";
 import { PageShareButton } from "@/components/page-share-button";
 import { TeamKoreaBadge } from "@/components/team-korea-badge";
 import { MedalRecordList } from "@/components/medal-record";
-import { VLeagueStandings } from "@/components/vleague-standings";
 import { chipTextColor } from "@/lib/vleague-teams";
 import {
   isEventOnlyMatch,
@@ -362,11 +360,8 @@ export default function SchedulePage() {
 
   const teamKoreaRecord = useMemo(() => getTeamKoreaRecord(matches), [matches]);
   const medals = useMemo(() => getTeamKoreaMedals(matches), [matches]);
-  const vleagueStandings = useMemo(() => computeVLeagueStandings(matches), [matches]);
   /** 팀코리아 성과·승패는 2026년 4~9월 달력에서만 노출 */
   const showTeamKoreaAchievements = monthPrefix >= "2026-04" && monthPrefix <= "2026-09";
-  /** 2026-27 V리그 순위는 시즌 기간(2026-11 ~ 2027-04) 달력에서만 노출 */
-  const showVleagueStandings = monthPrefix >= "2026-11" && monthPrefix <= "2027-04";
 
   /** 현재 보고 있는 월(또는 리스트 검색 결과 기간)에 브이리그 경기가 있을 때만 티켓팅 섹션 표시 */
   const showTicketingSection = useMemo(() => {
@@ -480,12 +475,6 @@ export default function SchedulePage() {
         <div className="px-4 sm:px-8">
           <TeamKoreaBadge record={teamKoreaRecord} />
           <MedalRecordList medals={medals} />
-        </div>
-      ) : null}
-
-      {showVleagueStandings ? (
-        <div className="mx-auto max-w-[1100px] px-4 pb-4 sm:px-8">
-          <VLeagueStandings standings={vleagueStandings} />
         </div>
       ) : null}
 
