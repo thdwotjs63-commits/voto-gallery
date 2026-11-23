@@ -71,7 +71,7 @@ export const STAR_PLAYERS: StarPlayer[] = [
     naverSports: "https://m.sports.naver.com/volleyball/news",
   },
   {
-    slug: "jeonghoyoung",
+    slug: "junghoyoung",
     name: "정호영",
     team: "흥국생명",
     galleryQuery: "정호영",
@@ -111,7 +111,7 @@ export const STAR_PLAYERS: StarPlayer[] = [
     naverSports: "https://m.sports.naver.com/volleyball/news",
   },
   {
-    slug: "munjeongwon",
+    slug: "moonjungwon",
     name: "문정원",
     team: "한국도로공사",
     galleryQuery: "문정원",
