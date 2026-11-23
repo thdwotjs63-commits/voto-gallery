@@ -17,6 +17,8 @@ export type StarPlayer = {
   slug: string;
   name: string;
   team?: string;
+  /** 페이지/버튼 언어. "ko"(기본) | "ja" | "zh". 외국 선수 페이지용. */
+  lang?: "ko" | "ja" | "zh";
   galleryQuery?: string;
   /** "사진 보기" 버튼이 갈 경로를 직접 지정 (없으면 /star/<slug>/photos). 예: 다인이는 "/" (홈 전체 갤러리). */
   photoHref?: string;
@@ -82,8 +84,9 @@ export const STAR_PLAYERS: StarPlayer[] = [
   },
   {
     slug: "jahstice",
-    name: "자스티스",
+    name: "Jahstice Auch",
     team: "흥국생명",
+    lang: "ja",
     galleryQuery: "자스티스",
     instagram: "https://www.instagram.com/hkpinkspiders/",
     youtube: "https://www.youtube.com/hkpinkspiders",
@@ -145,15 +148,16 @@ export const STAR_PLAYERS: StarPlayer[] = [
   },
   {
     slug: "eri.xue",
-    name: "이즈쉬에",
+    name: "薛翼枝",
     team: "SOOP SOOPers",
+    lang: "zh",
     galleryQuery: "이즈쉬에",
     instagram: "https://www.instagram.com/soop_soopers/",
     youtube: "https://youtube.com/@soopsoopersofficial",
     homepage: "https://soopers.kovo.co.kr/?gender=2",
     naverSports: "https://m.sports.naver.com/volleyball/news",
     extraLinks: [
-      { href: "https://www.sooplive.com/station/soopsoopers", label: "SOOP방송국", sub: "구단 공식 방송", icon: "📺", external: true },
+      { href: "https://www.sooplive.com/station/soopsoopers", label: "SOOP 直播间", sub: "球队官方直播", icon: "📺", external: true },
     ],
   },
 ];

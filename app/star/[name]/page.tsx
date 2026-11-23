@@ -39,6 +39,65 @@ export async function generateMetadata({ params }: StarPageProps): Promise<Metad
   };
 }
 
+type Lang = "ko" | "ja" | "zh";
+
+/** 언어별 UI 텍스트. {team} 은 구단 짧은 이름으로 치환된다. */
+const T: Record<Lang, Record<string, string>> = {
+  ko: {
+    photo: "사진 보기",
+    photoSub: "VOTO 갤러리",
+    photoSubHome: "다인이 전체 사진 갤러리",
+    recent: "최근",
+    count: "장",
+    instagram: "{team} 인스타그램",
+    instagramSub: "최신 소식 · 비하인드",
+    youtube: "{team} 유튜브",
+    youtubeSub: "경기 하이라이트 · 영상",
+    homepage: "{team} 홈페이지",
+    homepageSub: "구단 공식 사이트",
+    naver: "네이버 스포츠 배구",
+    naverSub: "뉴스 · 기록 · 일정",
+    soon: "준비 중이에요.",
+  },
+  ja: {
+    photo: "写真を見る",
+    photoSub: "VOTO ギャラリー",
+    photoSubHome: "全写真ギャラリー",
+    recent: "最新",
+    count: "枚",
+    instagram: "{team} インスタグラム",
+    instagramSub: "最新ニュース · ビハインド",
+    youtube: "{team} YouTube",
+    youtubeSub: "試合ハイライト · 動画",
+    homepage: "{team} 公式サイト",
+    homepageSub: "球団公式サイト",
+    naver: "NAVER スポーツ バレーボール",
+    naverSub: "ニュース · 記録 · 日程",
+    soon: "準備中です。",
+  },
+  zh: {
+    photo: "查看照片",
+    photoSub: "VOTO 相册",
+    photoSubHome: "全部照片相册",
+    recent: "最近",
+    count: "张",
+    instagram: "{team} Instagram",
+    instagramSub: "最新消息 · 幕后",
+    youtube: "{team} YouTube",
+    youtubeSub: "比赛集锦 · 视频",
+    homepage: "{team} 官方网站",
+    homepageSub: "球队官方网站",
+    naver: "NAVER 体育 排球",
+    naverSub: "新闻 · 记录 · 赛程",
+    soon: "敬请期待。",
+  },
+};
+
+function tr(lang: Lang, key: string, team?: string): string {
+  const v = T[lang]?.[key] ?? T.ko[key] ?? key;
+  return team ? v.replace("{team}", team) : v;
+}
+
 type HubLink = {
   href: string;
   label: string;
@@ -97,14 +156,14 @@ function shortTeamName(team?: string): string {
   return team.split(" ")[0] || team;
 }
 
-function buildLinks(player: StarPlayer): HubLink[] {
+function buildLinks(player: StarPlayer, lang: Lang): HubLink[] {
   const links: HubLink[] = [];
   const t = shortTeamName(player.team);
   if (player.instagram?.trim()) {
     links.push({
       href: player.instagram,
-      label: `${t} 인스타그램`,
-      sub: "최신 소식 · 비하인드",
+      label: tr(lang, "instagram", t),
+      sub: tr(lang, "instagramSub"),
       icon: "instagram",
       external: true,
     });
@@ -112,8 +171,8 @@ function buildLinks(player: StarPlayer): HubLink[] {
   if (player.youtube?.trim()) {
     links.push({
       href: player.youtube,
-      label: `${t} 유튜브`,
-      sub: "경기 하이라이트 · 영상",
+      label: tr(lang, "youtube", t),
+      sub: tr(lang, "youtubeSub"),
       icon: "youtube",
       external: true,
     });
@@ -121,8 +180,8 @@ function buildLinks(player: StarPlayer): HubLink[] {
   if (player.homepage?.trim()) {
     links.push({
       href: player.homepage,
-      label: `${t} 홈페이지`,
-      sub: "구단 공식 사이트",
+      label: tr(lang, "homepage", t),
+      sub: tr(lang, "homepageSub"),
       icon: "home",
       external: true,
     });
@@ -130,8 +189,8 @@ function buildLinks(player: StarPlayer): HubLink[] {
   if (player.naverSports?.trim()) {
     links.push({
       href: player.naverSports,
-      label: "네이버 스포츠 배구",
-      sub: "뉴스 · 기록 · 일정",
+      label: tr(lang, "naver"),
+      sub: tr(lang, "naverSub"),
       icon: "naver",
       external: true,
     });
@@ -157,7 +216,8 @@ export default async function StarPlayerPage({ params }: StarPageProps) {
   if (!player) {
     notFound();
   }
-  const links = buildLinks(player);
+  const lang: Lang = player.lang ?? "ko";
+  const links = buildLinks(player, lang);
   const hasGallery = !!player.galleryQuery?.trim();
 
   // 서버에서 그 선수 사진을 미리 불러와 최신 썸네일 + 최근 날짜를 구한다.
@@ -223,12 +283,12 @@ export default async function StarPlayerPage({ params }: StarPageProps) {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px] font-semibold text-white">
-                    사진 보기
+                    {tr(lang, "photo")}
                   </span>
                   <span className="block truncate text-xs text-zinc-300/85">
                     {player.photoHref
-                      ? "다인이 전체 사진 갤러리"
-                      : `${photoCount > 0 ? `${photoCount}장` : "VOTO 갤러리"}${recentLabel ? ` · 최근 ${recentLabel}` : ""}`}
+                      ? tr(lang, "photoSubHome")
+                      : `${photoCount > 0 ? `${photoCount}${tr(lang, "count")}` : tr(lang, "photoSub")}${recentLabel ? ` · ${tr(lang, "recent")} ${recentLabel}` : ""}`}
                   </span>
                 </span>
                 <span
@@ -302,7 +362,7 @@ export default async function StarPlayerPage({ params }: StarPageProps) {
 
           {links.length === 0 && !hasGallery ? (
             <p className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-6 text-center text-sm text-zinc-500">
-              준비 중이에요.
+              {tr(lang, "soon")}
             </p>
           ) : null}
         </nav>
