@@ -41,8 +41,20 @@ function categoryFromPathname(pathname: string): VotoCategoryId {
 
 export function VotoCategoryHome({
   initialCategory = DEFAULT_VOTO_CATEGORY,
+  initialQuery = "",
+  hideChrome = false,
+  title,
+  subtitle,
 }: {
   initialCategory?: VotoCategoryId;
+  /** 페이지 진입 시 자동으로 적용할 검색어 (예: 선수별 /star 페이지). */
+  initialQuery?: string;
+  /** true 면 카테고리 탭·검색창을 숨기고, 걸린 사진만 보여준다 (선수 전용 갤러리). */
+  hideChrome?: boolean;
+  /** 헤더 제목 교체 (기본: "배구사진"). */
+  title?: string;
+  /** 헤더 부제 (선수 소속팀 등). */
+  subtitle?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -55,7 +67,7 @@ export function VotoCategoryHome({
   const [shareToast, setShareToast] = useState<string | null>(null);
   const shareToastTimerRef = useRef<number | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
@@ -164,6 +176,9 @@ export function VotoCategoryHome({
   }, [category, loadCategory]);
 
   useEffect(() => {
+    // /voto, /voto/<category> 경로에서만 pathname 으로 카테고리를 동기화한다.
+    // /star/<선수> 같은 다른 경로에서는 initialCategory/initialQuery 를 보존해야 하므로 건너뛴다.
+    if (!pathname.startsWith("/voto")) return;
     const fromUrl = categoryFromPathname(pathname);
     setCategory((prev) => (prev === fromUrl ? prev : fromUrl));
   }, [pathname]);
@@ -171,6 +186,10 @@ export function VotoCategoryHome({
   const selectCategory = useCallback(
     (next: VotoCategoryId) => {
       setCategory(next);
+      // 탭을 바꾸면 검색 상태 초기화
+      setSearchQuery("");
+      setHighlightIndex(-1);
+      setDropdownOpen(false);
       const target = getVotoCategoryUrl(next);
       if (pathname !== target) {
         router.replace(target, { scroll: false });
@@ -179,11 +198,9 @@ export function VotoCategoryHome({
     [pathname, router]
   );
 
-  useEffect(() => {
-    setSearchQuery("");
-    setHighlightIndex(-1);
-    setDropdownOpen(false);
-  }, [category]);
+  // 카테고리 탭을 "직접 클릭"했을 때만 검색어를 초기화한다 (selectCategory 안에서 처리).
+  // category 변화를 useEffect 로 감지하면 초기 로딩/pathname 동기화 때도 리셋되어
+  // /star 선수 페이지의 initialQuery 가 지워지는 문제가 있어 effect 방식은 쓰지 않는다.
 
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
@@ -259,10 +276,16 @@ export function VotoCategoryHome({
               ← daeni.kr 홈
             </Link>
             <div className="h-4 w-px bg-white/15" aria-hidden />
-            <h1 className="text-lg font-bold tracking-tight text-white sm:text-xl">
-              배구사진
-            </h1>
+            <div className="flex flex-col">
+              <h1 className="text-lg font-bold tracking-tight text-white sm:text-xl">
+                {title ?? "배구사진"}
+              </h1>
+              {subtitle ? (
+                <span className="text-xs text-zinc-400">{subtitle}</span>
+              ) : null}
+            </div>
           </div>
+          {hideChrome ? null : (
           <nav className="flex flex-wrap gap-2" aria-label="카테고리">
             {VOTO_CATEGORIES.map((tab) => (
               <button
@@ -279,6 +302,7 @@ export function VotoCategoryHome({
               </button>
             ))}
           </nav>
+          )}
         </div>
       </header>
 
@@ -289,6 +313,9 @@ export function VotoCategoryHome({
 
         {!loading && !error && images.length > 0 ? (
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            {hideChrome ? (
+              <div className="flex-1" />
+            ) : (
             <div ref={searchWrapRef} className="relative z-30 max-w-xl flex-1">
               <label htmlFor="voto-search" className="mb-1.5 block text-xs font-medium text-zinc-500">
                 태그 · 파일명 검색
@@ -357,6 +384,7 @@ export function VotoCategoryHome({
                 </p>
               ) : null}
             </div>
+            )}
             <div className="flex items-center gap-2">
               <button
                 type="button"
