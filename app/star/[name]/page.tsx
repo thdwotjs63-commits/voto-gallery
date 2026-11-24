@@ -14,6 +14,34 @@ type StarPageProps = {
   params: Promise<{ name: string }>;
 };
 
+/** 선수 공유 미리보기(OG) 이미지: 지정값 → 그 선수 최신 사진 → 기본값 순. 항상 절대 URL. */
+async function resolveOgImage(player: StarPlayer): Promise<string> {
+  // 1) 직접 지정한 ogImage 우선 (상대경로면 절대 URL 로 변환)
+  if (player.ogImage?.trim()) {
+    const v = player.ogImage.trim();
+    return v.startsWith("http") ? v : `${SITE_URL}${v}`;
+  }
+  // 2) 그 선수 최신 사진 썸네일 (lh3 구글 이미지 = 카톡 OG 로 뜸)
+  if (player.galleryQuery?.trim()) {
+    try {
+      const all = await fetchVotoCategoryImages(ALL_VOTO_CATEGORY);
+      const mine = filterImagesByQuery(all, player.galleryQuery).sort(
+        (a, b) => b.sortTimeMs - a.sortTimeMs
+      );
+      if (mine[0]?.thumbSrc) return mine[0].thumbSrc;
+    } catch {
+      // 무시하고 기본값으로
+    }
+  }
+  // 3) photoBg(다인이 hero 등)
+  if (player.photoBg?.trim()) {
+    const v = player.photoBg.trim();
+    return v.startsWith("http") ? v : `${SITE_URL}${v}`;
+  }
+  // 4) 사이트 기본 이미지
+  return DEFAULT_OG_IMAGE_URL;
+}
+
 export async function generateMetadata({ params }: StarPageProps): Promise<Metadata> {
   const { name: raw } = await params;
   const player = findStarPlayer(raw);
@@ -25,6 +53,7 @@ export async function generateMetadata({ params }: StarPageProps): Promise<Metad
     ? `${player.name} (${player.team}) — 사진, 구단 채널, 기록을 한곳에서.`
     : `${player.name} — 사진, 구단 채널, 기록을 한곳에서.`;
   const path = `/star/${player.slug}`;
+  const ogImage = await resolveOgImage(player);
   return {
     title,
     description,
@@ -34,7 +63,13 @@ export async function generateMetadata({ params }: StarPageProps): Promise<Metad
       description,
       url: `${SITE_URL}${path}`,
       type: "website",
-      images: [{ url: DEFAULT_OG_IMAGE_URL }],
+      images: [{ url: ogImage }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogImage],
     },
   };
 }

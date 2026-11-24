@@ -24,6 +24,8 @@ export type StarPlayer = {
   photoHref?: string;
   /** 사진 버튼 배경 이미지를 직접 지정 (없으면 그 선수 최신 사진 썸네일 사용). 예: 다인이는 "/hero.jpg". */
   photoBg?: string;
+  /** 링크 공유 미리보기(OG) 이미지 직접 지정. 없으면 그 선수 최신 사진이 자동으로 쓰인다. 절대 URL 또는 "/경로". */
+  ogImage?: string;
   instagram?: string;
   youtube?: string;
   homepage?: string;
@@ -52,6 +54,7 @@ export const STAR_PLAYERS: StarPlayer[] = [
     galleryQuery: "김다인",
     photoHref: "/",
     photoBg: "/hero.jpg",
+    ogImage: "/hero.jpg",
     instagram: "https://www.instagram.com/hdecvolleyballteam/",
     youtube: "https://www.youtube.com/@HDECVolleyballTeam",
     homepage: "https://hillstate.hdec.kr/",
