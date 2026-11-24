@@ -87,7 +87,7 @@ export const STAR_PLAYERS: StarPlayer[] = [
   },
   {
     slug: "jahstice",
-    name: "Jahstice Auch",
+    name: "Jahstice Yauchi",
     team: "흥국생명",
     lang: "ja",
     galleryQuery: "자스티스",
