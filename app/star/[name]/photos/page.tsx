@@ -45,6 +45,8 @@ export default async function StarPlayerPhotosPage({ params }: StarPhotosPagePro
       hideChrome
       title={player.name}
       subtitle={player.team}
+      backHref={`/star/${player.slug}`}
+      backLabel={`${player.name} 페이지`}
     />
   );
 }

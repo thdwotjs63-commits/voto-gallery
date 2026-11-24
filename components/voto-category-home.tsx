@@ -45,6 +45,8 @@ export function VotoCategoryHome({
   hideChrome = false,
   title,
   subtitle,
+  backHref = "/",
+  backLabel = "daeni.kr 홈",
 }: {
   initialCategory?: VotoCategoryId;
   /** 페이지 진입 시 자동으로 적용할 검색어 (예: 선수별 /star 페이지). */
@@ -55,6 +57,10 @@ export function VotoCategoryHome({
   title?: string;
   /** 헤더 부제 (선수 소속팀 등). */
   subtitle?: string;
+  /** 뒤로가기 링크 경로 (기본: 홈 "/"). 선수 사진 페이지에선 그 선수 허브로. */
+  backHref?: string;
+  /** 뒤로가기 링크 라벨 (기본: "daeni.kr 홈"). */
+  backLabel?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -270,10 +276,10 @@ export function VotoCategoryHome({
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex flex-wrap items-center gap-3">
             <Link
-              href="/"
+              href={backHref}
               className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500 transition hover:text-zinc-300"
             >
-              ← daeni.kr 홈
+              ← {backLabel}
             </Link>
             <div className="h-4 w-px bg-white/15" aria-hidden />
             <div className="flex flex-col">
