@@ -35,7 +35,7 @@ export type VotoImage = {
   smartTags: string[];
 };
 
-const DRIVE_FETCH_INIT = { cache: "no-store" as RequestCache };
+const DRIVE_FETCH_INIT = { next: { revalidate: 3600 } } as const;
 
 const DRIVE_LIST_EXTRA_PARAMS = {
   supportsAllDrives: "true",

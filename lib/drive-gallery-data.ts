@@ -180,7 +180,7 @@ function parseScheduleFromFolderName(folderName: string): {
   };
 }
 
-const DRIVE_FETCH_INIT = { next: { revalidate: 300 } } as const;
+const DRIVE_FETCH_INIT = { next: { revalidate: 3600 } } as const;
 
 /** 팀/공유 드라이브 안의 파일도 list/get 이 동작하도록 */
 const DRIVE_LIST_EXTRA_PARAMS = {
