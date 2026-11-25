@@ -5,6 +5,7 @@ import { findStarPlayer, type StarPlayer } from "@/lib/star-players";
 import { fetchVotoCategoryImages } from "@/lib/voto-gallery-data";
 import { ALL_VOTO_CATEGORY } from "@/lib/voto-categories";
 import { filterImagesByQuery } from "@/lib/voto-search-index";
+import { fetchStarPlayerPhotos } from "@/lib/star-photos";
 import type { VotoImage } from "@/lib/voto-gallery-data";
 import { DEFAULT_OG_IMAGE_URL, SITE_URL } from "@/lib/seo-metadata";
 
@@ -261,10 +262,8 @@ export default async function StarPlayerPage({ params }: StarPageProps) {
   let recentLabel: string | null = null;
   if (hasGallery) {
     try {
-      const all = await fetchVotoCategoryImages(ALL_VOTO_CATEGORY);
-      const mine = filterImagesByQuery(all, player.galleryQuery!).sort(
-        (a, b) => b.sortTimeMs - a.sortTimeMs
-      );
+      // 사진 페이지와 같은 병합 소스(voto + 함께 찍은 홈 사진)로 개수·최근 날짜·썸네일을 구한다.
+      const mine = await fetchStarPlayerPhotos(player);
       photoCount = mine.length;
       recentImages = mine.slice(0, 4);
       if (mine[0]) recentLabel = formatRecentDate(mine[0].sortTimeMs);
