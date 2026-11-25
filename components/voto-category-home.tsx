@@ -47,6 +47,7 @@ export function VotoCategoryHome({
   subtitle,
   backHref = "/",
   backLabel = "daeni.kr 홈",
+  photoApi,
 }: {
   initialCategory?: VotoCategoryId;
   /** 페이지 진입 시 자동으로 적용할 검색어 (예: 선수별 /star 페이지). */
@@ -61,6 +62,8 @@ export function VotoCategoryHome({
   backHref?: string;
   /** 뒤로가기 링크 라벨 (기본: "daeni.kr 홈"). */
   backLabel?: string;
+  /** 설정 시 /api/voto-gallery 대신 이 URL 에서 사진을 불러온다 (선수 병합 갤러리: voto + 함께찍은 홈 사진). 서버가 이미 필터·병합·정렬해서 돌려주므로 클라이언트 재검색은 하지 않는다. */
+  photoApi?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -153,7 +156,8 @@ export function VotoCategoryHome({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/voto-gallery?category=${encodeURIComponent(cat)}`, {
+      const url = photoApi ?? `/api/voto-gallery?category=${encodeURIComponent(cat)}`;
+      const res = await fetch(url, {
         cache: "no-store",
         signal,
       });
@@ -173,7 +177,7 @@ export function VotoCategoryHome({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [photoApi]);
 
   useEffect(() => {
     const ac = new AbortController();

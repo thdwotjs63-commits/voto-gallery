@@ -41,7 +41,7 @@ export default async function StarPlayerPhotosPage({ params }: StarPhotosPagePro
   return (
     <VotoCategoryHome
       initialCategory={ALL_VOTO_CATEGORY}
-      initialQuery={player.galleryQuery ?? player.name}
+      photoApi={`/api/star-photos?player=${encodeURIComponent(player.slug)}`}
       hideChrome
       title={player.name}
       subtitle={player.team}
