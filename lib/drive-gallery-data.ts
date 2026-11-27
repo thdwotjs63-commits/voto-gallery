@@ -286,21 +286,96 @@ function hasKorean(tag: string): boolean {
   return /[가-힣]/.test(tag);
 }
 
+/**
+ * 함께 찍힌 "사람"으로 분류할 태그 목록(앞의 # 제외, 소문자).
+ * 파일명/디스크립션에서 이 이름이 나오면 위치와 상관없이 withTags(함께)로 보낸다.
+ * 새 인물이 생기면 여기에 추가하면 된다. 김다인은 주인공이지만 '함께' 필터에도 뜨도록 포함.
+ */
+const PERSON_TAGS = new Set<string>([
+  "김다인",
+  "나현수",
+  "이예림",
+  "이주아",
+  "강소휘",
+  "정호영",
+  "문정원",
+  "최윤영",
+  "고예림",
+  "자스티스",
+]);
+
+/** 장소(체육관 등)로 분류할 태그. 정확 일치 목록 + "체육관/경기장/커피차" 같은 키워드. */
+const LOCATION_TAGS = new Set<string>([
+  "수원실내체육관",
+  "염주체육관",
+  "대전충무체육관",
+  "화성실내체육관",
+]);
+const LOCATION_KEYWORDS = ["체육", "경기장", "체육관", "아레나", "커피차"];
+
+/** # 를 떼고 소문자로. */
+function bareTag(tag: string): string {
+  return tag.replace(/^#/, "").trim().toLowerCase();
+}
+
+/** 날짜(YYMMDD/YYYYMMDD) 또는 순수 숫자·복사본 번호 등 "버릴" 토큰인지. */
+function isDateOrNumberToken(bare: string): boolean {
+  // #261122, #20260505 같은 날짜
+  if (/^\d{6}$/.test(bare) || /^\d{8}$/.test(bare)) return true;
+  // 순수 숫자, (2), 복사본 번호, "(n of m)" 잔여물
+  if (/^\(?\d+\)?$/.test(bare)) return true;
+  if (/^\d+\s*of\s*\d+$/.test(bare)) return true;
+  return false;
+}
+
+function isLocationTag(bare: string): boolean {
+  if (LOCATION_TAGS.has(bare)) return true;
+  return LOCATION_KEYWORDS.some((kw) => bare.includes(kw));
+}
+
+/**
+ * 태그를 "위치"가 아니라 "내용"으로 분류한다.
+ * 파일명 태깅으로 넘어오며 순서가 들쭉날쭉해져, 위치 기반(tags[2]=moment)으로는
+ * 사람 이름이 moment 로 새는 등 오분류가 생겼다. 내용 기준으로 바꾼다:
+ *  - 날짜/순수숫자/복사본 번호 → 버림
+ *  - 사람 이름(PERSON_TAGS) → withTags(함께)
+ *  - 장소(체육관 등) → locationTag (첫 번째만)
+ *  - 그 외(alone, coolmoment, 출근길, 팬사인회 …) → momentTag (첫 번째만)
+ */
 function assignPositionalTags(tags: string[]): {
   dateTag?: string;
   locationTag?: string;
   momentTag?: string;
   withTags: string[];
 } {
-  const withTags = tags
-    .slice(3)
-    .filter((tag) => !META_POSITIONAL_TAGS.has(tag) && hasKorean(tag));
-  return {
-    dateTag: tags[0],
-    locationTag: tags[1],
-    momentTag: tags[2],
-    withTags,
-  };
+  let dateTag: string | undefined;
+  let locationTag: string | undefined;
+  let momentTag: string | undefined;
+  const withTags: string[] = [];
+
+  for (const tag of tags) {
+    if (META_POSITIONAL_TAGS.has(tag)) continue; // #hero, #banner 등은 별도 처리
+    const bare = bareTag(tag);
+    if (!bare) continue;
+
+    if (isDateOrNumberToken(bare)) {
+      // 날짜만 dateTag 후보로 보존(표시엔 거의 안 쓰지만 정렬 보조). 번호는 버림.
+      if (!dateTag && (/^\d{6}$/.test(bare) || /^\d{8}$/.test(bare))) dateTag = tag;
+      continue;
+    }
+    if (PERSON_TAGS.has(bare)) {
+      if (!withTags.includes(tag)) withTags.push(tag);
+      continue;
+    }
+    if (isLocationTag(bare)) {
+      if (!locationTag) locationTag = tag;
+      continue;
+    }
+    // 나머지는 moment (첫 번째만 대표값으로)
+    if (!momentTag) momentTag = tag;
+  }
+
+  return { dateTag, locationTag, momentTag, withTags };
 }
 
 function mapDriveFileRowToImage(file: DriveFileRow): DriveImage {
