@@ -9,6 +9,7 @@ import {
   displayRecordValue,
   formatPercentDisplay,
   formatRate,
+  getCareerDisplayStats,
   getHeroGamesCount,
   getHeroSetSuccessCount,
   getLatestTotalPoints,
@@ -25,7 +26,7 @@ import {
 } from "@/lib/records-data";
 import { SiteNav } from "@/components/site-nav";
 import { PageShareButton } from "@/components/page-share-button";
-import { SEASON_STATS, CAREER_TOTAL, KOVO_CAREER_ANCHOR } from "@/lib/season-summary";
+import { SEASON_STATS, KOVO_CAREER_ANCHOR } from "@/lib/season-summary";
 import {
   buildGalleryLinkForRecordDate,
   hasGalleryPhotosForRecordDate,
@@ -255,6 +256,11 @@ export default function RecordsPage() {
       KOVO_CAREER_ANCHOR.games,
     [latestSheetName, currentSeasonRecords, allCareerSeasonRecords]
   );
+  /** 통산 득점·세트당 평균·성공률: 2026-27+ 는 앵커+시즌 반영 */
+  const careerStats = useMemo(
+    () => getCareerDisplayStats(latestSheetName, currentSeasonRecords),
+    [latestSheetName, currentSeasonRecords]
+  );
 
   const teamOptions = useMemo(() => {
     const teams = new Set<string>();
@@ -446,9 +452,9 @@ export default function RecordsPage() {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
                   { label: "경기", value: careerGames },
-                  { label: "득점", value: CAREER_TOTAL.points },
-                  { label: "세트당 평균", value: CAREER_TOTAL.set.toFixed(2) },
-                  { label: "세트 성공률", value: `${CAREER_TOTAL.setSuccessRate}%` },
+                  { label: "득점", value: careerStats.points },
+                  { label: "세트당 평균", value: careerStats.set.toFixed(2) },
+                  { label: "세트 성공률", value: `${careerStats.setSuccessRate}%` },
                 ].map((s) => (
                   <div key={s.label} className="text-center">
                     <div className="text-xl font-semibold text-[#00287A]">{s.value}</div>
@@ -457,7 +463,8 @@ export default function RecordsPage() {
                 ))}
               </div>
               <p className="mt-3 text-[11px] text-zinc-400">
-                세트 성공 {CAREER_TOTAL.setSuccess} / 시도 {CAREER_TOTAL.setAttempts} · 디그 성공률 {CAREER_TOTAL.digSuccessRate}%
+                세트 성공 {careerStats.setSuccess.toLocaleString("ko-KR")} / 시도{" "}
+                {careerStats.setAttempts.toLocaleString("ko-KR")} · 디그 성공률 {careerStats.digSuccessRate}%
               </p>
               <button
                 type="button"

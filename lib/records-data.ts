@@ -1,5 +1,5 @@
 import Papa from "papaparse";
-import { KOVO_CAREER_ANCHOR } from "./season-summary";
+import { CAREER_TOTAL, KOVO_CAREER_ANCHOR } from "./season-summary";
 
 export type PlayerRecord = {
   date: string;
@@ -16,6 +16,8 @@ export type PlayerRecord = {
   setSuccessCount: number | null;
   setSuccessCountTotal: number | null;
   setAttempts: number | null;
+  /** 해당 경기 소화 세트 수 (CSV sets_played) */
+  setsPlayed: number | null;
   setAvg: number | null;
   setSuccessRate: string;
   /** CSV set_success_rate 원본 (예: "51/113" 또는 "0.43") */
@@ -23,6 +25,16 @@ export type PlayerRecord = {
   videoUrl: string;
   note: string;
   homeAway: string;
+};
+
+/** 통산 누적 카드용 (경기 수는 getHeroGamesCount 별도) */
+export type CareerDisplayStats = {
+  points: number;
+  set: number;
+  setSuccessRate: number;
+  setSuccess: number;
+  setAttempts: number;
+  digSuccessRate: number;
 };
 
 export type RecordsSheet = {
@@ -89,6 +101,7 @@ function mapRow(row: RawRow): PlayerRecord {
     setSuccessCount: parseSetSuccessCount(row.set_success ?? ""),
     setSuccessCountTotal: parseCountValue(row.set_success_count ?? ""),
     setAttempts: toNum(row.set_attempts ?? ""),
+    setsPlayed: toNum(row.sets_played ?? ""),
     setAvg: toNum(row.set_avg ?? ""),
     setSuccessRate: setSuccessRateRaw,
     setSuccessRateRaw,
@@ -260,6 +273,7 @@ export function isUnplayedFixture(r: PlayerRecord): boolean {
     r.block != null ||
     r.error != null ||
     r.setAttempts != null ||
+    r.setsPlayed != null ||
     r.setAvg != null ||
     (r.setSuccess?.trim() ?? "") !== "" ||
     (r.attackSuccess?.trim() ?? "") !== "" ||
@@ -313,6 +327,7 @@ const PANGPANG_PLAYER_DATES = new Set([
   "2025-12-06",
   "2025-12-25",
   "2026-02-13",
+  "2026-11-18",
 ]);
 
 const RECORD_MOMENT_RULES: {
@@ -408,10 +423,69 @@ export function getHeroGamesCount(
   return KOVO_CAREER_ANCHOR.games > 0 ? KOVO_CAREER_ANCHOR.games : null;
 }
 
-export function getLatestTotalPoints(records: PlayerRecord[]): number | null {
+export function getLatestTotalPoints(records: readonly PlayerRecord[]): number | null {
   const latest = records
     .filter((r) => isPlayedRecord(r) && r.totalPoints != null)
+    .slice()
     .sort((a, b) => a.date.localeCompare(b.date))
     .at(-1);
   return latest?.totalPoints ?? null;
+}
+
+/** 뛴 경기의 소화 세트 합. sets_played 없으면 set_success/set_avg 로 추정. */
+export function sumSeasonSetsPlayed(records: readonly PlayerRecord[]): number {
+  return records.filter(isPlayedRecord).reduce((sum, r) => {
+    if (r.setsPlayed != null && r.setsPlayed > 0) return sum + r.setsPlayed;
+    if (r.setSuccessCount != null && r.setAvg != null && r.setAvg > 0) {
+      return sum + r.setSuccessCount / r.setAvg;
+    }
+    return sum;
+  }, 0);
+}
+
+/**
+ * 통산 누적 카드 (득점·세트당 평균·세트 성공률 등).
+ * - 2026-27+ : CAREER_TOTAL/KOVO 앵커 + 최신 시즌 경기별 합 (득점은 total_points 누적 열 우선)
+ * - 그 이전: CAREER_TOTAL 고정값
+ */
+export function getCareerDisplayStats(
+  latestSheetName: string,
+  latestSheetRecords: readonly PlayerRecord[]
+): CareerDisplayStats {
+  const base: CareerDisplayStats = {
+    points: CAREER_TOTAL.points,
+    set: CAREER_TOTAL.set,
+    setSuccessRate: CAREER_TOTAL.setSuccessRate,
+    setSuccess: CAREER_TOTAL.setSuccess,
+    setAttempts: CAREER_TOTAL.setAttempts,
+    digSuccessRate: CAREER_TOTAL.digSuccessRate,
+  };
+  if (!usesKovoCareerAnchor(latestSheetName)) return base;
+
+  const played = latestSheetRecords.filter(isPlayedRecord);
+  const seasonSucc = sumSeasonSetSuccessCounts(latestSheetRecords);
+  const seasonAtt = played.reduce((sum, r) => sum + (r.setAttempts ?? 0), 0);
+  const seasonSets = sumSeasonSetsPlayed(latestSheetRecords);
+  const seasonPoints = played.reduce((sum, r) => sum + (r.points ?? 0), 0);
+
+  const points = getLatestTotalPoints(latestSheetRecords) ?? CAREER_TOTAL.points + seasonPoints;
+  const setSuccess = CAREER_TOTAL.setSuccess + seasonSucc;
+  const setAttempts = CAREER_TOTAL.setAttempts + seasonAtt;
+  const setSuccessRate =
+    setAttempts > 0 ? Math.round((setSuccess / setAttempts) * 1000) / 10 : CAREER_TOTAL.setSuccessRate;
+
+  const anchorSets = KOVO_CAREER_ANCHOR.setSuccess / CAREER_TOTAL.set;
+  const set =
+    seasonSets > 0
+      ? (KOVO_CAREER_ANCHOR.setSuccess + seasonSucc) / (anchorSets + seasonSets)
+      : CAREER_TOTAL.set;
+
+  return {
+    points,
+    set,
+    setSuccessRate,
+    setSuccess,
+    setAttempts,
+    digSuccessRate: CAREER_TOTAL.digSuccessRate,
+  };
 }

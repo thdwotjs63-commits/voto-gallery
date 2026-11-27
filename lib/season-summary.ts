@@ -33,7 +33,10 @@ export const KOVO_CAREER_ANCHOR = {
   games: 207,
 } as const;
 
-// 통산 누적 (네이버 표의 "통산" 행). games 는 KOVO 앵커와 동일(2026년까지).
+/**
+ * 통산 누적 앵커 (2026년까지 · 네이버 표 "통산" 행).
+ * games 는 KOVO 앵커와 동일. 2026-27부터는 기록 시트 경기별 합/누적 열을 더해 표시한다.
+ */
 export const CAREER_TOTAL = {
   games: KOVO_CAREER_ANCHOR.games,
   points: 287,

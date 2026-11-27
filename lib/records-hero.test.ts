@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { KOVO_CAREER_ANCHOR } from "./season-summary";
+import { CAREER_TOTAL, KOVO_CAREER_ANCHOR } from "./season-summary";
 import {
+  getCareerDisplayStats,
   getHeroGamesCount,
   getHeroSetSuccessCount,
   getLatestSetSuccessCountTotal,
@@ -24,6 +25,7 @@ function record(partial: Partial<PlayerRecord>): PlayerRecord {
     setSuccessCount: null,
     setSuccessCountTotal: null,
     setAttempts: null,
+    setsPlayed: null,
     setAvg: null,
     setSuccessRate: "",
     setSuccessRateRaw: "",
@@ -99,5 +101,59 @@ describe("legacy seasons keep cumulative set_success_count behavior", () => {
     expect(getHeroSetSuccessCount("2025-26", legacy)).toBe(8422);
     expect(getLatestSetSuccessCountTotal(legacy)).toBe(8422);
     expect(getHeroGamesCount("2025-26", legacy, legacy)).toBe(2);
+  });
+});
+
+describe("getCareerDisplayStats (2026-27+)", () => {
+  it("adds season points / set success onto CAREER_TOTAL and prefers total_points", () => {
+    const latest = [
+      record({
+        date: "2026-11-03",
+        points: null,
+        totalPoints: 287,
+        setSuccess: "24",
+        setSuccessCount: 24,
+        setAttempts: 69,
+        setsPlayed: 2,
+        setAvg: 12,
+      }),
+      record({
+        date: "2026-11-07",
+        points: 1,
+        totalPoints: 288,
+        setSuccess: "46",
+        setSuccessCount: 46,
+        setAttempts: 116,
+        setsPlayed: 4,
+        setAvg: 11.5,
+      }),
+      record({ date: "2026-12-01" }), // 미진행
+    ];
+    const stats = getCareerDisplayStats("2026-27", latest);
+    expect(stats.points).toBe(288);
+    expect(stats.setSuccess).toBe(CAREER_TOTAL.setSuccess + 24 + 46);
+    expect(stats.setAttempts).toBe(CAREER_TOTAL.setAttempts + 69 + 116);
+    expect(stats.setSuccessRate).toBe(
+      Math.round((stats.setSuccess / stats.setAttempts) * 1000) / 10
+    );
+    const seasonSets = 2 + 4;
+    const expectedSet =
+      (KOVO_CAREER_ANCHOR.setSuccess + 70) /
+      (KOVO_CAREER_ANCHOR.setSuccess / CAREER_TOTAL.set + seasonSets);
+    expect(stats.set).toBeCloseTo(expectedSet, 5);
+  });
+
+  it("keeps CAREER_TOTAL for pre-2026 sheets", () => {
+    const legacy = [
+      record({ date: "2025-10-01", points: 3, setSuccessCount: 20, setAttempts: 50 }),
+    ];
+    expect(getCareerDisplayStats("2025-26", legacy)).toEqual({
+      points: CAREER_TOTAL.points,
+      set: CAREER_TOTAL.set,
+      setSuccessRate: CAREER_TOTAL.setSuccessRate,
+      setSuccess: CAREER_TOTAL.setSuccess,
+      setAttempts: CAREER_TOTAL.setAttempts,
+      digSuccessRate: CAREER_TOTAL.digSuccessRate,
+    });
   });
 });

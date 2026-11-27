@@ -31,7 +31,6 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { SeasonOpeningBanner } from "@/components/season-opening-banner";
-import { TierHomePopup } from "@/components/tier-home-popup";
 import { GalleryChangelog } from "@/components/gallery-changelog";
 import { SiteNav } from "@/components/site-nav";
 import {
@@ -3730,7 +3729,6 @@ export default function Home() {
           </motion.div>
         ) : null}
       </AnimatePresence>
-      <TierHomePopup />
       </div>
     </>
   );
