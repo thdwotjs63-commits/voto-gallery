@@ -307,25 +307,56 @@ const PERSON_TAGS = new Set<string>([
 /** 장소(체육관 등)로 분류할 태그. 정확 일치 목록 + "체육관/경기장/커피차" 같은 키워드. */
 const LOCATION_TAGS = new Set<string>([
   "수원실내체육관",
+  "수원실내체육",
   "염주체육관",
   "대전충무체육관",
   "화성실내체육관",
+  "그랜드워커힐",
+  "청담 리베라호텔",
+  "리베라호텔",
+  "아레나 코마키",
+  "텐진아레나경기장",
+  "홍콩퀸엘리자베스스타디움",
+  "여수 진남체육관 코보컵 b조 예선",
+  "진남체육관",
 ]);
-const LOCATION_KEYWORDS = ["체육", "경기장", "체육관", "아레나", "커피차"];
+// 장소성 접미사·키워드. "커피차"는 상황(생일커피차 등)이라 제외한다.
+const LOCATION_KEYWORDS = [
+  "체육관",
+  "체육",
+  "경기장",
+  "아레나",
+  "스타디움",
+  "공항",
+  "호텔",
+  "워커힐",
+  "리베라",
+  "다이닝룸",
+];
 
 /** # 를 떼고 소문자로. */
 function bareTag(tag: string): string {
   return tag.replace(/^#/, "").trim().toLowerCase();
 }
 
-/** 날짜(YYMMDD/YYYYMMDD) 또는 순수 숫자·복사본 번호 등 "버릴" 토큰인지. */
-function isDateOrNumberToken(bare: string): boolean {
-  // #261122, #20260505 같은 날짜
-  if (/^\d{6}$/.test(bare) || /^\d{8}$/.test(bare)) return true;
+/**
+ * "버릴" 토큰인지 — 태그/필터 어디에도 넣지 않는다.
+ * 파일명·디스크립션에서 날짜·장수번호·편집본 표시 등이 태그로 잡혀 들어온다.
+ */
+function isJunkToken(bare: string): boolean {
   // 순수 숫자, (2), 복사본 번호, "(n of m)" 잔여물
   if (/^\(?\d+\)?$/.test(bare)) return true;
   if (/^\d+\s*of\s*\d+$/.test(bare)) return true;
+  // 날짜(6/8자리)로 시작하는 토큰: #260503, #260503-1, #260308경기-10, #251218-10 등
+  if (/^(?:\d{6}|\d{8})(?:[-_]|경기|$)/.test(bare)) return true;
+  // 보정본/원본 + 번호 같은 편집 표시 (#보정본2 등)
+  if (/^(보정본|원본|사본|복사본|편집본)\d*$/.test(bare)) return true;
   return false;
+}
+
+/** 날짜(YYMMDD/YYYYMMDD) 토큰인지 — dateTag 보존용. */
+function isDateToken(bare: string): boolean {
+  return /^\d{6}$/.test(bare) || /^\d{8}$/.test(bare);
 }
 
 function isLocationTag(bare: string): boolean {
@@ -358,9 +389,9 @@ function assignPositionalTags(tags: string[]): {
     const bare = bareTag(tag);
     if (!bare) continue;
 
-    if (isDateOrNumberToken(bare)) {
-      // 날짜만 dateTag 후보로 보존(표시엔 거의 안 쓰지만 정렬 보조). 번호는 버림.
-      if (!dateTag && (/^\d{6}$/.test(bare) || /^\d{8}$/.test(bare))) dateTag = tag;
+    if (isJunkToken(bare)) {
+      // 날짜(순수 6/8자리)만 dateTag 후보로 보존(정렬 보조). 그 외 번호·날짜변형은 버림.
+      if (!dateTag && isDateToken(bare)) dateTag = tag;
       continue;
     }
     if (PERSON_TAGS.has(bare)) {
